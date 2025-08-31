@@ -206,16 +206,43 @@ let baseCols = 4, baseRowsPrimary = 2, WANT_D1 = 1, WANT_D2 = 4, BUTTONS_ON_D2 =
 let TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
 
 /* ——— Images ——— */
-const imageTextures = [
-  'https://picsum.photos/1280?1',
-  'https://picsum.photos/1280?2',
-  'https://picsum.photos/1280?3',
-  'https://picsum.photos/1280?4',
-  'https://picsum.photos/1280?5',
-  'https://picsum.photos/1280?6',
-  'https://picsum.photos/1280?7',
-  'https://picsum.photos/1280?8'
-];
+/* ——— Images locales (img/by-pics/01.png, 02.png, 03.png, …) ——— */
+let imageTextures = [];
+const LOCAL_IMG_DIR = 'img/by-pics/'; // le dossier "img" est à côté de index.html
+const IMG_EXT = '.png';
+const IMG_PAD = 2;          // "01", "02", …
+const MAX_INDEX = 200;      // on teste 01 → 200
+const STOP_AFTER_MISSES = 10; // on s'arrête après 10 manquants d'affilée si on en a déjà trouvé
+
+async function scanLocalImages() {
+  imageTextures = [];
+  let misses = 0;
+  for (let i = 1; i <= MAX_INDEX; i++) {
+    const num = String(i).padStart(IMG_PAD, '0');
+    const url = `${LOCAL_IMG_DIR}${num}${IMG_EXT}`;
+    const ok = await imageExists(url);
+    if (ok) { imageTextures.push(url); misses = 0; }
+    else { misses++; if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break; }
+  }
+  // Sécurité : duplique la liste pour éviter d'en manquer si la grille veut plus d'images
+  if (imageTextures.length > 0 && imageTextures.length < 12) {
+    const base = imageTextures.slice();
+    while (imageTextures.length < 12) {
+      imageTextures.push(base[imageTextures.length % base.length]);
+    }
+  }
+}
+
+function imageExists(url) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    // petit cache-buster pour être sûr
+    img.src = url + '?v=' + Math.random();
+  });
+}
+
 
 /* ——— Utils ——— */
 function hashCode(str){ let h=0; for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return h; }
@@ -316,11 +343,12 @@ function init(){
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
 }
 
-function bootstrap(){
+async function bootstrap(){
   const w = window.innerWidth, h = window.innerHeight;
   currentBucket = pickBucket(w, h);
   applyBucket();
-  resetFractalRandom();
+  await scanLocalImages();   // ← on prépare la liste locale
+  resetFractalRandom();      // ← puis on construit la grille avec ces images
 }
 
 function applyBucket(){
