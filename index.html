@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Fractale — buckets + 3 catégories uniques (images locales intégrées)</title>
+<title>Fractale — buckets + 3 catégories uniques</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://cdn.skypack.dev" crossorigin>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js">
@@ -117,45 +117,6 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
 
-/* ——— DISCO: images locales "img" puis "BY-pics" nommées 01, 02, ... ——— */
-const POSSIBLE_EXTS = ['.jpg','.jpeg','.png','.webp','.avif','.JPG','.JPEG','.PNG','.WEBP','.AVIF'];
-const FOLDERS = ['img','BY-pics'];
-async function imageUrlExists(url){
-  return new Promise(resolve=>{
-    const i = new Image();
-    i.onload = ()=>resolve(true);
-    i.onerror = ()=>resolve(false);
-    i.src = url + (url.includes('?')?'&':'?') + 'v=' + Date.now(); // évite le cache agressif
-  });
-}
-async function discoverLocalImages(maxIndex=120, earlyStopAfter=8){
-  const found = [];
-  let missStreak = 0;
-  for (let n=1; n<=maxIndex; n++){
-    const name = String(n).padStart(2,'0');
-    let got = false;
-    for (const folder of FOLDERS){
-      for (const ext of POSSIBLE_EXTS){
-        const url = `./${folder}/${name}${ext}`;
-        // eslint-disable-next-line no-await-in-loop
-        if (await imageUrlExists(url)){
-          found.push(url);
-          got = true;
-          break;
-        }
-      }
-      if (got) break;
-    }
-    if (!got){
-      missStreak++;
-      if (missStreak >= earlyStopAfter) break; // on suppose la série finie
-    } else {
-      missStreak = 0;
-    }
-  }
-  return found;
-}
-
 /* ——— Buckets (avec hystérésis) ——— */
 const BUCKETS = [
   { id:'desktop-32:9', match:(w,h)=> w>=1025 && (w/h)>=3.1,                  grid:{cols:6, rows:2} },
@@ -244,8 +205,17 @@ const materialCache = new Map(); const textureLoader = new THREE.TextureLoader()
 let baseCols = 4, baseRowsPrimary = 2, WANT_D1 = 1, WANT_D2 = 4, BUTTONS_ON_D2 = true;
 let TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
 
-/* ——— Images (remplies dynamiquement depuis img/ et BY-pics/) ——— */
-let imageTextures = []; // sera rempli avant bootstrap()
+/* ——— Images ——— */
+const imageTextures = [
+  'https://picsum.photos/1280?1',
+  'https://picsum.photos/1280?2',
+  'https://picsum.photos/1280?3',
+  'https://picsum.photos/1280?4',
+  'https://picsum.photos/1280?5',
+  'https://picsum.photos/1280?6',
+  'https://picsum.photos/1280?7',
+  'https://picsum.photos/1280?8'
+];
 
 /* ——— Utils ——— */
 function hashCode(str){ let h=0; for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return h; }
@@ -314,7 +284,7 @@ const isLandscape = ()=> window.innerWidth >= window.innerHeight;
 const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; document.body.appendChild(canvas);
 
 init();
-await preloadImagesThenBootstrap(); // charge les images locales avant de construire la grille
+bootstrap();
 animate();
 
 function init(){
@@ -344,27 +314,6 @@ function init(){
 
   // hauteur header correcte au 1er frame
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
-}
-
-async function preloadImagesThenBootstrap(){
-  try{
-    const local = await discoverLocalImages(120, 8);
-    if (local.length > 0){
-      imageTextures = local;
-      console.info(`[Fractale] ${local.length} images locales trouvées dans "img/" et "BY-pics/".`);
-    } else {
-      // fallback si aucune image locale trouvée
-      imageTextures = [
-        'https://picsum.photos/1280?1','https://picsum.photos/1280?2','https://picsum.photos/1280?3','https://picsum.photos/1280?4',
-        'https://picsum.photos/1280?5','https://picsum.photos/1280?6','https://picsum.photos/1280?7','https://picsum.photos/1280?8'
-      ];
-      console.warn('[Fractale] Aucune image locale détectée. Fallback vers picsum.photos.');
-    }
-  } catch(err){
-    console.error('Erreur découverte images locales:', err);
-  } finally {
-    bootstrap(); // on continue quoi qu'il arrive
-  }
 }
 
 function bootstrap(){
@@ -729,6 +678,33 @@ function ensureFallbackButtons(){
     const spec = CATEGORIES[order[i]];
     buttonCells.set(p, { label: spec.label, url: spec.url, key: spec.key });
     if (!persistentButtonPaths.includes(p)) persistentButtonPaths.push(p);
+  }
+}
+
+/* Subdivisions d'ambiance non destructives */
+function sprinkleRefinements(maxOps=24){
+  const candidates = [];
+  for (const [path,s] of targetState.entries()){
+    if (!path.startsWith('content/')) continue;
+    if (imageCells.has(path) || buttonCells.has(path)) continue;
+    candidates.push({ path, s });
+  }
+  const salt = sessionSalt ^ 0xABCDEF;
+  candidates.sort((a,b)=> saltedKey(a.path, salt) - saltedKey(b.path, salt));
+  let ops=0;
+  for (const it of candidates){
+    if (ops>=maxOps) break;
+    // subdivise 1 fois si possible
+    if (it.s.depth < TARGET_DEPTH) {
+      targetState.delete(it.path);
+      const { x,y, originalSize:os, depth:d, path:p } = it.s;
+      const ns = os/2, nd = d+1, o = os/4;
+      createQuadTree(x-o, y+o, ns, nd, p+'/0', -1);
+      createQuadTree(x+o, y+o, ns, nd, p+'/1', -1);
+      createQuadTree(x-o, y-o, ns, nd, p+'/2', -1);
+      createQuadTree(x+o, y-o, ns, nd, p+'/3', -1);
+      ops++;
+    }
   }
 }
 
