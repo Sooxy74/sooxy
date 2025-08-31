@@ -309,9 +309,12 @@ const isLandscape = ()=> window.innerWidth >= window.innerHeight;
 /* THREE init */
 const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; document.body.appendChild(canvas);
 
-init();
-bootstrap();
-animate();
+// Démarre l'animation seulement quand bootstrap a fini
+(async () => {
+  init();
+  await bootstrap();
+  animate();
+})();
 
 function init(){
   scene = new THREE.Scene(); scene.background = new THREE.Color(config.backgroundColor);
