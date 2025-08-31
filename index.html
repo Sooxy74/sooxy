@@ -345,12 +345,17 @@ function init(){
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
 }
 
-function bootstrap(){
+async function bootstrap(){
+  // IMPORTANT : charger la liste des images locales d'abord
+  await scanLocalImages();   // ← c'est ça qui manquait
+
+  // Ensuite seulement on construit le layout
   const w = window.innerWidth, h = window.innerHeight;
   currentBucket = pickBucket(w, h);
   applyBucket();
   resetFractalRandom();
 }
+
 
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
