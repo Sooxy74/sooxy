@@ -165,7 +165,8 @@ const config = {
   showDots: true,
   dotSize: 0.12,
   dotColor: COLORS.accent,
-  dotSizeIsRelative: false
+  dotSizeIsRelative: false,
+  baseColsOverride: null,
 };
 
 /* ——— Vœux d’images par bucket ——— */
@@ -178,8 +179,9 @@ const LAYOUT_WISH = {
   'tablet-3:4'  : { wantD1:1, wantD2:4, buttonsOnD2:false }, /* portrait : tolère D1 */
   'tablet-9:16' : { wantD1:1, wantD2:4, buttonsOnD2:false },
 
-  'mobile-h'    : { wantD1:0, wantD2:4, buttonsOnD2:true  },
-  'mobile-v'    : { wantD1:0, wantD2:4, buttonsOnD2:true  }
+  'mobile-h'    : { wantD1:0, wantD2:4, buttonsOnD2:false },
+  'mobile-v'    : { wantD1:0, wantD2:4, buttonsOnD2:false },
+
 };
 
 /* ——— Catégories (3 uniques) ——— */
@@ -277,6 +279,20 @@ function isFullyVisible(x, y, size, contentTop){
     y + half <= contentTop - eps
   );
 }
+
+function isVisibleEnough(x, y, size, contentTop, minRatio = 0.5){
+  const half = size / 2;
+  const left   = Math.max(camera.left,   x - half);
+  const right  = Math.min(camera.right,  x + half);
+  const bottom = Math.max(camera.bottom, y - half);
+  const top    = Math.min(contentTop,    y + half);
+  const w = Math.max(0, right - left);
+  const h = Math.max(0, top - bottom);
+  const overlap = w * h;
+  const full = size * size;
+  return (overlap / full) >= minRatio;
+}
+
 function depth2SlotKey(x, y, w, contentTop){
   const cell = w/2;
   const col = Math.floor((x - camera.left) / cell);
@@ -305,6 +321,7 @@ function isAdjacentIn(set, key){
   return false;
 }
 const isLandscape = ()=> window.innerWidth >= window.innerHeight;
+const isMobileBucket = ()=> currentBucket==='mobile-h' || currentBucket==='mobile-v';
 
 /* THREE init */
 const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; document.body.appendChild(canvas);
@@ -359,11 +376,32 @@ async function bootstrap(){
 
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
-  baseCols = b?.grid.cols || 4;
+
+  // Lignes primaires
   baseRowsPrimary = b?.grid.rows || 2;
+
+  // Colonnes de base (UNE SEULE chaîne if/else if/else — pas de doublon après !)
+  if (isMobileBucket()) {
+    baseCols = 2;                                // un D1 = 50% largeur
+    baseRowsPrimary = Math.max(baseRowsPrimary, 3); // 3 lignes "content" en mobile
+  } else if (config.baseColsOverride != null) {
+    baseCols = Math.max(1, config.baseColsOverride);
+  } else if (config.targetCellPx) {
+    baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
+  } else {
+    baseCols = b?.grid.cols || 4;
+  }
+
+  // Souhaits par bucket
   const wish = LAYOUT_WISH[currentBucket] || { wantD1:1, wantD2:4, buttonsOnD2:true };
-  WANT_D1 = wish.wantD1; WANT_D2 = wish.wantD2; BUTTONS_ON_D2 = wish.buttonsOnD2;
+  WANT_D1 = wish.wantD1;
+  WANT_D2 = wish.wantD2;
+  BUTTONS_ON_D2 = wish.buttonsOnD2;
+
+  // (facultatif) log de debug
+  // console.log('bucket:', currentBucket, { baseCols, baseRowsPrimary, WANT_D1, WANT_D2, BUTTONS_ON_D2 });
 }
+
 
 /* Grain + Menu */
 function createGrainPlane(){
@@ -448,7 +486,7 @@ function updateFractalBase(forceFull=false){
   targetState.clear();
   const { w, contentTop } = getLayoutMetrics();
 
-  // lignes visibles + fillers (pansements)
+  // 1) D1 de base (puisqu'on passe maxDepthOverride=1 sur mobile)
   const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
   const totalRows   = Math.max(baseRowsPrimary, visibleRows);
 
@@ -459,42 +497,49 @@ function updateFractalBase(forceFull=false){
       const path = `${pref}/${row}/${col}`;
       const x = camera.left + col*w + w/2;
       const y = contentTop - row*w - w/2;
-      createQuadTree(x, y, w, 1, path);
+      createQuadTree(x, y, w, 1, path, isMobileBucket() ? 1 : -1);
     }
   }
 
-  // Assurer assez de D2 pour 3 boutons + images moyennes
-  ensureMinDepth2Cells(REQUIRED_BUTTONS + WANT_D2, WANT_D1);
+  // 2) Mobile : motif déterministe — Desktop/Tablet : logique standard
+  if (isMobileBucket()){
+    forceMobilePattern(); // -> 3 D1 fixes + D2 ailleurs
+  } else {
+    const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
+    ensureMinDepth2Cells(requiredD2, WANT_D1);
+  }
 
-  // Sélection : 3 boutons uniques (d’abord) puis images
+  // 3) Boutons puis images
   const okButtons = chooseButtonsThenImages(forceFull);
 
-  // Subdivisions d'ambiance (hors images/boutons)
-  if (okButtons) sprinkleRefinements(24);
+  // 4) Raffinement "ambiance"
+  if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
 
   return okButtons;
 }
 
-function ensureMinDepth2Cells(required, preserveD1Count){
+
+// Force un motif mobile : garde 3 D1 fixes et subdivise le reste en D2
+function forceMobilePattern(){
+  if (!isMobileBucket()) return;
+
   const { w, contentTop } = getLayoutMetrics();
-  let d1=[], d2=[];
-  for (const [path,s] of targetState.entries()){
+  const fixed = new Set(['content/0/1','content/1/0','content/2/1']); // (row,col)
+
+  for (const [path, s] of Array.from(targetState.entries())){
     if (!path.startsWith('content/')) continue;
-    if (!isFullyVisible(s.x, s.y, s.originalSize, contentTop)) continue;
-    if (Math.abs(s.originalSize - w)   < 1e-6) d1.push({path,s});
-    if (Math.abs(s.originalSize - w/2) < 1e-6) d2.push({path,s});
-  }
-  if (d2.length >= required) return;
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
 
-  d1.sort((a,b)=> hashCode(a.path) - hashCode(b.path));
-  let remainingD1 = d1.length;
+    // On ne touche qu'aux D1
+    const isD1 = Math.abs(s.originalSize - w) < 1e-6;
+    if (!isD1) continue;
 
-  for (const {path,s} of d1){
-    if (d2.length >= required) break;
-    if ((remainingD1 - 1) < preserveD1Count) break;
-    targetState.delete(path); remainingD1--;
+    // Ces 3 restent gros, tout le reste est subdivisé en D2
+    if (fixed.has(path)) continue;
 
-    const size=s.originalSize, ns=size/2, d=2, o=size/4;
+    // Remplace ce D1 par ses 4 D2
+    targetState.delete(path);
+    const size = s.originalSize, ns = size/2, d = 2, o = size/4;
     const quads = [
       {x:s.x-o, y:s.y+o, suffix:'/0'},
       {x:s.x+o, y:s.y+o, suffix:'/1'},
@@ -502,14 +547,16 @@ function ensureMinDepth2Cells(required, preserveD1Count){
       {x:s.x+o, y:s.y-o, suffix:'/3'},
     ];
     for (const q of quads){
-      if (!isFullyVisible(q.x, q.y, ns, contentTop)) continue;
+      // Partiellement visible ? ok (évite les trous collés aux bords)
+      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+
       const p = path + q.suffix;
       targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
-      d2.push({ path:p, s:targetState.get(p) });
-      if (d2.length >= required) break;
     }
   }
 }
+
+
 
 function isForbiddenD2Edge(key2){
   // Desktop/Tablet en paysage : interdire les colonnes w/2 extrêmes pour les boutons
@@ -526,7 +573,7 @@ function chooseButtonsThenImages(forceFull){
   imageCells.clear(); buttonCells.clear(); imageSlots.clear(); buttonSlots.clear();
   const { w, contentTop } = getLayoutMetrics();
 
-  // Agréger D1 & D2 visibles
+  // 1) Récupère toutes les cases D1 et D2 visibles
   const d1=[], d2=[];
   for (const [path,s] of targetState.entries()){
     if (!path.startsWith('content/')) continue;
@@ -538,118 +585,136 @@ function chooseButtonsThenImages(forceFull){
   d1.sort((a,b)=> saltedKey(a.path, salt)      - saltedKey(b.path, salt));
   d2.sort((a,b)=> saltedKey(a.path, salt+777 ) - saltedKey(b.path, salt+777));
 
-  /* 1) Choisir 3 cases boutons */
-  const pickedBtn = [];
-  if (BUTTONS_ON_D2) {
-    // priorité D2 non adjacents, non bords extrêmes
-    for (const it of d2) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (isForbiddenD2Edge(it.key2)) continue;
-      if (isAdjacentIn(buttonSlots, it.key2)) continue;
-      pickedBtn.push(it.path); buttonSlots.add(it.key2);
-    }
-    // compléter si besoin (même adjacents)
-    for (const it of d2) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (isForbiddenD2Edge(it.key2)) continue;
-      if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key2); }
-    }
-    // Si toujours pas assez (rare), autoriser D1 (mobile/étroits)
-    for (const it of d1) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (isAdjacentIn(buttonSlots, it.key1)) continue;
-      pickedBtn.push(it.path); buttonSlots.add(it.key1);
-    }
-    for (const it of d1) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key1); }
-    }
-  } else {
-    // Boutons en D1 prioritaire (tablettes portrait)
-    for (const it of d1) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (isAdjacentIn(buttonSlots, it.key1)) continue;
-      pickedBtn.push(it.path); buttonSlots.add(it.key1);
-    }
-    for (const it of d1) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key1); }
-    }
-    // backup D2
-    for (const it of d2) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (isForbiddenD2Edge(it.key2)) continue;
-      if (isAdjacentIn(buttonSlots, it.key2)) continue;
-      pickedBtn.push(it.path); buttonSlots.add(it.key2);
-    }
-    for (const it of d2) {
-      if (pickedBtn.length>=REQUIRED_BUTTONS) break;
-      if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key2); }
-    }
-  }
-  persistentButtonPaths = pickedBtn.slice(0, REQUIRED_BUTTONS);
+  // ← UNE SEULE déclaration, ici
+  const HAS_IMAGES = imageTextures && imageTextures.length > 0;
 
-  // Si 0/1/2 boutons => échec (rebuild immédiat dans reset)
-  if (persistentButtonPaths.length < REQUIRED_BUTTONS){
-    return false;
-  }
+  /* ==================== MOBILE : 3 positions figées ==================== */
+  if (isMobileBucket()){
+    const fixedPathsAll = ['content/0/1','content/1/0','content/2/1'];
+    const fixedPaths = fixedPathsAll.filter(p => {
+      const s = targetState.get(p);
+      return s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4);
+    });
 
-  // Assigner 3 catégories UNIQUES (ordre aléatoire, jamais de doublon)
-  const order = [0,1,2];
-  for (let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
-  for (let i=0; i<REQUIRED_BUTTONS; i++){
-    const path = persistentButtonPaths[i];
-    if (path && targetState.has(path)) {
-      const spec = CATEGORIES[order[i]];
+    // si une case manque (écran trop court), on complète avec d’autres D1 visibles (content OU filler)
+    const d1All = [];
+    for (const [path,s] of targetState.entries()){
+      if (!/^(content|filler)\//.test(path)) continue;
+      if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4)) continue;
+      if (Math.abs(s.originalSize - w) < 1e-6) d1All.push(path);
+    }
+
+    const picked = [...fixedPaths];
+    for (const p of d1All){
+      if (picked.length >= REQUIRED_BUTTONS) break;
+      if (!picked.includes(p)) picked.push(p);
+    }
+
+    persistentButtonPaths = picked.slice(0, REQUIRED_BUTTONS);
+    if (persistentButtonPaths.length < REQUIRED_BUTTONS) return false;
+
+    const fixedOrder = ['motion','fractal','code'];
+    for (let i=0; i<REQUIRED_BUTTONS; i++){
+      const spec = CATEGORIES.find(c=>c.key===fixedOrder[i]);
+      const path = persistentButtonPaths[i];
       buttonCells.set(path, { label: spec.label, url: spec.url, key: spec.key });
     }
-  }
-  // Sécurité anti-doublons : remplace une 2e occurrence par la catégorie manquante
-  const seen = new Map();
-  const missing = new Set(CATEGORIES.map(c=>c.key));
-  for (const p of persistentButtonPaths){
-    const k = buttonCells.get(p)?.key;
-    if (k){ missing.delete(k); seen.set(k, (seen.get(k)||0)+1); }
-  }
-  if (missing.size>0){
-    const missingKeys = Array.from(missing);
-    for (const [k,count] of seen.entries()){
-      if (count>1 && missingKeys.length>0){
-        let replaced = false;
-        for (const p of persistentButtonPaths){
-          const info = buttonCells.get(p);
-          if (info?.key===k && replaced){
-            const mKey = missingKeys.shift();
-            const spec = CATEGORIES.find(c=>c.key===mKey);
-            if (spec){ buttonCells.set(p, { label: spec.label, url: spec.url, key: spec.key }); }
-            break;
+
+  } else {
+    /* ==================== DESKTOP/TABLET : logique existante ==================== */
+    const pickedBtn = [];
+    if (BUTTONS_ON_D2) {
+      for (const it of d2) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (isForbiddenD2Edge(it.key2)) continue;
+        if (isAdjacentIn(buttonSlots, it.key2)) continue;
+        pickedBtn.push(it.path); buttonSlots.add(it.key2);
+      }
+      for (const it of d2) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (isForbiddenD2Edge(it.key2)) continue;
+        if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key2); }
+      }
+      for (const it of d1) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (isAdjacentIn(buttonSlots, it.key1)) continue;
+        pickedBtn.push(it.path); buttonSlots.add(it.key1);
+      }
+      for (const it of d1) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key1); }
+      }
+    } else {
+      for (const it of d1) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (isAdjacentIn(buttonSlots, it.key1)) continue;
+        pickedBtn.push(it.path); buttonSlots.add(it.key1);
+      }
+      for (const it of d1) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key1); }
+      }
+      for (const it of d2) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (isForbiddenD2Edge(it.key2)) continue;
+        if (isAdjacentIn(buttonSlots, it.key2)) continue;
+        pickedBtn.push(it.path); buttonSlots.add(it.key2);
+      }
+      for (const it of d2) {
+        if (pickedBtn.length>=REQUIRED_BUTTONS) break;
+        if (!pickedBtn.includes(it.path)) { pickedBtn.push(it.path); buttonSlots.add(it.key2); }
+      }
+    }
+    persistentButtonPaths = pickedBtn.slice(0, REQUIRED_BUTTONS);
+    if (persistentButtonPaths.length < REQUIRED_BUTTONS) return false;
+
+    // attribution aléatoire des 3 catégories uniques (desktop/tablette)
+    const order = [0,1,2];
+    for (let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+    for (let i=0; i<REQUIRED_BUTTONS; i++){
+      const path = persistentButtonPaths[i];
+      if (path && targetState.has(path)) {
+        const spec = CATEGORIES[order[i]];
+        buttonCells.set(path, { label: spec.label, url: spec.url, key: spec.key });
+      }
+    }
+    // anti-doublon
+    const seen = new Map();
+    const missing = new Set(CATEGORIES.map(c=>c.key));
+    for (const p of persistentButtonPaths){
+      const k = buttonCells.get(p)?.key;
+      if (k){ missing.delete(k); seen.set(k, (seen.get(k)||0)+1); }
+    }
+    if (missing.size>0){
+      const missingKeys = Array.from(missing);
+      for (const [k,count] of seen.entries()){
+        if (count>1 && missingKeys.length>0){
+          let replaced = false;
+          for (const p of persistentButtonPaths){
+            const info = buttonCells.get(p);
+            if (info?.key===k && replaced){
+              const mKey = missingKeys.shift();
+              const spec = CATEGORIES.find(c=>c.key===mKey);
+              if (spec){ buttonCells.set(p, { label: spec.label, url: spec.url, key: spec.key }); }
+              break;
+            }
+            if (info?.key===k && !replaced){ replaced = true; }
           }
-          if (info?.key===k && !replaced){ replaced = true; }
         }
       }
     }
   }
 
-  // Vérification finale stricte : 3 catégories présentes et toutes différentes
-  {
-    const keys = persistentButtonPaths.map(p=>buttonCells.get(p)?.key).filter(Boolean);
-    const unique = new Set(keys);
-    if (unique.size !== REQUIRED_BUTTONS) {
-      return false;
-    }
-  }
-
-  /* 2) Images — essayer 1 grande + WANT_D2 moyennes */
+  /* 2) Images — D1 = 0 sur mobile, donc seulement des D2 autour */
   const chosen = new Set();
   const buttonSet = new Set(persistentButtonPaths);
   const localImgSlots = new Set();
 
-  // 1 grande (D1)
-  if (WANT_D1>0) {
+  // D1 image (seulement s’il y a des images)
+  if (HAS_IMAGES && WANT_D1 > 0) {
     for (const c of d1) {
       if (buttonSet.has(c.path)) continue;
       chosen.add(c.path);
-      // occuper les 4 slots D2 internes pour limiter l’adjacence
       const half = w/2;
       const quads = [
         depth2SlotKey(c.s.x - half/2, c.s.y + half/2, w, contentTop),
@@ -662,25 +727,27 @@ function chooseButtonsThenImages(forceFull){
     }
   }
 
-  // Moyennes (D2)
+  // D2 images (seulement s’il y a des images)
   let pickedD2 = 0;
-  for (const c of d2) {
-    if (pickedD2 >= WANT_D2) break;
-    if (buttonSet.has(c.path)) continue;
-    if (isAdjacentIn(localImgSlots, c.key2)) continue;
-    chosen.add(c.path); localImgSlots.add(c.key2); imageSlots.add(c.key2); pickedD2++;
-  }
-  // Complément si pas assez (même adjacence)
-  for (const c of d2) {
-    if (pickedD2 >= WANT_D2) break;
-    if (buttonSet.has(c.path)) continue;
-    if (chosen.has(c.path)) continue;
-    chosen.add(c.path); imageSlots.add(c.key2); pickedD2++;
+  if (HAS_IMAGES) {
+    for (const c of d2) {
+      if (pickedD2 >= WANT_D2) break;
+      if (buttonSet.has(c.path)) continue;
+      if (isAdjacentIn(localImgSlots, c.key2)) continue;
+      chosen.add(c.path); localImgSlots.add(c.key2); imageSlots.add(c.key2); pickedD2++;
+    }
+    for (const c of d2) {
+      if (pickedD2 >= WANT_D2) break;
+      if (buttonSet.has(c.path)) continue;
+      if (chosen.has(c.path)) continue;
+      chosen.add(c.path); imageSlots.add(c.key2); pickedD2++;
+    }
   }
 
+  // Applique la sélection d’images (si aucune image dispo, chosen reste vide → tout noir)
   for (const p of chosen) imageCells.add(p);
 
-  // Assigner des textures sans doublon
+  // Textures sans doublon
   const used = new Set();
   for (const p of imageCells) if (imageAssignment.has(p)) used.add(imageAssignment.get(p));
   for (const p of imageCells) {
@@ -693,6 +760,8 @@ function chooseButtonsThenImages(forceFull){
 
   return true;
 }
+
+
 
 /* Fallback ultime si jamais 3 boutons ne sont pas trouvés après 50 essais */
 function ensureFallbackButtons(){
@@ -715,11 +784,62 @@ function ensureFallbackButtons(){
   }
 }
 
+function ensureMinDepth2Cells(required, preserveD1Count){
+  const { w, contentTop } = getLayoutMetrics();
+
+  // (utilisée côté desktop/tablette)
+  const protectedD1 = new Set(['D1:1,0','D1:0,1','D1:1,2']);
+
+  let d1 = [], d2 = [];
+  for (const [path, s] of targetState.entries()){
+    if (!path.startsWith('content/')) continue;
+    if (!isFullyVisible(s.x, s.y, s.originalSize, contentTop)) continue;
+
+    if (Math.abs(s.originalSize - w) < 1e-6){
+      const key1 = depth1SlotKey(s.x, s.y, w, contentTop);
+      if (!protectedD1.has(key1)) d1.push({ path, s });
+    }
+    if (Math.abs(s.originalSize - w/2) < 1e-6){
+      d2.push({ path, s });
+    }
+  }
+
+  if (d2.length >= required) return;
+
+  d1.sort((a,b)=> hashCode(a.path) - hashCode(b.path));
+  let remainingD1 = d1.length;
+
+  for (const {path, s} of d1){
+    if (d2.length >= required) break;
+    if ((remainingD1 - 1) < preserveD1Count) break;
+
+    targetState.delete(path); remainingD1--;
+    const size=s.originalSize, ns=size/2, d=2, o=size/4;
+    const quads = [
+      {x:s.x-o, y:s.y+o, suffix:'/0'},
+      {x:s.x+o, y:s.y+o, suffix:'/1'},
+      {x:s.x-o, y:s.y-o, suffix:'/2'},
+      {x:s.x+o, y:s.y-o, suffix:'/3'},
+    ];
+    for (const q of quads){
+      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+      const p = path + q.suffix;
+      targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
+      d2.push({ path:p, s:targetState.get(p) });
+      if (d2.length >= required) break;
+    }
+  }
+}
+
+
 /* Subdivisions d'ambiance non destructives */
 function sprinkleRefinements(maxOps=24){
   const candidates = [];
   for (const [path,s] of targetState.entries()){
-    if (!path.startsWith('content/')) continue;
+    // Sur mobile : on inclut aussi les "fillers" pour subdiviser le bas.
+    // Sinon (desktop/tablette) on garde le comportement d'origine (content seulement).
+    if (!isMobileBucket() && !path.startsWith('content/')) continue;
+
     if (imageCells.has(path) || buttonCells.has(path)) continue;
     candidates.push({ path, s });
   }
@@ -728,11 +848,11 @@ function sprinkleRefinements(maxOps=24){
   let ops=0;
   for (const it of candidates){
     if (ops>=maxOps) break;
-    // subdivise 1 fois si possible
     if (it.s.depth < TARGET_DEPTH) {
       targetState.delete(it.path);
       const { x,y, originalSize:os, depth:d, path:p } = it.s;
       const ns = os/2, nd = d+1, o = os/4;
+      // Ici on enlève la limite (override = -1) pour pouvoir raffiner
       createQuadTree(x-o, y+o, ns, nd, p+'/0', -1);
       createQuadTree(x+o, y+o, ns, nd, p+'/1', -1);
       createQuadTree(x-o, y-o, ns, nd, p+'/2', -1);
@@ -742,18 +862,24 @@ function sprinkleRefinements(maxOps=24){
   }
 }
 
+
 /* Materials */
 function getImageMaterial(url){
+  if (!url) return darkMaterial;           // ← fallback noir si pas d’URL
   if (materialCache.has(url)) return materialCache.get(url);
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: null });
   textureLoader.load(url, tex=>{
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     mat.map = tex; mat.needsUpdate = true;
+  }, undefined, ()=>{                       // onError → noir
+    mat.map = null; mat.color.set(COLORS.square);
+    mat.needsUpdate = true;
   });
   materialCache.set(url, mat);
   return mat;
 }
+
 function makeTopRightLabelSprite(text, squareSize){
   const lines = text.split('\\n');
   const cvs = document.createElement('canvas'); const W=1024, H=768;
