@@ -85,6 +85,38 @@
     font-size: 14px; color: #f3f1ee; letter-spacing: .02em; text-decoration: none;
   }
   .nav-btn:hover, .nav-btn:focus { outline: none; color: #f3ff00; }
+  
+  /* Animation des boutons du menu */
+  /* Animation des boutons du menu — sans délai CSS */
+  
+  #nav-links .nav-btn {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;      /* masque les lettres qui bougent */
+  line-height: 1.1;
+}
+
+  #nav-links .nav-btn .text-container {
+    position: relative;
+    display: block;
+    top: -1px;             /* petit ajustement vertical */
+  /* pas de transition CSS ici */
+  }
+
+  #nav-links .nav-btn .button-text {
+    display: block;
+    white-space: nowrap;
+  }
+
+  #nav-links .nav-btn .letter {
+    display: inline-block;
+    /* pas de transition CSS ici — GSAP gère tout */
+    will-change: transform;
+  }
+
+
+  /* garde ta couleur : la couleur au survol reste gérée par .nav-btn:hover */
+
   #logo-link { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center;
     margin-left: calc(var(--menu-gap) * 2);
   }
@@ -141,6 +173,7 @@
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
 </head>
 <body>
 
@@ -519,6 +552,70 @@ function init(){
   window.addEventListener('click', onClick, { passive:true });
   window.addEventListener('scroll', onScroll, { passive:true });
   // Curseur DOM par-dessus le menu
+  
+// ----- Animation hover pour les liens du menu [ABOUT] / [CONTACT] -----
+function enableNavButtonHoverAnimation(){
+  // gsap est chargé via <script ... defer>, s'il n'est pas prêt on retente au prochain frame
+  if (typeof window.gsap === 'undefined') {
+    requestAnimationFrame(enableNavButtonHoverAnimation);
+    return;
+  }
+  const buttons = document.querySelectorAll('#nav-links .nav-btn');
+  buttons.forEach(setupAnimatedNavButton);
+}
+
+function setupAnimatedNavButton(button){
+  if (!button) return;
+
+  // Récupère le texte original (ex: "[ ABOUT ]")
+  const label = button.textContent.trim();
+
+  // Construit le markup nécessaire à l'animation
+  button.innerHTML = `
+    <span class="text-container">
+      <span class="button-text initial-text">${label}</span>
+      <span class="button-text hover-text">${label}</span>
+    </span>
+  `;
+
+  // Découpe un élément texte en <span class="letter">…</span>
+  const splitTextIntoSpans = (el) => {
+    const text = el.textContent;
+    el.innerHTML = [...text].map(ch => `<span class="letter">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+    return el.querySelectorAll('.letter');
+  };
+
+  const initialEl = button.querySelector('.initial-text');
+  const hoverEl   = button.querySelector('.hover-text');
+
+  const initialLetters = splitTextIntoSpans(initialEl);
+  const hoverLetters   = splitTextIntoSpans(hoverEl);
+
+  // Positionnements init
+  gsap.set(hoverEl,       { position:'absolute', top:0, left:0 });
+  gsap.set(initialLetters,{ y:'0%'    });
+  gsap.set(hoverLetters,  { y:'100%'  });
+
+  // Timeline par bouton
+  const tl = gsap.timeline({ paused:true });
+  tl.to(initialLetters, {
+      y: '-100%',
+      stagger: 0.015,
+      duration: 0.20,
+      ease: 'power2.inOut'
+    })
+    .to(hoverLetters, {
+      y: '0%',
+      stagger: 0.015,
+      duration: 0.20,
+      ease: 'power2.inOut'
+    }, '<0.05');
+
+  button.addEventListener('mouseenter', () => tl.play());
+  button.addEventListener('mouseleave', () => tl.reverse());
+}
+  
+  
 (function createDomCursor(){
   const el = document.createElement('div');
   el.id = 'cursor-overlay';
@@ -526,7 +623,9 @@ function init(){
   document.body.appendChild(el);
   domCursorEl = el;
 })();
-
+  
+  enableNavButtonHoverAnimation();
+  
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
 }
 
