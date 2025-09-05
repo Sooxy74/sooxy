@@ -42,12 +42,13 @@
         opacity: 0;           /* on l'affiche seulement dans le header */
     }
     #cursor-overlay .inner{
-        width: 100%;
-        height: 100%;
-        background: #f3ff00;
-        opacity: .85;
-        box-shadow: 0 0 0 1px #08090a inset; /* bord foncé 1px */
+      width: 100%;
+      height: 100%;
+      background: #f3ff00;
+      opacity: .85;
+      box-shadow: 0 0 0 1px #11190c inset;
     }
+
 
   body {
     margin: 0; overflow: auto;
@@ -81,7 +82,7 @@
   #nav-links { display: flex; gap: calc(var(--menu-gap) * 2); align-items: center; white-space: nowrap; pointer-events: auto; }
   .nav-btn {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-size: 14px; color: #e5e5e5; letter-spacing: .02em; text-decoration: none;
+    font-size: 14px; color: #f3f1ee; letter-spacing: .02em; text-decoration: none;
   }
   .nav-btn:hover, .nav-btn:focus { outline: none; color: #f3ff00; }
   #logo-link { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center;
@@ -93,12 +94,19 @@
     aspect-ratio: auto; display: block; user-select: none;
   }
   #mobile-left, #mobile-right {
-    display: none; pointer-events: auto; color: #e5e5e5;
+    display: none; pointer-events: auto; color: #f3f1ee;
     position: absolute; top: 50%; transform: translateY(-50%);
   }
+
   #mobile-left  { left: var(--menu-gap); }
   #mobile-right { right: var(--menu-gap); }
-  .mobile-icon { display: block; width: 22px; height: 22px; }
+  .mobile-icon {
+  display: block;
+    /* taille réactive basée sur la hauteur du header */
+    width:  calc(var(--menu-h) * 1.00);
+    height: calc(var(--menu-h) * 1.00);
+  }
+
   @media (max-width: 640px) {
     #header-inner { justify-content: center; }
     #nav-links { display: none; }
@@ -111,13 +119,14 @@
 .hover-label{
   position:absolute;
   font:700 18px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
-  color:#e5e5e5; line-height:1;
+  color:#f3f1ee; line-height:1;
   transition:opacity .15s ease, color .15s ease;
-  transform:translate(-100%,0);      /* ancre = haut-droite */
+  transform:translate(-100%,0);
   transform-origin:100% 0%;
   text-align:right; white-space:normal;
   will-change:transform,opacity,color,width;
 }
+
 .hover-label .line{ display:block; }
 
 /* même interlignage au pixel près entre toutes les lignes */
@@ -138,21 +147,23 @@
 <header id="ui-header" aria-label="Top menu">
   <div id="header-inner">
     <a id="mobile-left" href="#about" aria-label="About / Info">
-      <svg class="mobile-icon" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-        <path d="M7.49991 0.876892C3.84222 0.876892 0.877075 3.84204 0.877075 7.49972C0.877075 11.1574 3.84222 14.1226 7.49991 14.1226C11.1576 14.1226 14.1227 11.1574 14.1227 7.49972C14.1227 3.84204 11.1576 0.876892 7.49991 0.876892ZM1.82707 7.49972C1.82707 4.36671 4.36689 1.82689 7.49991 1.82689C10.6329 1.82689 13.1727 4.36671 13.1727 7.49972C13.1727 10.6327 10.6329 13.1726 7.49991 13.1726C4.36689 13.1726 1.82707 10.6327 1.82707 7.49972ZM8.24992 4.49999C8.24992 4.9142 7.91413 5.24999 7.49992 5.24999C7.08571 5.24999 6.74992 4.9142 6.74992 4.49999C6.74992 4.08577 7.08571 3.74999 7.49992 3.74999C7.91413 3.74999 8.24992 4.08577 8.24992 4.49999ZM6.00003 5.99999H6.50003H7.50003C7.77618 5.99999 8.00003 6.22384 8.00003 6.49999V9.99999H8.50003H9.00003V11H8.50003H7.50003H6.50003H6.00003V9.99999H6.50003H7.00003V6.99999H6.50003H6.00003V5.99999Z" fill-rule="evenodd" clip-rule="evenodd"/>
+      <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path fill="#f3f1ee" d="M119.5,61.73c-7.8,0-14.72,3.82-19,9.69-4.28-5.87-11.2-9.69-19-9.69h-26.5v68h33c4.68,0,8.49,3.81,8.5,8.49v.05s9-.04,9-.04c0-4.69,3.81-8.5,8.5-8.5h31V61.73h-25.5ZM88,120.73h-24v-50h17.5c8,0,14.5,6.5,14.5,14.5v.04l.35,37.58c-2.48-1.36-5.33-2.13-8.35-2.13ZM136,120.73h-22c-3.14,0-6.09.85-8.64,2.3l-.36-37.81c0-7.99,6.51-14.49,14.5-14.49h16.5v50Z"/>
       </svg>
+
     </a>
     <nav id="nav-links" aria-label="Primary">
       <a class="nav-btn" href="#about">[ ABOUT ]</a>
       <a class="nav-btn" href="#contact">[ CONTACT ]</a>
     </nav>
     <a id="logo-link" href="/" aria-label="Home">
-      <img id="logo-overlay" src="https://i.postimg.cc/nz6hx67W/logo-sooxy-art.png" alt="Logo Sooxy Art" loading="eager" decoding="async" />
+      <img id="logo-overlay" src="img/logo-sooxy-art.png" alt="Logo Sooxy Art" loading="eager" decoding="async" />
     </a>
     <a id="mobile-right" href="#contact" aria-label="Contact">
-      <svg class="mobile-icon" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-        <path d="M1 2C0.447715 2 0 2.44772 0 3V12C0 12.5523 0.447715 13 1 13H14C14.5523 13 15 12.5523 15 12V3C15 2.44772 14.5523 2 14 2H1ZM1 3L14 3V3.92494C13.9174 3.92486 13.8338 3.94751 13.7589 3.99505L7.5 7.96703L1.24112 3.99505C1.16621 3.94751 1.0826 3.92486 1 3.92494V3ZM1 4.90797V12H14V4.90797L7.74112 8.87995C7.59394 8.97335 7.40606 8.97335 7.25888 8.87995L1 4.90797Z" fill-rule="evenodd" clip-rule="evenodd"/>
+      <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path fill="#f3f1ee" d="M55,136h90v-72H55v72ZM64,73h72v7.29l-36.47,23.82-35.53-23.85v-7.25ZM64,91.09l35.47,23.81,36.53-23.86v35.96h-72v-35.91Z"/>
       </svg>
+
     </a>
   </div>
 </header>
@@ -200,11 +211,13 @@ function pickBucket(w, h){
 // Couleurs & config
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const COLORS = {
-  background: 0x0055ff,
-  square:     0x08090a,
-  accent:     0xf3ff00,
-  textCSS:    '#e5e5e5'
+  background: 0x0055ff,           // bleu
+  square:     0x11190c,           // noir
+  accent:     0xf3ff00,           // jaune
+  textCSS:    '#f3f1ee',          // blanc (pour DOM/canvas)
+  placeholder:'#CAC4B7'           // gris fallback images
 };
+
 const config = {
   borderWidth: 0.005,
   backgroundColor: COLORS.background,
@@ -278,22 +291,15 @@ const PRESETS = {
     { size:'D2', row:0, col:1, quad:0, key:'motion'  },
     { size:'D2', row:0, col:2, quad:2, key:'ui'     },
     { size:'D2', row:1, col:0, quad:1, key:'fractal' },
-    // ⬇️ Random Stuff monté de 3 quarts (même D1 col=2, quad 3 -> 1)
     { size:'D2', row:1, col:3, quad:2, key:'random'  },
-    { size:'D2', row:0, col:2, quad:1, key:'code'    },
-
+    { size:'D2', row:0, col:2, quad:1, key:'code'    }
   ],
-
-  // Images
+  // Images UNIQUEMENT en D1 (taille w)
   imagesD1: [
     { row:0, col:0 },
-    { row:0, col:3 },
-    
+    { row:0, col:3 }
   ],
-  // On supprime l’image qui était en {row:0,col:2,quad:1} (conflit avec Random)
-  imagesD2: [
-    { row:1, col:3, quad:1 }
-  ],
+  imagesD2: [] // rien en w/2
 },
 
 
@@ -399,15 +405,14 @@ async function scanLocalImages() {
     const url = `${LOCAL_IMG_DIR}${num}${IMG_EXT}`;
     const ok = await imageExists(url);
     if (ok) { imageTextures.push(url); misses = 0; }
-    else { misses++; if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break; }
-  }
-  if (imageTextures.length > 0 && imageTextures.length < 12) {
-    const base = imageTextures.slice();
-    while (imageTextures.length < 12) {
-      imageTextures.push(base[imageTextures.length % base.length]);
+    else {
+      misses++;
+      if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break;
     }
   }
+  // pas de duplication automatique : on garde uniquement les fichiers réellement présents
 }
+
 
 function imageExists(url) {
   return new Promise(resolve => {
@@ -498,7 +503,7 @@ function init(){
   geometry = new THREE.PlaneGeometry(1,1);
   cursorMaterial = new THREE.MeshBasicMaterial({ color: config.cursorColor, transparent:true, opacity:0.85 });
   darkMaterial   = new THREE.MeshBasicMaterial({ color: config.darkColor });
-  dotMaterial    = new THREE.MeshBasicMaterial({ color: config.dotColor });
+  dotMaterial    = new THREE.MeshBasicMaterial({ color: config.dotColor, depthTest: false });
   menuBorderMaterial = new THREE.MeshBasicMaterial({ color: config.backgroundColor });
   mouseSquare = new THREE.Mesh(geometry, cursorMaterial); mouseSquare.userData.targetPosition = new THREE.Vector3(); mouseSquare.userData.targetScale = new THREE.Vector3(); mouseSquare.renderOrder = 4; scene.add(mouseSquare);
   cursorBorder = new THREE.Mesh(geometry, darkMaterial); cursorBorder.userData.targetPosition = new THREE.Vector3(); cursorBorder.userData.targetScale = new THREE.Vector3(); cursorBorder.renderOrder = 3; scene.add(cursorBorder);
@@ -669,7 +674,10 @@ function createQuadTree(x, y, size, depth, path, maxDepthOverride=-1){
 
 // On conçoit le contenu sur 4 colonnes "virtuelles" (preset desktop-16:9)
 const CONTENT_COLS = 4;
+// Colonnes "centrales" où w est interdit (Motion = col 1, Creative Coding = col 2)
+const NO_D1_CONTENT_COLS = new Set([1, 2]);
 
+  
 // Décalage horizontal (en colonnes) pour centrer CONTENT_COLS dans baseCols
 function contentOffsetColsForBucket(){
   return Math.max(0, (baseCols - CONTENT_COLS) / 2); // 21:9 -> 0.5, 32:9 -> 1, etc.
@@ -735,32 +743,34 @@ function updateFractalBase(forceFull=false){
     : baseRowsPrimary;
   const totalRows   = Math.max(minRows, visibleRows);
 
-const offsetCols = contentOffsetColsForBucket();
+  const offsetCols = contentOffsetColsForBucket();
 
-for (let row = 0; row < totalRows; row++) {
-  const isPrimary = row < baseRowsPrimary;
+  for (let row = 0; row < totalRows; row++) {
+    const isPrimary = row < baseRowsPrimary;
+    const colsThisRow = isPrimary ? Math.min(CONTENT_COLS, baseCols) : baseCols;
 
-  // Sur les rangées "de contenu", on ne fabrique que 4 colonnes virtuelles,
-  // centrées grâce au décalage offsetCols.
-  const colsThisRow = isPrimary ? Math.min(CONTENT_COLS, baseCols) : baseCols;
+    for (let col = 0; col < colsThisRow; col++) {
+      const pref = isPrimary ? 'content' : 'filler';
+      const path = `${pref}/${row}/${col}`;
 
-  for (let col = 0; col < colsThisRow; col++) {
-    const pref = isPrimary ? 'content' : 'filler';
-    const path = `${pref}/${row}/${col}`;
+      const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
+      const y = contentTop - row * w - w/2;
 
-    // ⭐️ Décalage horizontal pour centrer les 4 colonnes
-    const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
-    const y = contentTop - row * w - w/2;
+      const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
+      createQuadTree(
+        x, y, w, 1, path,
+        (isMobileBucket() || forceThisCell) ? 1 : -1
+      );
+    }
 
-    const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
-    createQuadTree(
-      x, y, w, 1, path,
-      (isMobileBucket() || forceThisCell) ? 1 : -1
-    );
+    if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
 
-  // ⬅️ AJOUT ICI : remplir les bandes bleues (gauche/droite) de cette rangée
-  if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
+// Interdiction des D1 dans Motion (col 1) + Creative Coding (col 2)
+// Et aussi dans les colonnes de remplissage latérales quand l'écran > 16:9
+if (!isMobileBucket()){
+  enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+  if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers(); // 21:9 et 32:9
 }
 
   if (isMobileBucket()){
@@ -768,13 +778,12 @@ for (let row = 0; row < totalRows; row++) {
   } else {
     const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
 
-    // On protège par "path" (content/row/col) pour être indépendant du décalage horizontal
+    // Protège les D1 explicitement demandées par le preset
     const protectedD1Paths = new Set();
     (preset?.buttons  || []).forEach(b  => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
-    (preset?.imagesD1 || []).forEach(im => {                          protectedD1Paths.add(`content/${im.row}/${im.col}`); });
+    (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); });
 
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
-
   }
 
   const okButtons = chooseButtonsThenImages(forceFull);
@@ -814,6 +823,95 @@ function forceMobilePattern(){
   }
 }
 
+// Force: pas de D1 (w) dans certaines colonnes de la grille "content"
+function enforceNoD1InColumns(colsSet){
+  const { w, contentTop } = getLayoutMetrics();
+  const toSplit = [];
+
+  for (const [path, s] of targetState.entries()){
+    if (!path.startsWith('content/')) continue;
+
+    // On ne cible QUE les feuilles D1 de base: "content/row/col"
+    const m = path.match(/^content\/(\d+)\/(\d+)$/);
+    if (!m) continue;
+
+    const col = parseInt(m[2], 10);
+    if (!colsSet.has(col)) continue;
+
+    // D1 seulement
+    if (Math.abs(s.originalSize - w) > 1e-6) continue;
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+
+    toSplit.push({ path, s });
+  }
+
+  // Remplace chaque D1 par ses 4 enfants D2
+  for (const { path, s } of toSplit){
+    targetState.delete(path);
+
+    const size = s.originalSize;
+    const ns = size / 2;
+    const d  = 2;
+    const o  = size / 4;
+
+    const quads = [
+      { x: s.x - o, y: s.y + o, suffix: '/0' },
+      { x: s.x + o, y: s.y + o, suffix: '/1' },
+      { x: s.x - o, y: s.y - o, suffix: '/2' },
+      { x: s.x + o, y: s.y - o, suffix: '/3' },
+    ];
+
+    for (const q of quads){
+      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+      const p = path + q.suffix;
+      targetState.set(p, {
+        x: q.x, y: q.y,
+        size: ns - config.borderWidth,
+        depth: d, path: p, originalSize: ns
+      });
+    }
+  }
+}
+
+// Force: pas de D1 (w) dans les colonnes latérales "filler/L" et "filler/R"
+function enforceNoD1InSideFillers(){
+  const { w, contentTop } = getLayoutMetrics();
+  const toSplit = [];
+
+  for (const [path, s] of targetState.entries()){
+    if (!path.startsWith('filler/')) continue;
+    if (!/^filler\/[LR]\/\d+\/\d+$/.test(path)) continue; // uniquement les latérales créées par addPrimaryRowSideFillers
+    if (Math.abs(s.originalSize - w) > 1e-6) continue;    // D1 seulement
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+    toSplit.push({ path, s });
+  }
+
+  for (const { path, s } of toSplit){
+    targetState.delete(path);
+    const size = s.originalSize;
+    const ns = size / 2;
+    const d  = 2;
+    const o  = size / 4;
+
+    const quads = [
+      { x: s.x - o, y: s.y + o, suffix: '/0' },
+      { x: s.x + o, y: s.y + o, suffix: '/1' },
+      { x: s.x - o, y: s.y - o, suffix: '/2' },
+      { x: s.x + o, y: s.y - o, suffix: '/3' },
+    ];
+
+    for (const q of quads){
+      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+      const p = path + q.suffix;
+      targetState.set(p, {
+        x: q.x, y: q.y,
+        size: ns - config.borderWidth,
+        depth: d, path: p, originalSize: ns
+      });
+    }
+  }
+}
+  
 function specToPath(spec, contentTop, w) {
   if (!spec) return null;
   if (spec.size === 'D1') {
@@ -831,11 +929,11 @@ function specToPath(spec, contentTop, w) {
 
 function chooseButtonsThenImages(forceFull){
   imageCells.clear(); buttonCells.clear(); imageSlots.clear(); buttonSlots.clear();
+
   const { w, contentTop } = getLayoutMetrics();
-  const HAS_IMAGES = imageTextures && imageTextures.length > 0;
   const preset = presetForBucket(currentBucket);
 
-  // Boutons déterministes
+  // --- Boutons déterministes (inchangé) ---
   persistentButtonPaths = [];
   for (const b of (preset?.buttons || [])) {
     const path = specToPath(b, contentTop, w);
@@ -848,32 +946,36 @@ function chooseButtonsThenImages(forceFull){
   const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
   if (persistentButtonPaths.length < requiredBtnCount) return false;
 
-  // Images déterministes
-  if (HAS_IMAGES){
-    for (const img of (preset?.imagesD1 || [])){
-      const p = `content/${img.row}/${img.col}`;
-      const s = targetState.get(p);
-      if (s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4) && !buttonCells.has(p)){
-        imageCells.add(p);
-      }
+  // --- Images UNIQUEMENT en D1 (taille w) ---
+  for (const img of (preset?.imagesD1 || [])){
+    const p = `content/${img.row}/${img.col}`;
+    const s = targetState.get(p);
+    if (s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4) && !buttonCells.has(p)){
+      imageCells.add(p);
     }
-    for (const img of (preset?.imagesD2 || [])){
-      const p = specToPath({ size:'D2', ...img }, contentTop, w);
-      if (p && !buttonCells.has(p)) imageCells.add(p);
-    }
+  }
+  // on ignore totalement imagesD2
+
+  // --- Attribution aléatoire, sans doublon à l'écran ---
+  // uniqueUrls = déduplication, puis mélange
+  const uniqueUrls = Array.from(new Set(imageTextures));
+  for (let i = uniqueUrls.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = tmp;
   }
 
-  // Attribution textures sans doublon
-  const used = new Set();
-  for (const p of imageCells) if (imageAssignment.has(p)) used.add(imageAssignment.get(p));
-  for (const p of imageCells) {
-    if (!imageAssignment.has(p)) {
-      let idx = 0;
-      while (used.has(idx) && idx < imageTextures.length) idx++;
-      imageAssignment.set(p, idx); used.add(idx);
-    }
+  const cells = Array.from(imageCells);
+  // si pas assez d'images uniques, les cases restantes auront un placeholder gris
+  for (let i = 0; i < cells.length; i++) {
+    const url = uniqueUrls[i] || null;
+    imageAssignment.set(cells[i], url);
   }
-  for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
+
+  // nettoyage des affectations obsolètes
+  for (const k of Array.from(imageAssignment.keys())) {
+    if (!imageCells.has(k)) imageAssignment.delete(k);
+  }
+
   return true;
 }
 
@@ -1043,17 +1145,29 @@ function sprinkleRefinements(maxOps = 24){
 
 // Materials
 function getImageMaterial(url){
-  if (!url) return darkMaterial;
+  // placeholder gris quand pas d'URL, ou si le chargement échoue
+  const PLACEHOLDER_KEY = '__placeholder__';
+  const getPlaceholder = () => {
+    if (!materialCache.has(PLACEHOLDER_KEY)) {
+      materialCache.set(PLACEHOLDER_KEY, new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.placeholder) }));
+    }
+    return materialCache.get(PLACEHOLDER_KEY);
+  };
+
+  if (!url) return getPlaceholder();
+
   if (materialCache.has(url)) return materialCache.get(url);
+
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: null });
   textureLoader.load(url, tex=>{
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     mat.map = tex; mat.needsUpdate = true;
   }, undefined, ()=>{
-    mat.map = null; mat.color.set(COLORS.square);
+    mat.map = null; mat.color.set(COLORS.placeholder); // gris si erreur
     mat.needsUpdate = true;
   });
+
   materialCache.set(url, mat);
   return mat;
 }
@@ -1231,10 +1345,10 @@ function syncStateToMeshes(){
 
     let material = darkMaterial;
     if (isImg) {
-      const idx = imageAssignment.get(key);
-      const url = imageTextures[idx];
+      const url = imageAssignment.get(key);
       material  = getImageMaterial(url);
     }
+
 
     if (ex){
       // --- UPDATE ---
@@ -1242,6 +1356,7 @@ function syncStateToMeshes(){
       ex.targetScale.set(t.size, t.size, 1);
       if (ex.mesh.material !== material) ex.mesh.material = material;
       ex.isButton = isBtn; ex.isImage = isImg;
+      if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
 
       // labels DOM + baffle (robuste au reset)
       if (isBtn){
@@ -1294,7 +1409,16 @@ function getDotScale(state){
   if (config.dotSizeIsRelative) return state.mesh.scale.x * cappedDotSize;
   const viewHeight = camera.top - camera.bottom; const viewWidth = camera.right - camera.left; const gridSize = Math.max(viewWidth, viewHeight); const baseSize = gridSize / 256; const base = baseSize * cappedDotSize; return base;
 }
-function addDotToState(st){ if (st.dotMesh) return; st.dotMesh = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial); st.dotMesh.position.copy(st.mesh.position); st.dotMesh.renderOrder = 0; scene.add(st.dotMesh); const sc = getDotScale(st); st.dotMesh.scale.set(sc, sc, 1); }
+function addDotToState(st){
+  if (st.dotMesh) return;
+  st.dotMesh = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
+  st.dotMesh.position.copy(st.mesh.position);
+  st.dotMesh.position.z = 0.02;  // au-dessus des cases
+  st.dotMesh.renderOrder = 1;    // devant les cases, sous les overlays
+  scene.add(st.dotMesh);
+  const sc = getDotScale(st);
+  st.dotMesh.scale.set(sc, sc, 1);
+}
 
 // Anim
 function animate(){
@@ -1377,19 +1501,27 @@ function animate(){
 
   if (inside){
     hoverAny = true;
-    st.domLabelEl.style.color = '#f3ff00';
+    st.domLabelEl.style.color = '#f3ff00'; // jaune au survol
     if (!st.hovering){
       st.hovering = true;
       if (st.baffles){ st.baffles.forEach(b=>{ b.start(); b.reveal(600); }); }
     }
-  } else {
-    st.domLabelEl.style.color = '#e5e5e5';
-    st.hovering = false;
-  }
+} else {
+  st.domLabelEl.style.color = '#f3f1ee'; // blanc par défaut
+  st.hovering = false;
+}
+
 }
 
 
-    if (st.dotMesh){ st.dotMesh.position.copy(st.mesh.position); if (st.isImage && st.dotMesh.scale.x>0) st.dotMesh.scale.set(0,0,0); }
+    if (st.dotMesh){
+      st.dotMesh.position.copy(st.mesh.position);
+      st.dotMesh.position.z = 0.02;
+      const sc = getDotScale(st);
+      if (st.isImage) st.dotMesh.scale.set(0, 0, 0);
+      else            st.dotMesh.scale.set(sc, sc, 1);
+    }
+
 
     if (st.mesh.scale.x < 0.001 && st.targetScale.x===0){
       scene.remove(st.mesh); meshPool.push(st.mesh);
