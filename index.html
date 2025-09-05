@@ -388,6 +388,7 @@ let TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
 let domCursorEl = null;
 let cursorInHeader = false;
 let lastGridCursorSizeWorld = 0;   // mémorise la taille utilisée dans la grille
+let persistentImageUrls = null;
 
 
 
@@ -977,27 +978,37 @@ function chooseButtonsThenImages(forceFull){
 
   // --- Images D2 (w/2)
   for (const spec of (preset?.imagesD2 || [])){
-    const path = specToPath(spec, contentTop, w); // assure la subdivision et renvoie le child exact
+    const path = specToPath(spec, contentTop, w);
     if (path && !buttonCells.has(path)) {
       imageCells.add(path);
     }
   }
 
-  // --- Attribution d'images (robuste, avec fallback)
-  let uniqueUrls = Array.from(new Set(imageTextures));
-  // shuffle
-  for (let i = uniqueUrls.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const t = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = t;
-  }
-  if (uniqueUrls.length === 0) {
-    uniqueUrls = ['img/logo-sooxy-art.png'];
+  // --- Attribution d'images
+  const cells = Array.from(imageCells);
+  let urlsToUse = [];
+
+  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
+    // première attribution: on choisit et on mémorise l’ordre
+    let uniqueUrls = Array.from(new Set(imageTextures));
+    for (let i = uniqueUrls.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = t;
+    }
+    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
+    for (let i = 0; i < cells.length; i++){
+      urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
+    }
+    persistentImageUrls = urlsToUse.slice(); // mémorise pour les “reforms” suivants
+  } else {
+    // ré-agencement soft: on réutilise la même liste mémorisée
+    for (let i = 0; i < cells.length; i++){
+      urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
+    }
   }
 
-  const cells = Array.from(imageCells);
-  for (let i = 0; i < cells.length; i++) {
-    const url = uniqueUrls[i % uniqueUrls.length];
-    imageAssignment.set(cells[i], url);
+  for (let i = 0; i < cells.length; i++){
+    imageAssignment.set(cells[i], urlsToUse[i]);
   }
 
   // nettoyage
@@ -1007,6 +1018,26 @@ function chooseButtonsThenImages(forceFull){
 
   return true;
 }
+
+  
+function reformGridKeepImages(){
+  // on garde persistentImageUrls tel quel
+  forceRecreateLabelsOnce = true; // pour reconstruire proprement les labels DOM
+  reseed();                      // nouveau bruit / seed => nouveau quad-tree
+
+  targetState.clear();
+  imageCells.clear();
+  buttonCells.clear();
+  imageAssignment.clear(); // on va ré-attribuer aux nouvelles cases, mais avec les mêmes URLs
+  imageSlots.clear();
+  buttonSlots.clear();
+
+  const ok = updateFractalBase(false); // false => chooseButtonsThenImages réutilise persistentImageUrls
+  if (ok) {
+    syncStateToMeshes();
+  }
+}
+  
 
 function presetForBucket(id){ return PRESETS[id] || PRESETS['desktop-16:9']; }
 
@@ -1744,6 +1775,10 @@ function onClick(e){
   }
 
   const wp = new THREE.Vector3(lastMouseScreenPos.x,lastMouseScreenPos.y,0).unproject(camera);
+  const { contentTop } = getLayoutMetrics();
+
+  // ignore les clics dans le header
+  if (wp.y >= contentTop) return;
 
   // Navigation si on clique dans un bouton
   for (const [key, st] of fractalState.entries()){
@@ -1759,7 +1794,8 @@ function onClick(e){
     }
   }
 
-  // sinon: ne rien faire (surtout pas re-randomiser)
+  // sinon: “reform” de la grille sans recharger/réchanger les images
+  reformGridKeepImages();
 }
 
 // Outil de repérage
