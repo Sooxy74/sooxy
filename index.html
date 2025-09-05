@@ -541,9 +541,12 @@ async function bootstrap(){
   currentBucket = pickBucket(w, h);
   applyBucket();
 
-  buildFreeOverlays();   // ← AJOUT ICI
-
+  // 1) construit la grille et assigne ses images (gauche/droite)
   resetFractalRandom();
+
+  // 2) maintenant que imageAssignment est rempli, l’overlay du milieu
+  // peut piocher dans la même liste en évitant les doublons
+  buildFreeOverlays();
 }
 
 
@@ -1204,22 +1207,13 @@ function getImageMaterial(url){
 
 const FREE_OVERLAYS = [
   {
-    // rangée sous "UI design" = row:1
     row: 1,
-    // on part de la colonne 2 (celle “sous UI”)...
     col: 2,
-    // ...et on la décale de w/2 vers la GAUCHE  →  -0.5
     offsetCols: -0.5,
     offsetRows: 0,
-
-    // taille = 1 case (plein w × w)
-    wMul: 1, 
+    wMul: 1,
     hMul: 1,
-
-    // mets ici l’image que tu veux afficher
-    url: 'img/hero.png',
-
-    // petits traits 1px pour fondre avec la grille (optionnel)
+    url: null, // auto: prendra dans imageTextures (BY-pics), en évitant si possible une image déjà utilisée
     gutters: { left: true, right: true, top: false, bottom: false }
   },
 ];
@@ -1227,6 +1221,18 @@ const FREE_OVERLAYS = [
 
 let freeOverlays = [];
 
+function pickOverlayUrl() {
+  // images déjà utilisées par la grille (D1 & D2)
+  const used = new Set(imageAssignment.values());
+  // on essaie de prendre une image de la même liste non encore utilisée
+  for (const u of imageTextures) {
+    if (!used.has(u)) return u;
+  }
+  // fallback si tout est utilisé ou liste vide
+  return imageTextures[0] || 'img/logo-sooxy-art.png';
+}
+
+  
 function buildFreeOverlays(){
   // Nettoyage
   for (const o of freeOverlays){
@@ -1241,13 +1247,13 @@ function buildFreeOverlays(){
 
   // Création
   for (const spec of FREE_OVERLAYS){
-    const mat = spec.url
-      ? getImageMaterial(spec.url)
-      : new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.15, transparent: true });
+    // → même pool que la grille, et on évite si possible une image déjà utilisée
+    const urlToUse = spec.url ? spec.url : pickOverlayUrl();
+    const mat = getImageMaterial(urlToUse);
 
     const mesh = new THREE.Mesh(geometry, mat);
     mesh.renderOrder = 2;
-    // on démarre "collapsé", mais on ne forcera PAS la position finale tout de suite :
+    // on démarre "collapsé"
     mesh.position.set(0, 0, 0.20);
     mesh.scale.set(0, 0, 1);
     scene.add(mesh);
@@ -1285,24 +1291,17 @@ function buildFreeOverlays(){
   // Calcule les cibles (centre + tailles)
   updateFreeOverlays();
 
-  // ⚓ SNAP INITIAL : position = cible, scale = 0
-  // => l’overlay « pop » bien depuis son centre (comme les images de gauche/droite)
+  // Snap initial: image = au bon centre, scale 0 (anim ensuite)
   for (const o of freeOverlays){
-    // image
     o.mesh.position.copy(o.targetPosition);
-    o.mesh.scale.set(0, 0, 1); // on laisse l’anim faire la mise à l’échelle
+    o.mesh.scale.set(0, 0, 1);
 
-    // cover bleu : on le place/scale tout de suite à sa taille finale (il ne s’anime pas)
     if (o.cover){
       o.cover.position.set(o.targetPosition.x, o.targetPosition.y, 0.19);
-      // sa scale a déjà été fixée dans updateFreeOverlays()
     }
 
-    // stripes/gouttières : place-les à la bonne position,
-    // mais démarre avec une longueur nulle (épaisseur OK) pour une apparition propre
     if (o.vLeft){
       o.vLeft.position.copy(o.vLeft._tPos);
-      // épaisseur = _tScale.x (1px), longueur = 0 → grandira vers _tScale.y
       o.vLeft.scale.set(o.vLeft._tScale.x, 0, 1);
     }
     if (o.vRight){
@@ -1311,7 +1310,6 @@ function buildFreeOverlays(){
     }
     if (o.hTop){
       o.hTop.position.copy(o.hTop._tPos);
-      // épaisseur = _tScale.y (1px), longueur = 0 → grandira vers _tScale.x
       o.hTop.scale.set(0, o.hTop._tScale.y, 1);
     }
     if (o.hBottom){
@@ -1320,6 +1318,8 @@ function buildFreeOverlays(){
     }
   }
 }
+
+
 
 
 
@@ -1742,18 +1742,24 @@ function onClick(e){
     logD2At(wp);
     return;
   }
+
   const wp = new THREE.Vector3(lastMouseScreenPos.x,lastMouseScreenPos.y,0).unproject(camera);
+
+  // Navigation si on clique dans un bouton
   for (const [key, st] of fractalState.entries()){
     if (!st.isButton) continue;
     const half = st.targetScale.x/2;
-    const inside = (wp.x>=st.targetPosition.x-half && wp.x<=st.targetPosition.x+half && wp.y>=st.targetPosition.y-half && wp.y<=st.targetPosition.y+half);
+    const inside =
+      (wp.x >= st.targetPosition.x - half && wp.x <= st.targetPosition.x + half &&
+       wp.y >= st.targetPosition.y - half && wp.y <= st.targetPosition.y + half);
     if (inside && buttonCells.has(key)){
-      const {url} = buttonCells.get(key);
+      const { url } = buttonCells.get(key);
       window.location.href = url;
       return;
     }
   }
-  resetFractalRandom();
+
+  // sinon: ne rien faire (surtout pas re-randomiser)
 }
 
 // Outil de repérage
