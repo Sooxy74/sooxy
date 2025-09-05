@@ -286,7 +286,7 @@ const LAYOUT_WISH = {
 const PRESETS = {
   // Desktop 16:9 — suit la maquette : 5 boutons (rouges) en D2, images (vertes) en D1 et D2
   'desktop-16:9': {
-  // Boutons
+  // Boutons (inchangé)
   buttons: [
     { size:'D2', row:0, col:1, quad:0, key:'motion'  },
     { size:'D2', row:0, col:2, quad:2, key:'ui'     },
@@ -294,13 +294,18 @@ const PRESETS = {
     { size:'D2', row:1, col:3, quad:2, key:'random'  },
     { size:'D2', row:0, col:2, quad:1, key:'code'    }
   ],
-  // Images UNIQUEMENT en D1 (taille w)
+
+  // Images plein w (D1) : on laisse seulement celles du haut
   imagesD1: [
     { row:0, col:0 },
     { row:0, col:3 }
   ],
-  imagesD2: [] // rien en w/2
+
+  // Aucune image w/2 ici
+  imagesD2: []
 },
+
+
 
 
   // Tablettes/Mobiles : inchangé par rapport à ton code actuel
@@ -673,9 +678,11 @@ function createQuadTree(x, y, size, depth, path, maxDepthOverride=-1){
 }
 
 // On conçoit le contenu sur 4 colonnes "virtuelles" (preset desktop-16:9)
-const CONTENT_COLS = 4;
 // Colonnes "centrales" où w est interdit (Motion = col 1, Creative Coding = col 2)
+const CONTENT_COLS = 4;
 const NO_D1_CONTENT_COLS = new Set([1, 2]);
+// plus AUCUNE exception : pas de D1 autorisé dans ces colonnes
+const D1_EXCEPTIONS = new Set();
 
   
 // Décalage horizontal (en colonnes) pour centrer CONTENT_COLS dans baseCols
@@ -788,7 +795,12 @@ if (!isMobileBucket()){
 
   const okButtons = chooseButtonsThenImages(forceFull);
   if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
+    // sécurité : on re-vérifie qu’aucun D1 n’a ré-échappé dans ces colonnes
+  if (!isMobileBucket()){
+    enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+  }
   return okButtons;
+
 }
 
 // Motif mobile : garde les D1 du preset et subdivise le reste en D2
@@ -831,21 +843,21 @@ function enforceNoD1InColumns(colsSet){
   for (const [path, s] of targetState.entries()){
     if (!path.startsWith('content/')) continue;
 
-    // On ne cible QUE les feuilles D1 de base: "content/row/col"
+    // ne viser que les feuilles D1 "content/row/col"
     const m = path.match(/^content\/(\d+)\/(\d+)$/);
     if (!m) continue;
 
     const col = parseInt(m[2], 10);
     if (!colsSet.has(col)) continue;
 
-    // D1 seulement
+    // uniquement les cases plein w qui sont assez visibles
     if (Math.abs(s.originalSize - w) > 1e-6) continue;
     if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
 
     toSplit.push({ path, s });
   }
 
-  // Remplace chaque D1 par ses 4 enfants D2
+  // on remplace chaque D1 par ses 4 enfants D2
   for (const { path, s } of toSplit){
     targetState.delete(path);
 
@@ -872,6 +884,8 @@ function enforceNoD1InColumns(colsSet){
     }
   }
 }
+
+
 
 // Force: pas de D1 (w) dans les colonnes latérales "filler/L" et "filler/R"
 function enforceNoD1InSideFillers(){
@@ -928,12 +942,15 @@ function specToPath(spec, contentTop, w) {
 }
 
 function chooseButtonsThenImages(forceFull){
-  imageCells.clear(); buttonCells.clear(); imageSlots.clear(); buttonSlots.clear();
+  imageCells.clear();
+  buttonCells.clear();
+  imageSlots.clear();
+  buttonSlots.clear();
 
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
 
-  // --- Boutons déterministes (inchangé) ---
+  // --- Boutons déterministes
   persistentButtonPaths = [];
   for (const b of (preset?.buttons || [])) {
     const path = specToPath(b, contentTop, w);
@@ -946,7 +963,7 @@ function chooseButtonsThenImages(forceFull){
   const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
   if (persistentButtonPaths.length < requiredBtnCount) return false;
 
-  // --- Images UNIQUEMENT en D1 (taille w) ---
+  // --- Images D1 (plein w)
   for (const img of (preset?.imagesD1 || [])){
     const p = `content/${img.row}/${img.col}`;
     const s = targetState.get(p);
@@ -954,24 +971,33 @@ function chooseButtonsThenImages(forceFull){
       imageCells.add(p);
     }
   }
-  // on ignore totalement imagesD2
 
-  // --- Attribution aléatoire, sans doublon à l'écran ---
-  // uniqueUrls = déduplication, puis mélange
-  const uniqueUrls = Array.from(new Set(imageTextures));
+  // --- Images D2 (w/2)
+  for (const spec of (preset?.imagesD2 || [])){
+    const path = specToPath(spec, contentTop, w); // assure la subdivision et renvoie le child exact
+    if (path && !buttonCells.has(path)) {
+      imageCells.add(path);
+    }
+  }
+
+  // --- Attribution d'images (robuste, avec fallback)
+  let uniqueUrls = Array.from(new Set(imageTextures));
+  // shuffle
   for (let i = uniqueUrls.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    const tmp = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = tmp;
+    const t = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = t;
+  }
+  if (uniqueUrls.length === 0) {
+    uniqueUrls = ['img/logo-sooxy-art.png'];
   }
 
   const cells = Array.from(imageCells);
-  // si pas assez d'images uniques, les cases restantes auront un placeholder gris
   for (let i = 0; i < cells.length; i++) {
-    const url = uniqueUrls[i] || null;
+    const url = uniqueUrls[i % uniqueUrls.length];
     imageAssignment.set(cells[i], url);
   }
 
-  // nettoyage des affectations obsolètes
+  // nettoyage
   for (const k of Array.from(imageAssignment.keys())) {
     if (!imageCells.has(k)) imageAssignment.delete(k);
   }
@@ -1178,13 +1204,26 @@ function getImageMaterial(url){
 
 const FREE_OVERLAYS = [
   {
-    row: 1, col: 1,
-    offsetCols: 0.5, offsetRows: 0,   // ← ton décalage w/2
-    wMul: 1, hMul: 1,                 // taille (en multiples de w)
-    url: 'img/hero.png',              // ton image
-    gutters: { left: true, right: false, top: false, bottom: false } // ← trait bleu à gauche
+    // rangée sous "UI design" = row:1
+    row: 1,
+    // on part de la colonne 2 (celle “sous UI”)...
+    col: 2,
+    // ...et on la décale de w/2 vers la GAUCHE  →  -0.5
+    offsetCols: -0.5,
+    offsetRows: 0,
+
+    // taille = 1 case (plein w × w)
+    wMul: 1, 
+    hMul: 1,
+
+    // mets ici l’image que tu veux afficher
+    url: 'img/hero.png',
+
+    // petits traits 1px pour fondre avec la grille (optionnel)
+    gutters: { left: true, right: true, top: false, bottom: false }
   },
 ];
+
 
 let freeOverlays = [];
 
@@ -1196,6 +1235,7 @@ function buildFreeOverlays(){
     if (o.vRight)  scene.remove(o.vRight);
     if (o.hTop)    scene.remove(o.hTop);
     if (o.hBottom) scene.remove(o.hBottom);
+    if (o.cover)   scene.remove(o.cover);
   }
   freeOverlays.length = 0;
 
@@ -1203,18 +1243,30 @@ function buildFreeOverlays(){
   for (const spec of FREE_OVERLAYS){
     const mat = spec.url
       ? getImageMaterial(spec.url)
-      : new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.15, transparent: true }); // placeholder
+      : new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.15, transparent: true });
 
     const mesh = new THREE.Mesh(geometry, mat);
-    mesh.renderOrder = 2;     // sous les traits mais au-dessus des cases
-    mesh.position.z = 0.20;
+    mesh.renderOrder = 2;
+    // on démarre "collapsé", mais on ne forcera PAS la position finale tout de suite :
+    mesh.position.set(0, 0, 0.20);
+    mesh.scale.set(0, 0, 1);
     scene.add(mesh);
 
-    // bandes 1px (même bleu que l'arrière-plan)
+    // cache bleu sous l'image
+    const cover = new THREE.Mesh(geometry, menuBorderMaterial);
+    cover.renderOrder = 2;
+    cover.position.set(0, 0, 0.19);
+    cover.scale.set(0, 0, 1);
+    scene.add(cover);
+
+    // bandes 1px (fond bleu) au-dessus de l'image
     const makeStripe = () => {
-      const m = new THREE.Mesh(geometry, menuBorderMaterial); // menuBorderMaterial = couleur fond
-      m.renderOrder = 3;   // au-dessus de l'overlay
-      m.position.z = 0.21;
+      const m = new THREE.Mesh(geometry, menuBorderMaterial);
+      m.renderOrder = 3;
+      m.position.set(0, 0, 0.21);
+      m.scale.set(0, 0, 1);
+      m._tPos   = new THREE.Vector3();  // cibles pour lerp
+      m._tScale = new THREE.Vector3();
       scene.add(m);
       return m;
     };
@@ -1224,57 +1276,94 @@ function buildFreeOverlays(){
     const hTop    = spec.gutters?.top    ? makeStripe() : null;
     const hBottom = spec.gutters?.bottom ? makeStripe() : null;
 
-    freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom });
+    const targetPosition = new THREE.Vector3();
+    const targetScale    = new THREE.Vector3(0, 0, 1);
+
+    freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom, targetPosition, targetScale, cover });
   }
 
+  // Calcule les cibles (centre + tailles)
   updateFreeOverlays();
+
+  // ⚓ SNAP INITIAL : position = cible, scale = 0
+  // => l’overlay « pop » bien depuis son centre (comme les images de gauche/droite)
+  for (const o of freeOverlays){
+    // image
+    o.mesh.position.copy(o.targetPosition);
+    o.mesh.scale.set(0, 0, 1); // on laisse l’anim faire la mise à l’échelle
+
+    // cover bleu : on le place/scale tout de suite à sa taille finale (il ne s’anime pas)
+    if (o.cover){
+      o.cover.position.set(o.targetPosition.x, o.targetPosition.y, 0.19);
+      // sa scale a déjà été fixée dans updateFreeOverlays()
+    }
+
+    // stripes/gouttières : place-les à la bonne position,
+    // mais démarre avec une longueur nulle (épaisseur OK) pour une apparition propre
+    if (o.vLeft){
+      o.vLeft.position.copy(o.vLeft._tPos);
+      // épaisseur = _tScale.x (1px), longueur = 0 → grandira vers _tScale.y
+      o.vLeft.scale.set(o.vLeft._tScale.x, 0, 1);
+    }
+    if (o.vRight){
+      o.vRight.position.copy(o.vRight._tPos);
+      o.vRight.scale.set(o.vRight._tScale.x, 0, 1);
+    }
+    if (o.hTop){
+      o.hTop.position.copy(o.hTop._tPos);
+      // épaisseur = _tScale.y (1px), longueur = 0 → grandira vers _tScale.x
+      o.hTop.scale.set(0, o.hTop._tScale.y, 1);
+    }
+    if (o.hBottom){
+      o.hBottom.position.copy(o.hBottom._tPos);
+      o.hBottom.scale.set(0, o.hBottom._tScale.y, 1);
+    }
+  }
 }
+
+
 
 function updateFreeOverlays(){
   if (!freeOverlays.length) return;
 
   const { w, contentTop } = getLayoutMetrics();
-  const bucketOffset = contentOffsetColsForBucket(); // ← décale les 4 colonnes vers le centre (0 en 16:9, 0.5 en 21:9, 1 en 32:9)
+  const bucketOffset = contentOffsetColsForBucket();
 
   for (const o of freeOverlays){
-    const { mesh, spec } = o;
+    const { spec } = o;
 
-    // Centre + taille en monde (col/row sont exprimés dans la grille "contenu" 4 colonnes)
-    const colNudge = spec.offsetCols || 0;  // petit décalage relatif (ex: +0.5 = w/2)
+    const colNudge = spec.offsetCols || 0;
     const rowNudge = spec.offsetRows || 0;
 
-    const cx = camera.left + (spec.col + 0.5 + bucketOffset + colNudge) * w;  // ← ICI : + bucketOffset
+    const cx = camera.left + (spec.col + 0.5 + bucketOffset + colNudge) * w;
     const cy = contentTop   - (spec.row + 0.5 + rowNudge) * w;
     const sx = w * (spec.wMul || 1);
     const sy = w * (spec.hMul || 1);
 
-    mesh.position.set(cx, cy, 0.20);
-    mesh.scale.set(sx - config.borderWidth, sy - config.borderWidth, 1);
+    // → cibles d’anim de l’image overlay
+    o.targetPosition.set(cx, cy, 0.20);
+    o.targetScale.set(
+      Math.max(0, sx - config.borderWidth),
+      Math.max(0, sy - config.borderWidth),
+      1
+    );
 
-    // Bords (coordonnées monde)
+    // cibles des traits 1px
     const leftX   = cx - sx/2;
     const rightX  = cx + sx/2;
     const topY    = cy + sy/2;
     const bottomY = cy - sy/2;
-
-    // 1px CSS en monde
     const bw = config.borderWidth;
 
-    if (o.vLeft){
-      o.vLeft.position.set(leftX, cy, 0.21);
-      o.vLeft.scale.set(bw, sy + bw, 1);
-    }
-    if (o.vRight){
-      o.vRight.position.set(rightX, cy, 0.21);
-      o.vRight.scale.set(bw, sy + bw, 1);
-    }
-    if (o.hTop){
-      o.hTop.position.set(cx, topY, 0.21);
-      o.hTop.scale.set(sx + bw, bw, 1);
-    }
-    if (o.hBottom){
-      o.hBottom.position.set(cx, bottomY, 0.21);
-      o.hBottom.scale.set(sx + bw, bw, 1);
+    if (o.vLeft){   o.vLeft._tPos.set(leftX,  cy, 0.21);   o.vLeft._tScale.set(bw,     sy + bw, 1); }
+    if (o.vRight){  o.vRight._tPos.set(rightX, cy, 0.21);  o.vRight._tScale.set(bw,     sy + bw, 1); }
+    if (o.hTop){    o.hTop._tPos.set(cx,    topY, 0.21);   o.hTop._tScale.set(sx + bw, bw,     1); }
+    if (o.hBottom){ o.hBottom._tPos.set(cx, bottomY, 0.21);o.hBottom._tScale.set(sx + bw, bw,     1); }
+
+    // --- cache bleu : taille finale dès le 1er frame (pas d'anim) ---
+    if (o.cover){
+      o.cover.position.set(cx, cy, 0.19);
+      o.cover.scale.set(sx + bw*2, sy + bw*2, 1);
     }
   }
 }
@@ -1535,6 +1624,30 @@ function animate(){
   }
 
   updateFreeOverlays();
+  
+  // --- anime les overlays comme la grille ---
+for (const o of freeOverlays){
+  o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
+  o.mesh.scale.lerp(o.targetScale,       config.gridAnimationSpeed);
+
+  if (o.vLeft){
+    o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed);
+    o.vLeft.scale.lerp(   o.vLeft._tScale, config.gridAnimationSpeed);
+  }
+  if (o.vRight){
+    o.vRight.position.lerp(o.vRight._tPos,   config.gridAnimationSpeed);
+    o.vRight.scale.lerp(   o.vRight._tScale, config.gridAnimationSpeed);
+  }
+  if (o.hTop){
+    o.hTop.position.lerp(o.hTop._tPos,   config.gridAnimationSpeed);
+    o.hTop.scale.lerp(   o.hTop._tScale, config.gridAnimationSpeed);
+  }
+  if (o.hBottom){
+    o.hBottom.position.lerp(o.hBottom._tPos,   config.gridAnimationSpeed);
+    o.hBottom.scale.lerp(   o.hBottom._tScale, config.gridAnimationSpeed);
+  }
+  
+}
   
   renderer.render(scene, camera);
   const canvas = document.getElementById('webgl-canvas');
