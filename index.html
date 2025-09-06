@@ -60,9 +60,16 @@
     opacity: 0; transition: opacity .25s ease;
   }
   #ui-header {
-    position: fixed; top: 0; left: 0; right: 0; height: var(--menu-h);
-    z-index: 4; pointer-events: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--menu-h);
+  z-index: 4;
+  pointer-events: none;
+
+  /* fond opaque = rend le chevauchement impossible visuellement */
+  background: #11190c;
   }
+
   
   #ui-header::after {
   content: "";
@@ -147,7 +154,20 @@
   }
   #scroll-spacer { height: var(--doc-h); }
   
-  #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+  /* Les labels doivent passer SOUS le header (z=4) */
+  /* Les labels ne doivent JAMAIS recouvrir la zone du header */
+  /* Les labels ne doivent pas recouvrir le header,
+   mais sans marge supplémentaire */
+  #labels-layer{
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+    clip-path: inset(var(--menu-h) 0 0 0); /* ⬅️ plus de + 8px */
+  }
+
+
+
 .hover-label{
   position:absolute;
   font:700 18px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
@@ -281,12 +301,15 @@ const config = {
 
 };
   
-  // --- Labels DOM (effet baffle) ---
+// --- Labels DOM (effet baffle) ---
 const LABEL_MARGIN_DEPTH_RIGHT = 6;   // marge droite ≈ w/32
 const LABEL_MARGIN_DEPTH_TOP   = 6;   // marge haut   ≈ w/32
 const LABEL_NUDGE_PX_Y         = -2;  // micro-ajustement vertical
 const LABEL_RIGHT_EXTRA_PX     = 1;   // petit décalage à droite
-const SAFE_TOP_GAP_PX          = 0;   // pas d’espace fixe ; on suit le menu réel
+
+// marge dure (px) sous le header pour empêcher tout chevauchement visuel
+const SAFE_TOP_GAP_PX          = 0;
+
 
 function worldToClientXY(v3){
   const v = v3.clone().project(camera);
@@ -300,48 +323,49 @@ function makeDomLabelEl(text){
   return el;
 }
   
-  // Vœux d’images par bucket
+// Vœux d’images par bucket
 const LAYOUT_WISH = {
   'desktop-32:9': { wantD1:2, wantD2:6, buttonsOnD2:true },
   'desktop-21:9': { wantD1:2, wantD2:5, buttonsOnD2:true },
-  // Desktop 16:9 : on colle au screen de référence : images en D1+D2, 5 boutons en D2
   'desktop-16:9': { wantD1:3, wantD2:4, buttonsOnD2:true },
   'tablet-4:3'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'tablet-3:4'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'tablet-9:16' : { wantD1:1, wantD2:4, buttonsOnD2:false },
-  'mobile-h'    : { wantD1:0, wantD2:4, buttonsOnD2:false },
-  'mobile-v'    : { wantD1:0, wantD2:4, buttonsOnD2:false },
+  // Mobile : on ne force aucune D2 via la grille, les boutons sont posés par-dessus
+  'mobile-h'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
+  'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
 };
 
+
+// Presets déterministes par bucket
+//  row/col = case D1 (grille de base), quad ∈ {0,1,2,3} = sous-carré D2 :
+//  0: haut-gauche, 1: haut-droit, 2: bas-gauche, 3: bas-droit
 // Presets déterministes par bucket
 //  row/col = case D1 (grille de base), quad ∈ {0,1,2,3} = sous-carré D2 :
 //  0: haut-gauche, 1: haut-droit, 2: bas-gauche, 3: bas-droit
 const PRESETS = {
   // Desktop 16:9 — suit la maquette : 5 boutons (rouges) en D2, images (vertes) en D1 et D2
   'desktop-16:9': {
-  // Boutons (inchangé)
-  buttons: [
-    { size:'D2', row:0, col:1, quad:0, key:'motion'  },
-    { size:'D2', row:0, col:2, quad:2, key:'ui'     },
-    { size:'D2', row:1, col:0, quad:1, key:'fractal' },
-    { size:'D2', row:1, col:3, quad:2, key:'random'  },
-    { size:'D2', row:0, col:2, quad:1, key:'code'    }
-  ],
+    // Boutons (inchangé)
+    buttons: [
+      { size:'D2', row:0, col:1, quad:0, key:'motion'  },
+      { size:'D2', row:0, col:2, quad:2, key:'ui'     },
+      { size:'D2', row:1, col:0, quad:1, key:'fractal' },
+      { size:'D2', row:1, col:3, quad:2, key:'random'  },
+      { size:'D2', row:0, col:2, quad:1, key:'code'    }
+    ],
 
-  // Images plein w (D1) : on laisse seulement celles du haut
-  imagesD1: [
-    { row:0, col:0 },
-    { row:0, col:3 }
-  ],
+    // Images plein w (D1) : on laisse seulement celles du haut
+    imagesD1: [
+      { row:0, col:0 },
+      { row:0, col:3 }
+    ],
 
-  // Aucune image w/2 ici
-  imagesD2: []
-},
+    // Aucune image w/2 ici
+    imagesD2: []
+  },
 
-
-
-
-  // Tablettes/Mobiles : inchangé par rapport à ton code actuel
+  // Tablettes/Mobiles
   'tablet-4:3': {
     buttons: [
       { size:'D2', row:0, col:0, quad:0, key:'motion' },
@@ -372,29 +396,42 @@ const PRESETS = {
     ],
     imagesD1: [], imagesD2: [],
   },
-  'mobile-v': {
+    'mobile-v': {
+    // Grille base: 2 colonnes x 4 rangées (BUCKETS mobile-v)
+    // On place 5 boutons en D2 (w/2) avec un motif lisible en colonne
     buttons: [
-      { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'     },
-      { size:'D1', row:2, col:1, key:'fractal' },
-      { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    },
+      { size:'D2', row:0, col:0, quad:1, key:'motion'  }, // haut-gauche, quadrant haut-droit
+      { size:'D2', row:1, col:1, quad:2, key:'ui'      }, // rangée 2, col droite, quadrant bas-gauche
+      { size:'D2', row:2, col:0, quad:3, key:'fractal' }, // rangée 3, col gauche, quadrant bas-droit
+      { size:'D2', row:3, col:1, quad:0, key:'random'  }, // rangée 4, col droite, quadrant haut-gauche
+      { size:'D2', row:1, col:0, quad:0, key:'code'    }, // rangée 2, col gauche, quadrant haut-gauche
     ],
     imagesD1: [], imagesD2: [],
   },
+
   'mobile-h': {
+    // Grille base: 3 colonnes x 2 rangées (BUCKETS mobile-h)
+    // 5 boutons en D2 répartis sur la surface
     buttons: [
-      { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'     },
-      { size:'D1', row:2, col:1, key:'fractal' },
-      { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    },
+      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
+      { size:'D2', row:0, col:1, quad:2, key:'ui'      },
+      { size:'D2', row:1, col:2, quad:0, key:'fractal' },
+      { size:'D2', row:1, col:0, quad:3, key:'random'  },
+      { size:'D2', row:0, col:2, quad:2, key:'code'    },
     ],
     imagesD1: [], imagesD2: [],
   },
+
+
+  // Pas de preset spécifique → on déclenchera le fallback
   'desktop-21:9': null,
   'desktop-32:9': null,
 };
+
+// === helpers preset (global) ===
+function presetForBucket(id){
+  return PRESETS[id] || PRESETS['desktop-16:9'];
+}
 
 // Catégories (5 uniques)
 const CATEGORIES = [
@@ -427,7 +464,10 @@ let persistentImageUrls = null;
 
 // Scroll vertical simulé en coordonnées monde
 let scrollOffsetWorld = 0;
+// Hauteur totale du contenu en "monde" pour le mobile (calculée dynamiquement)
+let mobileWorldContentHeight = 0;
 
+  
 // Images locales (img/BY-pics/01.png, 02.png, 03.png, …)
 let imageTextures = [];
 const LOCAL_IMG_DIR = 'img/BY-pics/';
@@ -468,34 +508,116 @@ function saltedKey(path, salt){ return (hashCode(path) ^ salt) | 0; }
 const sessionSalt = (Math.random()*0x7fffffff) | 0;
 function reseed(){ rngFn = Math.random; noise2D = createNoise2D(Math.random); }
 
+/* ====== BLOC MOBILE DÉTERMINISTE (remplace l'ancien ASCII) ====== */
+/*
+Objectif mobile :
+- 1 colonne de base (baseCols=1).
+- 5 boutons catégorie en D2 (taille = w/2), alternance gauche/droite.
+- Entre deux boutons successifs : espace vertical = w/4.
+- Aspect : fond noir (pas d'image).
+- Pas d'overlays, pas d'images sur mobile.
+*/
+
+// Mobile : ordre des catégories (5)
+const USE_MOBILE_DETERMINISTIC = true;
+const MOBILE_CATEGORY_ORDER = ['motion','ui','fractal','random','code'];
+
+// Construit 5 gros carrés w/2 en diagonale (AUCUN espace avant le 1er)
+// interlignes = w/4 entre les boutons uniquement
+function buildMobileButtonsDeterministic(){
+  const { w, contentTop } = getLayoutMetrics();
+
+  const side = w;
+  const gap  = w / 2;  // ⬅️ au lieu de w / 4
+  const stepY = side + gap;
+  const half = side / 2;
+
+  // Centres des colonnes
+  const xLeft  = camera.left + w * 0.5;
+  const xRight = camera.left + w * 1.5;
+
+  // 1er bouton : collé sous le header (pas de gap en haut)
+  const firstCy = contentTop - half;
+
+  // Nettoyage des anciens boutons mobiles éventuels
+  if (persistentButtonPaths && persistentButtonPaths.length){
+    for (const p of persistentButtonPaths){ targetState.delete(p); }
+  }
+  persistentButtonPaths = [];
+  buttonCells.clear();
+
+  const N = REQUIRED_BUTTONS; // 5
+  for (let i = 0; i < N; i++){
+    const onLeft = (i % 2 === 1);      // 0: droite, 1: gauche, 2: droite, ...
+    const cx = onLeft ? xLeft : xRight;
+    const cy = firstCy - i * stepY;
+
+    const path = `btn/${i}`;
+    targetState.set(path, {
+      x: cx,
+      y: cy,
+      size: side - config.borderWidth,
+      depth: 1,
+      path,
+      originalSize: side
+    });
+
+    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length];
+    const cat = CATEGORIES.find(c => c.key === key);
+    if (cat){
+      buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+      persistentButtonPaths.push(path);
+    }
+  }
+
+  // Hauteur totale : N * side + (N - 1) * gap (plus de gap supérieur)
+  mobileWorldContentHeight = N * side + (N - 1) * gap;
+  updateScrollDocHeight();
+
+  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
+}
+
+
+
+function ensureFallbackButtons(){
+  // En mobile on retombe sur le layout déterministe
+  if (isMobileBucket()){
+    buildMobileButtonsDeterministic();
+  }
+  // Desktop / tablette : rien à faire, presetForBucket() couvre le cas.
+}
+  
+  
 // Layout helpers
 function getLayoutMetrics(){
   const viewHeight = camera.top - camera.bottom;
   const viewWidth  = camera.right - camera.left;
 
-  // largeur d’une case D1 en unités monde (sert encore pour la grille)
+  // largeur d’une case D1 en unités monde
   const w = viewWidth / baseCols;
 
   // *** Mesure DOM du header réel (pixels CSS) ***
   const headerEl = document.getElementById('ui-header');
   const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
 
-  // conversion px -> monde, exacte
+  // conversion px -> monde
   const headerWorld = (headerPx / window.innerHeight) * viewHeight;
 
-  // 1 px CSS en unités monde (utile pour les lignes nettes)
+  // 1 px CSS en unités monde
   const onePxWorld = viewHeight / window.innerHeight;
 
-  // *** Verrouille la gouttière à 1 px CSS ***
+  // Verrouille la gouttière à 1 px CSS
   if (Math.abs(config.borderWidth - onePxWorld) > 1e-6) {
     config.borderWidth = onePxWorld;
   }
 
-  // Le contenu démarre pile sous le header réel (pas de +1 px caché)
-  const contentTop = camera.top - headerWorld - scrollOffsetWorld;
+  // ✅ Correction : on AJOUTE le scroll pour faire monter le contenu
+  // (avant: camera.top - headerWorld - scrollOffsetWorld)
+  const contentTop = camera.top - headerWorld + scrollOffsetWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
 }
+
 
 
   function isFullyVisible(x, y, size, contentTop){
@@ -652,30 +774,34 @@ async function bootstrap(){
 
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
-  if (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') {
+
+  // Desktop / tablettes : on suit la grille du bucket
+  if (currentBucket !== 'mobile-h' && currentBucket !== 'mobile-v'){
+    if (config.baseColsOverride != null) {
+      baseCols = Math.max(1, config.baseColsOverride);
+      baseRowsPrimary = b?.grid.rows || 2;
+    } else if (config.targetCellPx) {
+      baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
+      baseRowsPrimary = b?.grid.rows || 2;
+    } else {
+      baseCols = b?.grid.cols || 4;
+      baseRowsPrimary = b?.grid.rows || 2;
+    }
+  } else {
+    // Mobile : grille logique à 2 colonnes, le reste est géré par notre layout déterministe
     baseCols = 2;
-  } else if (config.baseColsOverride != null) {
-    baseCols = Math.max(1, config.baseColsOverride);
-  } else if (config.targetCellPx) {
-    baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
-  } else {
-    baseCols = b?.grid.cols || 4;
+    baseRowsPrimary = 2;
   }
-  if (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') {
-    baseRowsPrimary = Math.max(b?.grid.rows || 2, 5);
-  } else if (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16') {
-    baseRowsPrimary = Math.max(b?.grid.rows || 3, 5);
-  } else if (currentBucket === 'tablet-4:3') {
-    baseRowsPrimary = Math.max(b?.grid.rows || 2, 2);
-  } else {
-    baseRowsPrimary = b?.grid.rows || 2;
-  }
+
   const wish = LAYOUT_WISH[currentBucket] || { wantD1:1, wantD2:4, buttonsOnD2:true };
   WANT_D1 = wish.wantD1;
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
+
   updateScrollDocHeight();
 }
+
+
 
 // Grain + Menu
 function createGrainPlane(){
@@ -717,32 +843,43 @@ window.addEventListener('resize', ()=>{
 function updateScrollDocHeight(){
   const isMobile = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   const spacer = document.getElementById('scroll-spacer');
-  
   if (!spacer) return;
 
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
-  const totalRows = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16')
-    ? Math.max(baseRowsPrimary, 5)
-    : baseRowsPrimary;
+  let contentWorld;
+  if (isMobile){
+    // Utilise la hauteur calculée par le layout mobile déterministe (fallback si non calculée)
+    contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
+      ? mobileWorldContentHeight
+      : Math.max(baseRowsPrimary, 5) * w;
+  } else {
+    const totalRows = baseRowsPrimary;
+    contentWorld = totalRows * w;
+  }
 
-  const worldContent = menuHeight + totalRows * w;
-  const docPx = Math.max(window.innerHeight, Math.ceil((worldContent / viewHeight) * window.innerHeight));
-  spacer.style.height = (isMobile ? docPx : window.innerHeight) + 'px';
+  const worldTotal = menuHeight + contentWorld;
+  const docPx = Math.max(window.innerHeight, Math.ceil((worldTotal / viewHeight) * window.innerHeight));
+  spacer.style.height = docPx + 'px';
 }
 
 
 function onScroll(){
   const isMobile = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   if (!isMobile){ scrollOffsetWorld = 0; return; }
+
+  const { viewHeight, w, menuHeight } = getLayoutMetrics();
+  const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
+    ? mobileWorldContentHeight
+    : Math.max(baseRowsPrimary, 5) * w;
+
   const maxScrollPx = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
   const t = maxScrollPx > 0 ? window.scrollY / maxScrollPx : 0;
-  const { viewHeight, w, menuHeight } = getLayoutMetrics();
-  const totalRows = Math.max(baseRowsPrimary, 5);
-  const contentWorld = totalRows * w;
+
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
   scrollOffsetWorld = t * worldScrollable;
-  needsBaseUpdate = true;
+
+  needsBaseUpdate = true; // recalcule la grille pile sous le menu
 }
 
 // QuadTree / Build
@@ -835,6 +972,7 @@ function addPrimaryRowSideFillers(row, offsetCols){
 
 function updateFractalBase(forceFull=false){
   targetState.clear();
+
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
   if (!preset) {
@@ -851,7 +989,7 @@ function updateFractalBase(forceFull=false){
   const minRows = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16')
     ? Math.max(baseRowsPrimary, 5)
     : baseRowsPrimary;
-  const totalRows   = Math.max(minRows, visibleRows);
+  const totalRows = Math.max(minRows, visibleRows);
 
   const offsetCols = contentOffsetColsForBucket();
 
@@ -867,44 +1005,46 @@ function updateFractalBase(forceFull=false){
       const y = contentTop - row * w - w/2;
 
       const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
-      createQuadTree(
-        x, y, w, 1, path,
-        (isMobileBucket() || forceThisCell) ? 1 : -1
-      );
+      // Mobile : pas de limite spéciale ; Desktop : comportement normal
+      createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
     }
 
     if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
 
-// Interdiction des D1 dans Motion (col 1) + Creative Coding (col 2)
-// Et aussi dans les colonnes de remplissage latérales quand l'écran > 16:9
-if (!isMobileBucket()){
-  enforceNoD1InColumns(NO_D1_CONTENT_COLS);
-  if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers(); // 21:9 et 32:9
-}
+  // Desktop/Tablette uniquement : règles "pas de D1" + quota D2
+  if (!isMobileBucket()){
+    enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+    if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers();
 
-  if (isMobileBucket()){
-    forceMobilePattern();
-  } else {
     const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
-
-    // Protège les D1 explicitement demandées par le preset
     const protectedD1Paths = new Set();
     (preset?.buttons  || []).forEach(b  => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
     (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); });
-
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
   }
 
+  // ⬇️ MOBILE : aucune tuile > w/2 (<= moitié d’un bouton)
+  if (isMobileBucket()){
+    forceMobilePattern();  // remplace toute D1 visible par 4 D2
+  }
+
+  // Place les boutons (mobile = déterministe, desktop/tablette = preset)
   const okButtons = chooseButtonsThenImages(forceFull);
+
+
+  // Raffinements d’ambiance (un peu plus généreux en mobile)
   if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
-    // sécurité : on re-vérifie qu’aucun D1 n’a ré-échappé dans ces colonnes
+
+  // Rappel des règles desktop si besoin
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
   }
-  return okButtons;
 
+  return okButtons;
 }
+
+
 
 // Motif mobile : garde les D1 du preset et subdivise le reste en D2
 function forceMobilePattern(){
@@ -1043,6 +1183,43 @@ function specToPath(spec, contentTop, w) {
   }
   return null;
 }
+  
+// === garantir l'existence d'une D2 et renvoyer son path ===
+function ensureD2Path(row, col, quad, contentTop, w){
+  const parent = `content/${row}/${col}`;
+  const child  = `${parent}/${quad}`;
+
+  // déjà présent ?
+  const sChild = targetState.get(child);
+  if (sChild){
+    if (!isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null;
+    return child;
+  }
+
+  // sinon on part d'un D1 plein w et on le subdivise
+  const s = targetState.get(parent);
+  if (!s) return null;
+  if (Math.abs(s.originalSize - w) > 1e-6) return null;            // pas un D1 plein w
+  if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) return null;
+
+  targetState.delete(parent);
+  const size = s.originalSize, ns = size/2, d = 2, o = size/4;
+  const quads = [
+    {x:s.x-o, y:s.y+o, suffix:'/0'},
+    {x:s.x+o, y:s.y+o, suffix:'/1'},
+    {x:s.x-o, y:s.y-o, suffix:'/2'},
+    {x:s.x+o, y:s.y-o, suffix:'/3'},
+  ];
+  for (const q of quads){
+    if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+    const p = parent + q.suffix;
+    targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
+  }
+
+  const sNew = targetState.get(child);
+  return (sNew && isVisibleEnough(sNew.x, sNew.y, sNew.originalSize, contentTop, 0.40)) ? child : null;
+}
+
 
 function chooseButtonsThenImages(forceFull){
   imageCells.clear();
@@ -1050,10 +1227,15 @@ function chooseButtonsThenImages(forceFull){
   imageSlots.clear();
   buttonSlots.clear();
 
+  // Mobile : on construit les 5 boutons w/2 en diagonale, sans images dédiées
+  if (isMobileBucket() && USE_MOBILE_DETERMINISTIC){
+    return buildMobileButtonsDeterministic();
+  }
+
+  // Desktop / tablettes : logique existante basée sur les presets
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
 
-  // --- Boutons déterministes
   persistentButtonPaths = [];
   for (const b of (preset?.buttons || [])) {
     const path = specToPath(b, contentTop, w);
@@ -1066,7 +1248,6 @@ function chooseButtonsThenImages(forceFull){
   const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
   if (persistentButtonPaths.length < requiredBtnCount) return false;
 
-  // --- Images D1 (plein w)
   for (const img of (preset?.imagesD1 || [])){
     const p = `content/${img.row}/${img.col}`;
     const s = targetState.get(p);
@@ -1074,117 +1255,162 @@ function chooseButtonsThenImages(forceFull){
       imageCells.add(p);
     }
   }
-
-  // --- Images D2 (w/2)
   for (const spec of (preset?.imagesD2 || [])){
     const path = specToPath(spec, contentTop, w);
-    if (path && !buttonCells.has(path)) {
-      imageCells.add(path);
-    }
+    if (path && !buttonCells.has(path)) imageCells.add(path);
   }
 
-  // --- Attribution d'images
   const cells = Array.from(imageCells);
   let urlsToUse = [];
-
   if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
-    // première attribution: on choisit et on mémorise l’ordre
     let uniqueUrls = Array.from(new Set(imageTextures));
-    for (let i = uniqueUrls.length - 1; i > 0; i--) {
+    for (let i = uniqueUrls.length - 1; i > 0; i--){
       const j = Math.floor(Math.random() * (i + 1));
-      const t = uniqueUrls[i]; uniqueUrls[i] = uniqueUrls[j]; uniqueUrls[j] = t;
+      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
     }
     if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
-    for (let i = 0; i < cells.length; i++){
-      urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
-    }
-    persistentImageUrls = urlsToUse.slice(); // mémorise pour les “reforms” suivants
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
+    persistentImageUrls = urlsToUse.slice();
   } else {
-    // ré-agencement soft: on réutilise la même liste mémorisée
-    for (let i = 0; i < cells.length; i++){
-      urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
-    }
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
   }
-
-  for (let i = 0; i < cells.length; i++){
-    imageAssignment.set(cells[i], urlsToUse[i]);
-  }
-
-  // nettoyage
-  for (const k of Array.from(imageAssignment.keys())) {
-    if (!imageCells.has(k)) imageAssignment.delete(k);
-  }
+  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
+  for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
 
   return true;
 }
 
-  
+
+function chooseMobileAsciiButtonsAndImages(forceFull){
+  const { w, contentTop } = getLayoutMetrics();
+
+  // 1) Trouver les D2 "parents" des blocs 2x2 de B (boutons)
+  const blocks = findMobileCategoryBlocksD3(); // => {d1row,d1col,quad2}[]
+  const buttonD2Keys = new Set();
+  blocks.forEach(b=>{
+    const p = `content/${b.d1row}/${b.d1col}`;
+    // on s’assure que la D1 existe et est visible
+    const s = targetState.get(p);
+    if (!s || !isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.40)) return;
+    // la D2 fille
+    buttonD2Keys.add(`${p}/${b.quad2}`);
+  });
+
+  // 2) Subdiviser TOUTES les D1 "content/row/col" en D2
+  const toSplitD1 = [];
+  for (const [path, s] of targetState.entries()){
+    if (!/^content\/\d+\/\d+$/.test(path)) continue; // D1 seulement
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+    toSplitD1.push({ path, s });
+  }
+  for (const {path, s} of toSplitD1){
+    targetState.delete(path);
+    const size = s.originalSize, ns = size/2, d = 2, o = size/4;
+    const quads = [
+      {x:s.x-o, y:s.y+o, suffix:'/0'},
+      {x:s.x+o, y:s.y+o, suffix:'/1'},
+      {x:s.x-o, y:s.y-o, suffix:'/2'},
+      {x:s.x+o, y:s.y-o, suffix:'/3'},
+    ];
+    for (const q of quads){
+      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+      const p = path + q.suffix;
+      targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
+    }
+  }
+
+  // 3) Parcourir les D2 : garder celles marquées "bouton", subdiviser les autres en D3
+  persistentButtonPaths = [];
+  buttonCells.clear();
+  imageCells.clear();
+  imageSlots.clear();
+  buttonSlots.clear();
+
+  const d2List = [];
+  for (const [path, s] of targetState.entries()){
+    if (!/^content\/\d+\/\d+\/[0-3]$/.test(path)) continue; // D2
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+    d2List.push({ path, s });
+  }
+
+  // Tri stable (lecture haut->bas, gauche->droite)
+  d2List.sort((a,b)=> a.s.y===b.s.y ? a.s.x - b.s.x : b.s.y - a.s.y);
+
+  // Pour attribution des catégories
+  let catIdx = 0;
+
+  for (const {path, s} of d2List){
+    if (buttonD2Keys.has(path)){
+      // garder la D2 telle quelle → bouton + image
+      const key = MOBILE_CATEGORY_ORDER[catIdx % MOBILE_CATEGORY_ORDER.length];
+      catIdx++;
+      const cat = CATEGORIES.find(c => c.key === key);
+      if (cat){
+        buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+        persistentButtonPaths.push(path);
+        imageCells.add(path); // même tuile porte l'image
+      }
+    } else {
+      // subdiviser en D3 (4 petits carrés A w/4)
+      targetState.delete(path);
+      const size = s.originalSize, ns = size/2, d = 3, o = size/4;
+      const quads = [
+        {x:s.x-o, y:s.y+o, suffix:'/0'},
+        {x:s.x+o, y:s.y+o, suffix:'/1'},
+        {x:s.x-o, y:s.y-o, suffix:'/2'},
+        {x:s.x+o, y:s.y-o, suffix:'/3'},
+      ];
+      for (const q of quads){
+        if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+        const p = path + q.suffix;
+        targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
+      }
+    }
+  }
+
+  // 4) Attribution images : 1 image par bouton D2
+  const cells = Array.from(imageCells);
+  let urlsToUse = [];
+  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
+    let uniqueUrls = Array.from(new Set(imageTextures));
+    for (let i = uniqueUrls.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
+    }
+    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
+    persistentImageUrls = urlsToUse.slice();
+  } else {
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
+  }
+  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
+
+  // Nettoyage des images orphelines
+  for (const k of Array.from(imageAssignment.keys())){
+    if (!imageCells.has(k)) imageAssignment.delete(k);
+  }
+
+  // On veut au moins 5 boutons
+  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
+}
+
 function reformGridKeepImages(){
   // on garde persistentImageUrls tel quel
-  forceRecreateLabelsOnce = true; // pour reconstruire proprement les labels DOM
+  forceRecreateLabelsOnce = true; // reconstruire proprement les labels DOM
   reseed();                      // nouveau bruit / seed => nouveau quad-tree
 
   targetState.clear();
   imageCells.clear();
   buttonCells.clear();
-  imageAssignment.clear(); // on va ré-attribuer aux nouvelles cases, mais avec les mêmes URLs
+  imageAssignment.clear(); // on ré-attribuera les mêmes URLs aux nouvelles cases
   imageSlots.clear();
   buttonSlots.clear();
 
-  const ok = updateFractalBase(false); // false => chooseButtonsThenImages réutilise persistentImageUrls
+  const ok = updateFractalBase(false); // false => garde persistentImageUrls
   if (ok) {
     syncStateToMeshes();
   }
-}
-  
-
-function presetForBucket(id){ return PRESETS[id] || PRESETS['desktop-16:9']; }
-
-function ensureD2Path(row, col, quad, contentTop, w){
-  const basePath  = `content/${row}/${col}`;
-  const childPath = `${basePath}/${quad}`;
-  if (targetState.has(childPath)) return childPath;
-  const base = targetState.get(basePath);
-  if (base){
-    const ns = base.originalSize / 2;
-    const o  = base.originalSize / 4;
-    targetState.delete(basePath);
-    const quads = [
-      {x:base.x-o, y:base.y+o, suffix:'/0'},
-      {x:base.x+o, y:base.y+o, suffix:'/1'},
-      {x:base.x-o, y:base.y-o, suffix:'/2'},
-      {x:base.x+o, y:base.y-o, suffix:'/3'},
-    ];
-    for (const q of quads){
-      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
-      const p = basePath + q.suffix;
-      targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:2, path:p, originalSize:ns });
-    }
-    return targetState.has(childPath) ? childPath : null;
-  }
-  return null;
-}
-
-// Fallback : 5 boutons sur les premières cases visibles
-function ensureFallbackButtons(){
-  const { w, contentTop } = getLayoutMetrics();
-  const candidates = [];
-  for (const [path,s] of targetState.entries()){
-    if (!path.startsWith('content/')) continue;
-    if (!isFullyVisible(s.x, s.y, s.originalSize, contentTop)) continue;
-    candidates.push({ path, s });
-  }
-  candidates.sort((a,b)=> a.s.y===b.s.y ? a.s.x - b.s.x : b.s.y - a.s.y);
-  const need = Math.min(REQUIRED_BUTTONS, candidates.length);
-  const keys = ['motion','web','fractal','random','code'];
-  for (let i=0; i<need; i++){
-    const p = candidates[i].path;
-    const spec = CATEGORIES.find(c => c.key === keys[i % keys.length]);
-    if (!spec) continue;
-    buttonCells.set(p, { label: spec.label, url: spec.url, key: spec.key });
-    if (!persistentButtonPaths.includes(p)) persistentButtonPaths.push(p);
-  }
-}
+}  
 
 function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new Set()){
   const { w, contentTop } = getLayoutMetrics();
@@ -1364,17 +1590,20 @@ function pickOverlayUrl() {
 
   
 function buildFreeOverlays(){
-  // Nettoyage
-  for (const o of freeOverlays){
-    scene.remove(o.mesh);
-    if (o.vLeft)   scene.remove(o.vLeft);
-    if (o.vRight)  scene.remove(o.vRight);
-    if (o.hTop)    scene.remove(o.hTop);
-    if (o.hBottom) scene.remove(o.hBottom);
-    if (o.cover)   scene.remove(o.cover);
+  if (isMobileBucket()){
+    // nettoie d'éventuels overlays déjà créés
+    for (const o of freeOverlays){
+      scene.remove(o.mesh);
+      if (o.vLeft)   scene.remove(o.vLeft);
+      if (o.vRight)  scene.remove(o.vRight);
+      if (o.hTop)    scene.remove(o.hTop);
+      if (o.hBottom) scene.remove(o.hBottom);
+      if (o.cover)   scene.remove(o.cover);
+    }
+    freeOverlays.length = 0;
+    return; // pas d'overlay en mobile
   }
-  freeOverlays.length = 0;
-
+ 
   // Création
   for (const spec of FREE_OVERLAYS){
     // → même pool que la grille, et on évite si possible une image déjà utilisée
@@ -1530,15 +1759,17 @@ function rebuildDomLabel(st, label){
   const el = makeDomLabelEl(label);
   document.getElementById('labels-layer')?.appendChild(el);
   st.domLabelEl = el;
-  st.labelText = label; // ← on garde le texte courant pour éviter les remplacements inutiles
+  st.labelText = label; // garde le texte courant
+
   if (window.baffle){
     const lines = Array.from(el.querySelectorAll('.line'));
+    const speed = Math.max(1, (config.labelBaffleSpeedMs|0) || 1);
     st.baffles = lines.map(line =>
-      window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed:100 })
+      window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed })
     );
   }
 }
-  
+
   
 // Sync meshes
 function syncStateToMeshes(){
@@ -1640,99 +1871,107 @@ function addDotToState(st){
 }
 
 // Anim
+// Remplace toute ta fonction animate() par celle-ci
 function animate(){
   requestAnimationFrame(animate);
+
   if (needsBaseUpdate){ 
     const ok = updateFractalBase(false);
     if (ok) { syncStateToMeshes(); }
-    needsBaseUpdate=false;
+    needsBaseUpdate = false;
   }
+
   if (needsRefineCheck){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     if (refineTargetStateAt(wp)) syncStateToMeshes();
-    updateMouseSquareTarget(wp); needsRefineCheck=false;
+    updateMouseSquareTarget(wp);
+    needsRefineCheck = false;
   }
 
+  // curseur carré (canvas)
   mouseSquare.position.lerp(mouseSquare.userData.targetPosition, config.mouseSquareAnimationSpeed);
   mouseSquare.scale.lerp(mouseSquare.userData.targetScale, config.mouseSquareAnimationSpeed);
   cursorBorder.position.lerp(cursorBorder.userData.targetPosition, config.mouseSquareAnimationSpeed);
   cursorBorder.scale.lerp(cursorBorder.userData.targetScale, config.mouseSquareAnimationSpeed);
 
-  let hoverAny=false;
+  // animer les tuiles
   for (const [key, st] of Array.from(fractalState.entries())){
     if (st.isButton) {
-      st.mesh.position.copy(st.targetPosition); st.mesh.scale.copy(st.targetScale);
+      // boutons : pas de lerp (snap)
+      st.mesh.position.copy(st.targetPosition);
+      st.mesh.scale.copy(st.targetScale);
       if (st.labelSprite){
         const m = st.targetScale.x * 0.03;
-        st.labelSprite.position.set(st.targetPosition.x + (st.targetScale.x/2 - m), st.targetPosition.y + (st.targetScale.x/2 - m), 0.2);
+        st.labelSprite.position.set(
+          st.targetPosition.x + (st.targetScale.x/2 - m),
+          st.targetPosition.y + (st.targetScale.x/2 - m),
+          0.2
+        );
         st.labelSprite.scale.set(st.targetScale.x, st.targetScale.x*0.75, 1);
       }
     } else {
+      // reste de la grille : lerp doux
       st.mesh.position.lerp(st.targetPosition, config.gridAnimationSpeed);
       st.mesh.scale.lerp(st.targetScale, config.gridAnimationSpeed);
     }
 
+    // >>> BLOC LABELS DOM — VERSION CORRIGÉE (UNIQUE) <<<
     if (st.isButton && st.domLabelEl){
-  const { w, contentTop } = getLayoutMetrics();
+      const { w, contentTop } = getLayoutMetrics();
 
-  // marges internes (monde)
-  const mRightWorld = w / Math.pow(2, LABEL_MARGIN_DEPTH_RIGHT - 1);
-  const mTopWorld   = w / Math.pow(2, LABEL_MARGIN_DEPTH_TOP   - 1);
+      // marges internes (en "monde")
+      const mRightWorld = w / Math.pow(2, LABEL_MARGIN_DEPTH_RIGHT - 1);
+      const mTopWorld   = w / Math.pow(2, LABEL_MARGIN_DEPTH_TOP   - 1);
 
-  const half = st.targetScale.x / 2;
+      const half = st.mesh.scale.x / 2;
 
-  // ancre haut-droite de la case
-  const tx = st.targetPosition.x + half - mRightWorld;
-  const topEdgeWorld = st.targetPosition.y + half;
-  let ty = topEdgeWorld - mTopWorld;
+      // ancre haut-droite de la tuile
+      const tx = st.mesh.position.x + half - mRightWorld;
+      let   ty = st.mesh.position.y + half - mTopWorld;
 
-  // ne pas dépasser le top du contenu (monde)
-  ty = Math.min(ty, contentTop - mTopWorld);
+      // ne pas dépasser le top du contenu
+      ty = Math.min(ty, contentTop - mTopWorld);
 
-  // monde -> pixels
-  const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
-  const pxPerWorldX = window.innerWidth  / (camera.right - camera.left);
-  const pxPerWorldY = window.innerHeight / (camera.top   - camera.bottom);
+      // monde -> pixels
+      const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
+      const pxPerWorldX = window.innerWidth  / (camera.right - camera.left);
+      const boxWidthPx  = Math.max(0, (st.mesh.scale.x - 2 * mRightWorld) * pxPerWorldX);
 
-  // garde-fou : ne pas passer sous le header réel
-  const headerEl = document.getElementById('ui-header');
-  const menuPx   = headerEl ? headerEl.getBoundingClientRect().height : 0;
-  const minTopPx = Math.ceil(menuPx + (mTopWorld * pxPerWorldY) + SAFE_TOP_GAP_PX);
-  if (p.y < minTopPx) p.y = minTopPx;
+    // clamp "anti-chevauchement header" : top >= (headerBottom + SAFE_TOP_GAP_PX)
+      const contentTopPx = worldToClientXY(new THREE.Vector3(0, contentTop, 0)).y;
+      const minTopPx     = contentTopPx + SAFE_TOP_GAP_PX;
+      const finalTopPx   = Math.max(p.y, minTopPx);
 
-  // largeur de la boîte texte (pixels) — conversion X seulement
-  const extraRightWorld = LABEL_RIGHT_EXTRA_PX / pxPerWorldX;
-  const rightWorld = mRightWorld + extraRightWorld;
-  const leftWorld  = mRightWorld;
-  const boxWidthPx = Math.max(0, (st.targetScale.x - leftWorld - rightWorld) * pxPerWorldX);
+      // placement + sizing
+      st.domLabelEl.style.left     = p.x + 'px';
+      st.domLabelEl.style.top      = (finalTopPx + LABEL_NUDGE_PX_Y) + 'px';
+      st.domLabelEl.style.width    = boxWidthPx + 'px';
+      st.domLabelEl.style.fontSize = Math.max(12, st.mesh.scale.x * pxPerWorldX * 0.1) + 'px';
 
-  st.domLabelEl.style.left = p.x + 'px';
-  st.domLabelEl.style.top  = (p.y + LABEL_NUDGE_PX_Y) + 'px';
-  st.domLabelEl.style.width = boxWidthPx + 'px';
-  st.domLabelEl.style.fontSize = Math.max(12, st.targetScale.x * pxPerWorldX * 0.1) + 'px';
+      // hover précis (pas de parallaxe)
+      const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+      const inside = (
+        wp.x >= st.mesh.position.x - half && wp.x <= st.mesh.position.x + half &&
+        wp.y >= st.mesh.position.y - half && wp.y <= st.mesh.position.y + half
+      );
 
-  // Hover sur la case
-  const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-  const inside = (
-    wp.x >= st.targetPosition.x - half && wp.x <= st.targetPosition.x + half &&
-    wp.y >= st.targetPosition.y - half && wp.y <= st.targetPosition.y + half
-  );
+      st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
 
-  if (inside){
-    hoverAny = true;
-    st.domLabelEl.style.color = '#f3ff00'; // jaune au survol
-    if (!st.hovering){
-      st.hovering = true;
-      if (st.baffles){ st.baffles.forEach(b=>{ b.start(); b.reveal(600); }); }
+      if (inside && !st.hovering){
+        st.hovering = true;
+        if (st.baffles){
+          st.baffles.forEach(b=>{
+            b.start();
+            b.reveal(Math.max(0, (config.labelRevealMs|0)));
+          });
+        }
+      }
+      if (!inside) st.hovering = false;
     }
-} else {
-  st.domLabelEl.style.color = '#f3f1ee'; // blanc par défaut
-  st.hovering = false;
-}
-
-}
+    // >>> FIN BLOC LABELS DOM <<<
 
 
+    // point brillant central (option)
     if (st.dotMesh){
       st.dotMesh.position.copy(st.mesh.position);
       st.dotMesh.position.z = 0.02;
@@ -1741,47 +1980,47 @@ function animate(){
       else            st.dotMesh.scale.set(sc, sc, 1);
     }
 
-
-    if (st.mesh.scale.x < 0.001 && st.targetScale.x===0){
+    // retrait des tuiles disparues
+    if (st.mesh.scale.x < 0.001 && st.targetScale.x === 0){
       scene.remove(st.mesh); meshPool.push(st.mesh);
       if (st.dotMesh){ scene.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
       if (st.labelSprite){ scene.remove(st.labelSprite); }
       if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
       if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
-
       fractalState.delete(key);
     }
   }
 
+  // MAJ overlays libres + gouttières (1px)
   updateFreeOverlays();
-  
-  // --- anime les overlays comme la grille ---
-for (const o of freeOverlays){
-  o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
-  o.mesh.scale.lerp(o.targetScale,       config.gridAnimationSpeed);
+  for (const o of freeOverlays){
+    o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
+    o.mesh.scale.lerp(o.targetScale,       config.gridAnimationSpeed);
 
-  if (o.vLeft){
-    o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed);
-    o.vLeft.scale.lerp(   o.vLeft._tScale, config.gridAnimationSpeed);
+    if (o.vLeft){
+      o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed);
+      o.vLeft.scale.lerp(   o.vLeft._tScale, config.gridAnimationSpeed);
+    }
+    if (o.vRight){
+      o.vRight.position.lerp(o.vRight._tPos,   config.gridAnimationSpeed);
+      o.vRight.scale.lerp(   o.vRight._tScale, config.gridAnimationSpeed);
+    }
+    if (o.hTop){
+      o.hTop.position.lerp(o.hTop._tPos,   config.gridAnimationSpeed);
+      o.hTop.scale.lerp(   o.hTop._tScale, config.gridAnimationSpeed);
+    }
+    if (o.hBottom){
+      o.hBottom.position.lerp(o.hBottom._tPos,   config.gridAnimationSpeed);
+      o.hBottom.scale.lerp(   o.hBottom._tScale, config.gridAnimationSpeed);
+    }
   }
-  if (o.vRight){
-    o.vRight.position.lerp(o.vRight._tPos,   config.gridAnimationSpeed);
-    o.vRight.scale.lerp(   o.vRight._tScale, config.gridAnimationSpeed);
-  }
-  if (o.hTop){
-    o.hTop.position.lerp(o.hTop._tPos,   config.gridAnimationSpeed);
-    o.hTop.scale.lerp(   o.hTop._tScale, config.gridAnimationSpeed);
-  }
-  if (o.hBottom){
-    o.hBottom.position.lerp(o.hBottom._tPos,   config.gridAnimationSpeed);
-    o.hBottom.scale.lerp(   o.hBottom._tScale, config.gridAnimationSpeed);
-  }
-  
-}
-  
+
+  // rendu
   renderer.render(scene, camera);
+
+  // fade-in du canvas une fois prêt
   const canvas = document.getElementById('webgl-canvas');
-  if (canvas && canvas.style.opacity!=='1') canvas.style.opacity='1';
+  if (canvas && canvas.style.opacity !== '1') canvas.style.opacity = '1';
 }
 
 function isMobileBucket(){ return currentBucket==='mobile-h' || currentBucket==='mobile-v'; }
@@ -1822,6 +2061,7 @@ function updateMouseSquareTarget(worldPos){
     const baseFs = lastGridCursorSizeWorld || Math.max(0, (w/2) - config.borderWidth);
     const fs = Math.max(0, baseFs);
     const half = fs / 2;
+    updateDomCursorOverlay(fs, true);
 
     // Centre = souris, clampé pour rester visible
     let nx = worldPos.x;
@@ -1852,6 +2092,9 @@ function updateMouseSquareTarget(worldPos){
   const ny = (leaf.y - leaf.originalSize/2) + iy*cell + cell/2;
   const fs = Math.max(0, cell - config.borderWidth);
 
+  // >>> ICI la ligne qu'il te manquait <<<
+  updateDomCursorOverlay(fs, false);
+
   mouseSquare.userData.targetPosition.set(nx, ny, 4);
   mouseSquare.userData.targetScale.set(fs, fs, 1);
   cursorBorder.userData.targetPosition.set(nx, ny, 3);
@@ -1861,6 +2104,26 @@ function updateMouseSquareTarget(worldPos){
   lastGridCursorSizeWorld = fs;
 }
 
+
+function updateDomCursorOverlay(fsWorld, inHeader){
+  if (!domCursorEl) return;
+  const { viewHeight } = getLayoutMetrics();
+
+  // world -> pixels
+  const pxPerWorldY = window.innerHeight / viewHeight;
+  const sidePx = Math.max(0, Math.round(fsWorld * pxPerWorldY));
+
+  // récupère la position souris en pixels depuis lastMouseScreenPos
+  const cx = (lastMouseScreenPos.x * 0.5 + 0.5) * window.innerWidth;
+  const cy = (-lastMouseScreenPos.y * 0.5 + 0.5) * window.innerHeight;
+
+  domCursorEl.style.left = cx + 'px';
+  domCursorEl.style.top  = cy + 'px';
+  domCursorEl.style.width  = sidePx + 'px';
+  domCursorEl.style.height = sidePx + 'px';
+  domCursorEl.style.opacity = inHeader ? '1' : '0';
+}
+  
 // Mouse & Click
 function onMouseMove(e){
   lastMouseScreenPos.set((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
@@ -1879,13 +2142,12 @@ function onClick(e){
   // ignore les clics dans le header
   if (wp.y >= contentTop) return;
 
-  // Navigation si on clique dans un bouton
   for (const [key, st] of fractalState.entries()){
     if (!st.isButton) continue;
-    const half = st.targetScale.x/2;
+    const half = st.mesh.scale.x/2;
     const inside =
-      (wp.x >= st.targetPosition.x - half && wp.x <= st.targetPosition.x + half &&
-       wp.y >= st.targetPosition.y - half && wp.y <= st.targetPosition.y + half);
+      (wp.x >= st.mesh.position.x - half && wp.x <= st.mesh.position.x + half &&
+       wp.y >= st.mesh.position.y - half && wp.y <= st.mesh.position.y + half);
     if (inside && buttonCells.has(key)){
       const { url } = buttonCells.get(key);
       window.location.href = url;
@@ -1893,7 +2155,6 @@ function onClick(e){
     }
   }
 
-  // sinon: “reform” de la grille sans recharger/réchanger les images
   reformGridKeepImages();
 }
 
