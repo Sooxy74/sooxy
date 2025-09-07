@@ -302,10 +302,10 @@ const config = {
 };
   
 // --- Labels DOM (effet baffle) ---
-const LABEL_MARGIN_DEPTH_RIGHT = 6;   // marge droite ≈ w/32
-const LABEL_MARGIN_DEPTH_TOP   = 6;   // marge haut   ≈ w/32
-const LABEL_NUDGE_PX_Y         = -2;  // micro-ajustement vertical
-const LABEL_RIGHT_EXTRA_PX     = 1;   // petit décalage à droite
+const LABEL_MARGIN_PCT_RIGHT = 1/16; // 6.25% du côté du bouton
+const LABEL_MARGIN_PCT_TOP   = 1/16; // 6.25% du côté du bouton
+const LABEL_NUDGE_PX_Y       = -2;
+const LABEL_RIGHT_EXTRA_PX   = 1;
 
 // marge dure (px) sous le header pour empêcher tout chevauchement visuel
 const SAFE_TOP_GAP_PX          = 0;
@@ -520,7 +520,7 @@ Objectif mobile :
 
 // Mobile : ordre des catégories (5)
 const USE_MOBILE_DETERMINISTIC = true;
-const MOBILE_CATEGORY_ORDER = ['motion','ui','fractal','random','code'];
+const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
 
 // Construit 5 gros carrés w/2 en diagonale (AUCUN espace avant le 1er)
 // interlignes = w/4 entre les boutons uniquement
@@ -798,9 +798,15 @@ function applyBucket(){
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
+  // ↓↓↓ NOUVEAU : profondeur max -1 en MOBILE (évite les plus petits carrés)
+  if (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') {
+    TARGET_DEPTH = (prefersReducedMotion ? 4 : 6); // desktop: 5/7 → mobile: 4/6
+  } else {
+    TARGET_DEPTH = (prefersReducedMotion ? 5 : 7);
+  }
+
   updateScrollDocHeight();
 }
-
 
 
 // Grain + Menu
@@ -902,20 +908,38 @@ function resetFractalRandom(){
 }
 function createQuadTree(x, y, size, depth, path, maxDepthOverride=-1){
   const noiseVal = (noise2D(x*config.noiseScale, y*config.noiseScale)+1)/2;
-  const regionalMaxDepth = maxDepthOverride !== -1 ? maxDepthOverride : config.minDepth + Math.floor(noiseVal * config.maxDepthVariation);
+
+  // profondeur max locale pilotée par le bruit
+  const baseMaxDepth =
+    (maxDepthOverride !== -1)
+      ? maxDepthOverride
+      : (config.minDepth + Math.floor(noiseVal * config.maxDepthVariation));
+
+  // ↓↓↓ NOUVEAU : en mobile on retire 1 niveau de profondeur max
+  const regionalMaxDepth = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v')
+    ? Math.max(config.minDepth, baseMaxDepth - 1)
+    : baseMaxDepth;
+
   const currentProbability = config.initialProbabilityToSubdivide - depth * config.depthDecayFactor;
-  const stop = depth >= regionalMaxDepth || (depth>0 && Math.random()>currentProbability) || size/2 <= config.borderWidth;
+
+  const stop =
+    depth >= regionalMaxDepth ||
+    (depth > 0 && Math.random() > currentProbability) ||
+    size/2 <= config.borderWidth;
+
   if (stop){
     const scale = size - config.borderWidth;
     if (scale > 0) targetState.set(path, { x, y, size:scale, depth, path, originalSize:size });
     return;
   }
+
   const ns = size/2, o = size/4, d = depth+1;
   createQuadTree(x-o, y+o, ns, d, path+'/0', maxDepthOverride);
   createQuadTree(x+o, y+o, ns, d, path+'/1', maxDepthOverride);
   createQuadTree(x-o, y-o, ns, d, path+'/2', maxDepthOverride);
   createQuadTree(x+o, y-o, ns, d, path+'/3', maxDepthOverride);
 }
+
 
 // On conçoit le contenu sur 4 colonnes "virtuelles" (preset desktop-16:9)
 // Colonnes "centrales" où w est interdit (Motion = col 1, Creative Coding = col 2)
@@ -970,21 +994,27 @@ function addPrimaryRowSideFillers(row, offsetCols){
   }
 }
 
-function updateFractalBase(forceFull=false){
+function updateFractalBase(forceFull = false){
+  // on repart de zéro à chaque build
   targetState.clear();
 
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
+
+  // S'il n'y a pas de preset on retombe sur le fallback de boutons
   if (!preset) {
     ensureFallbackButtons();
     return true;
   }
 
+  // === 1) Construire la grille de base (content + fillers) ===
   const FORCE_D1 = new Set();
   (preset?.buttons  || []).forEach(b  => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
   (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
   (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
+  // En mobile on prévoit un minimum de lignes pour avoir de la matière autour,
+  // mais on ne laissera rien passer sous les boutons (voir étape 4).
   const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
   const minRows = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16')
     ? Math.max(baseRowsPrimary, 5)
@@ -1005,14 +1035,15 @@ function updateFractalBase(forceFull=false){
       const y = contentTop - row * w - w/2;
 
       const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
-      // Mobile : pas de limite spéciale ; Desktop : comportement normal
+      // Desktop/tablette : profondeur “normale”.
+      // Mobile : on ajustera juste après.
       createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
     }
 
     if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
 
-  // Desktop/Tablette uniquement : règles "pas de D1" + quota D2
+  // === 2) Règles desktop/tablette (interdictions et quotas) ===
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
     if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers();
@@ -1024,25 +1055,33 @@ function updateFractalBase(forceFull=false){
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
   }
 
-  // ⬇️ MOBILE : aucune tuile > w/2 (<= moitié d’un bouton)
+  // === 3) Pattern mobile (pas de D1 plein, on force au moins du D2) ===
   if (isMobileBucket()){
-    forceMobilePattern();  // remplace toute D1 visible par 4 D2
+    forceMobilePattern(); // remplace les D1 visibles par 4 D2 sauf exceptions fixées
   }
 
-  // Place les boutons (mobile = déterministe, desktop/tablette = preset)
+  // === 4) Placer les boutons ===
+  // - Desktop/tablette : via le preset
+  // - Mobile : layout déterministe 'btn/*'
   const okButtons = chooseButtonsThenImages(forceFull);
 
+  // ★★★ NOUVEAU : en mobile on supprime TOUTE tuile (content/filler)
+  // qui recouvre la surface de l’un des boutons 'btn/*' → plus de grille derrière.
+  if (okButtons && isMobileBucket()){
+    cutOutUnderButtons();   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+  }
 
-  // Raffinements d’ambiance (un peu plus généreux en mobile)
+  // === 5) Raffinements d'ambiance (hors boutons/images) ===
   if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
 
-  // Rappel des règles desktop si besoin
+  // Rappel des règles desktop si besoin (après raffinements)
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
   }
 
   return okButtons;
 }
+
 
 
 
@@ -1078,6 +1117,47 @@ function forceMobilePattern(){
   }
 }
 
+// Supprime toutes les tuiles de la grille qui passent sous les boutons mobiles
+// Supprime uniquement les tuiles 100% sous les boutons, garde une "gouttière" 1px
+function cutOutUnderButtons(keepGutterPx = 1){
+  const { onePxWorld } = getLayoutMetrics();
+  const guard = Math.max(keepGutterPx, 1) * onePxWorld; // ≈1px CSS en monde
+
+  // Rectangles "intérieurs" des boutons (réduits de guard)
+  const btnRects = [];
+  for (const [path, s] of targetState.entries()){
+    if (!path.startsWith('btn/')) continue;
+    const innerHalf = (s.originalSize / 2) - guard; // anneau de sécurité
+    btnRects.push({ x: s.x, y: s.y, half: innerHalf });
+  }
+  if (!btnRects.length) return;
+
+  // Supprime seulement les tuiles complètement incluses dans l'un de ces inner rects
+  for (const [path, s] of Array.from(targetState.entries())){
+    if (path.startsWith('btn/')) continue;
+    if (!(path.startsWith('content/') || path.startsWith('filler/'))) continue;
+
+    const half   = s.originalSize / 2;
+    const left   = s.x - half;
+    const right  = s.x + half;
+    const bottom = s.y - half;
+    const top    = s.y + half;
+
+    let fullyInside = false;
+    for (const b of btnRects){
+      if (left  >= b.x - b.half &&
+          right <= b.x + b.half &&
+          bottom>= b.y - b.half &&
+          top   <= b.y + b.half){
+        fullyInside = true; break;
+      }
+    }
+    if (fullyInside) targetState.delete(path);
+  }
+}
+
+  
+  
 // Force: pas de D1 (w) dans certaines colonnes de la grille "content"
 function enforceNoD1InColumns(colsSet){
   const { w, contentTop } = getLayoutMetrics();
@@ -1806,6 +1886,7 @@ function syncStateToMeshes(){
       ex.targetScale.set(t.size, t.size, 1);
       if (ex.mesh.material !== material) ex.mesh.material = material;
       ex.isButton = isBtn; ex.isImage = isImg;
+      ex.mesh.renderOrder = isBtn ? 3 : 0;   // boutons devant la grille
       if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
 
       // labels DOM + baffle (robuste au reset)
@@ -1825,7 +1906,7 @@ function syncStateToMeshes(){
       mesh.material = material;
       mesh.position.set(t.x, t.y, 0);
       mesh.scale.set(0, 0, 0);
-      mesh.renderOrder = 0;
+      mesh.renderOrder = isBtn ? 3 : 0;
       scene.add(mesh);
 
       const st = {
@@ -1855,10 +1936,21 @@ function syncStateToMeshes(){
 }
 
 function getDotScale(state){
+  // ✅ Mobile : point fixe de 3 px
+  if (isMobileBucket()) {
+    const { onePxWorld } = getLayoutMetrics(); // 1 px CSS en unités "monde"
+    return 1.5 * onePxWorld;
+  }
+
+  // 🖥️ Desktop / tablette : on garde ton comportement actuel
   const cappedDotSize = Math.min(0.5, config.dotSize);
   if (config.dotSizeIsRelative) return state.mesh.scale.x * cappedDotSize;
-  const viewHeight = camera.top - camera.bottom; const viewWidth = camera.right - camera.left; const gridSize = Math.max(viewWidth, viewHeight); const baseSize = gridSize / 256; const base = baseSize * cappedDotSize; return base;
+  const viewHeight = camera.top - camera.bottom;
+  const viewWidth  = camera.right - camera.left;
+  const gridSize   = Math.max(viewWidth, viewHeight);
+  return (gridSize / 256) * cappedDotSize;
 }
+
 function addDotToState(st){
   if (st.dotMesh) return;
   st.dotMesh = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
@@ -1920,8 +2012,10 @@ function animate(){
       const { w, contentTop } = getLayoutMetrics();
 
       // marges internes (en "monde")
-      const mRightWorld = w / Math.pow(2, LABEL_MARGIN_DEPTH_RIGHT - 1);
-      const mTopWorld   = w / Math.pow(2, LABEL_MARGIN_DEPTH_TOP   - 1);
+      const btnSide = st.mesh.scale.x; // côté réel du bouton (déjà "snap")
+      const mRightWorld = btnSide * LABEL_MARGIN_PCT_RIGHT;
+      const mTopWorld   = btnSide * LABEL_MARGIN_PCT_TOP;
+
 
       const half = st.mesh.scale.x / 2;
 
