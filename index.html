@@ -1060,11 +1060,73 @@ function forceMobilePattern(){
 
 
 
-// --- FIX MOBILE ---
-// Ne supprime plus aucune tuile sous les boutons (on masque visuellement).
+// --- CUTOUT MOBILE : supprime réellement les tuiles sous les boutons,
+// avec une TOLÉRANCE (inset) pour ne pas supprimer celles qui ne font que toucher.
 function cutOutUnderButtons(){
-  // no-op on purpose
+  // Seulement en mobile
+  if (!isMobileBucket()) return;
+
+  // On a besoin des tailles en "monde" et de l'équivalent 1px CSS
+  const { onePxWorld } = getLayoutMetrics();
+
+  // Tolérance (px CSS) déjà déclarée globalement dans ton code :
+  // MOBILE_BTN_OCCLUDER_PAD_PX (par défaut = 1). Tu peux la monter à 2 ou 3.
+  const insetPx = (typeof MOBILE_BTN_OCCLUDER_PAD_PX === 'number' ? MOBILE_BTN_OCCLUDER_PAD_PX : 1);
+  const insetWorld = Math.max(insetPx, 0) * onePxWorld;
+
+  // 1) Construire les rectangles "bouton" (avec inset/tolérance)
+  //    On s'appuie sur targetState (les boutons existent déjà : paths 'btn/i' en mobile)
+  const buttonRects = [];
+  for (const [btnPath, _meta] of buttonCells.entries()){
+    const s = targetState.get(btnPath);
+    if (!s) continue; // sécurité
+    const half = s.originalSize / 2;
+
+    // On RÉTRÉCIT le rectangle du bouton d'une marge 'insetWorld' de chaque côté
+    // pour éviter de supprimer les carrés qui ne font que toucher le bord.
+    const left   = s.x - half + insetWorld;
+    const right  = s.x + half - insetWorld;
+    const bottom = s.y - half + insetWorld;
+    const top    = s.y + half - insetWorld;
+
+    // Si l'inset est trop grand et inverse le rect, on skip
+    if (left >= right || bottom >= top) continue;
+
+    buttonRects.push({ left, right, bottom, top });
+  }
+
+  if (buttonRects.length === 0) return;
+
+  // 2) Parcourir toutes les tuiles de la grille et supprimer celles dont
+  //    le CENTRE est à l'intérieur d'un rect de bouton (contracté).
+  //    -> Le test sur le centre garantit que les tuiles qui ne font QUE toucher le bord
+  //       (centre hors du rect) NE seront PAS supprimées.
+  for (const [path, s] of Array.from(targetState.entries())){
+    // Ne jamais supprimer les boutons eux-mêmes
+    if (buttonCells.has(path)) continue;
+
+    const cx = s.x;
+    const cy = s.y;
+
+    let underAButton = false;
+    for (const r of buttonRects){
+      if (cx > r.left && cx < r.right && cy > r.bottom && cy < r.top){
+        underAButton = true;
+        break;
+      }
+    }
+
+    if (underAButton){
+      // Supprime immédiatement de l'état logique…
+      targetState.delete(path);
+      // …et marque pour kill instantané côté mesh (pas d'anim de scale à 0 -> pas de flash)
+      if (typeof instantKill !== 'undefined' && instantKill.add) {
+        instantKill.add(path);
+      }
+    }
+  }
 }
+
 
   
 // Force: pas de D1 (w) dans certaines colonnes de la grille "content"
