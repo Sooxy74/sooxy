@@ -60,16 +60,9 @@
     opacity: 0; transition: opacity .25s ease;
   }
   #ui-header {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  height: var(--menu-h);
-  z-index: 4;
-  pointer-events: none;
-
-  /* fond opaque = rend le chevauchement impossible visuellement */
-  background: #11190c;
+    position: fixed; top: 0; left: 0; right: 0; height: var(--menu-h);
+    z-index: 4; pointer-events: none;
   }
-
   
   #ui-header::after {
   content: "";
@@ -154,20 +147,7 @@
   }
   #scroll-spacer { height: var(--doc-h); }
   
-  /* Les labels doivent passer SOUS le header (z=4) */
-  /* Les labels ne doivent JAMAIS recouvrir la zone du header */
-  /* Les labels ne doivent pas recouvrir le header,
-   mais sans marge supplémentaire */
-  #labels-layer{
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 3;
-    clip-path: inset(var(--menu-h) 0 0 0); /* ⬅️ plus de + 8px */
-  }
-
-
-
+  #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
 .hover-label{
   position:absolute;
   font:700 18px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
@@ -301,15 +281,12 @@ const config = {
 
 };
   
-// --- Labels DOM (effet baffle) ---
-const LABEL_MARGIN_PCT_RIGHT = 1/16; // 6.25% du côté du bouton
-const LABEL_MARGIN_PCT_TOP   = 1/16; // 6.25% du côté du bouton
-const LABEL_NUDGE_PX_Y       = -2;
-const LABEL_RIGHT_EXTRA_PX   = 1;
-
-// marge dure (px) sous le header pour empêcher tout chevauchement visuel
-const SAFE_TOP_GAP_PX          = 0;
-
+  // --- Labels DOM (effet baffle) ---
+const LABEL_MARGIN_DEPTH_RIGHT = 6;   // marge droite ≈ w/32
+const LABEL_MARGIN_DEPTH_TOP   = 6;   // marge haut   ≈ w/32
+const LABEL_NUDGE_PX_Y         = -2;  // micro-ajustement vertical
+const LABEL_RIGHT_EXTRA_PX     = 1;   // petit décalage à droite
+const SAFE_TOP_GAP_PX          = 0;   // pas d’espace fixe ; on suit le menu réel
 
 function worldToClientXY(v3){
   const v = v3.clone().project(camera);
@@ -327,45 +304,45 @@ function makeDomLabelEl(text){
 const LAYOUT_WISH = {
   'desktop-32:9': { wantD1:2, wantD2:6, buttonsOnD2:true },
   'desktop-21:9': { wantD1:2, wantD2:5, buttonsOnD2:true },
+  // Desktop 16:9 : on colle à ta maquette actuelle
   'desktop-16:9': { wantD1:3, wantD2:4, buttonsOnD2:true },
   'tablet-4:3'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'tablet-3:4'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'tablet-9:16' : { wantD1:1, wantD2:4, buttonsOnD2:false },
-  // Mobile : on ne force aucune D2 via la grille, les boutons sont posés par-dessus
+  // Mobile : pas de D2 forcé via la grille (les boutons prennent la main)
   'mobile-h'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
   'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
 };
 
-
-// Presets déterministes par bucket
-//  row/col = case D1 (grille de base), quad ∈ {0,1,2,3} = sous-carré D2 :
-//  0: haut-gauche, 1: haut-droit, 2: bas-gauche, 3: bas-droit
 // Presets déterministes par bucket
 //  row/col = case D1 (grille de base), quad ∈ {0,1,2,3} = sous-carré D2 :
 //  0: haut-gauche, 1: haut-droit, 2: bas-gauche, 3: bas-droit
 const PRESETS = {
   // Desktop 16:9 — suit la maquette : 5 boutons (rouges) en D2, images (vertes) en D1 et D2
   'desktop-16:9': {
-    // Boutons (inchangé)
-    buttons: [
-      { size:'D2', row:0, col:1, quad:0, key:'motion'  },
-      { size:'D2', row:0, col:2, quad:2, key:'ui'     },
-      { size:'D2', row:1, col:0, quad:1, key:'fractal' },
-      { size:'D2', row:1, col:3, quad:2, key:'random'  },
-      { size:'D2', row:0, col:2, quad:1, key:'code'    }
-    ],
+  // Boutons (inchangé)
+  buttons: [
+    { size:'D2', row:0, col:1, quad:0, key:'motion'  },
+    { size:'D2', row:0, col:2, quad:2, key:'ui'     },
+    { size:'D2', row:1, col:0, quad:1, key:'fractal' },
+    { size:'D2', row:1, col:3, quad:2, key:'random'  },
+    { size:'D2', row:0, col:2, quad:1, key:'code'    }
+  ],
 
-    // Images plein w (D1) : on laisse seulement celles du haut
-    imagesD1: [
-      { row:0, col:0 },
-      { row:0, col:3 }
-    ],
+  // Images plein w (D1) : on laisse seulement celles du haut
+  imagesD1: [
+    { row:0, col:0 },
+    { row:0, col:3 }
+  ],
 
-    // Aucune image w/2 ici
-    imagesD2: []
-  },
+  // Aucune image w/2 ici
+  imagesD2: []
+},
 
-  // Tablettes/Mobiles
+
+
+
+  // Tablettes/Mobiles : inchangé par rapport à ton code actuel
   'tablet-4:3': {
     buttons: [
       { size:'D2', row:0, col:0, quad:0, key:'motion' },
@@ -396,42 +373,32 @@ const PRESETS = {
     ],
     imagesD1: [], imagesD2: [],
   },
-    'mobile-v': {
-    // Grille base: 2 colonnes x 4 rangées (BUCKETS mobile-v)
-    // On place 5 boutons en D2 (w/2) avec un motif lisible en colonne
-    buttons: [
-      { size:'D2', row:0, col:0, quad:1, key:'motion'  }, // haut-gauche, quadrant haut-droit
-      { size:'D2', row:1, col:1, quad:2, key:'ui'      }, // rangée 2, col droite, quadrant bas-gauche
-      { size:'D2', row:2, col:0, quad:3, key:'fractal' }, // rangée 3, col gauche, quadrant bas-droit
-      { size:'D2', row:3, col:1, quad:0, key:'random'  }, // rangée 4, col droite, quadrant haut-gauche
-      { size:'D2', row:1, col:0, quad:0, key:'code'    }, // rangée 2, col gauche, quadrant haut-gauche
-    ],
-    imagesD1: [], imagesD2: [],
-  },
+  'mobile-v': {
+  // Grille base 2x4 (bucket mobile-v) : 5 boutons en D2 disposés en colonne lisible
+  buttons: [
+    { size:'D2', row:0, col:0, quad:1, key:'motion'  },
+    { size:'D2', row:1, col:1, quad:2, key:'ui'      },
+    { size:'D2', row:2, col:0, quad:3, key:'fractal' },
+    { size:'D2', row:3, col:1, quad:0, key:'random'  },
+    { size:'D2', row:1, col:0, quad:0, key:'code'    },
+  ],
+  imagesD1: [], imagesD2: [],
+},
+'mobile-h': {
+  // Grille base 3x2 (bucket mobile-h) : 5 boutons en D2 répartis
+  buttons: [
+    { size:'D2', row:0, col:0, quad:1, key:'motion'  },
+    { size:'D2', row:0, col:1, quad:2, key:'ui'      },
+    { size:'D2', row:1, col:2, quad:0, key:'fractal' },
+    { size:'D2', row:1, col:0, quad:3, key:'random'  },
+    { size:'D2', row:0, col:2, quad:2, key:'code'    },
+  ],
+  imagesD1: [], imagesD2: [],
+},
 
-  'mobile-h': {
-    // Grille base: 3 colonnes x 2 rangées (BUCKETS mobile-h)
-    // 5 boutons en D2 répartis sur la surface
-    buttons: [
-      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
-      { size:'D2', row:0, col:1, quad:2, key:'ui'      },
-      { size:'D2', row:1, col:2, quad:0, key:'fractal' },
-      { size:'D2', row:1, col:0, quad:3, key:'random'  },
-      { size:'D2', row:0, col:2, quad:2, key:'code'    },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-
-
-  // Pas de preset spécifique → on déclenchera le fallback
   'desktop-21:9': null,
   'desktop-32:9': null,
 };
-
-// === helpers preset (global) ===
-function presetForBucket(id){
-  return PRESETS[id] || PRESETS['desktop-16:9'];
-}
 
 // Catégories (5 uniques)
 const CATEGORIES = [
@@ -459,13 +426,19 @@ let domCursorEl = null;
 let cursorInHeader = false;
 let lastGridCursorSizeWorld = 0;   // mémorise la taille utilisée dans la grille
 let persistentImageUrls = null;
+// === AJOUTS GLOBAUX (mobile uniquement) ===
+const USE_MOBILE_DETERMINISTIC = true;
+const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
+const MOBILE_BTN_OCCLUDER_PAD_PX = 1; // marge d’occlusion (px CSS) autour du bouton
+
+let mobileWorldContentHeight = 0; // hauteur totale du contenu en "monde" pour mobile
+let instantKill = new Set();      // paths supprimés immédiatement (sans lerp)
 
 
 
 // Scroll vertical simulé en coordonnées monde
 let scrollOffsetWorld = 0;
-// Hauteur totale du contenu en "monde" pour le mobile (calculée dynamiquement)
-let mobileWorldContentHeight = 0;
+let mobileBuildScrollAt = 0; // scroll au moment de la construction mobile (sert d’ancre)
 
   
 // Images locales (img/BY-pics/01.png, 02.png, 03.png, …)
@@ -508,111 +481,25 @@ function saltedKey(path, salt){ return (hashCode(path) ^ salt) | 0; }
 const sessionSalt = (Math.random()*0x7fffffff) | 0;
 function reseed(){ rngFn = Math.random; noise2D = createNoise2D(Math.random); }
 
-/* ====== BLOC MOBILE DÉTERMINISTE (remplace l'ancien ASCII) ====== */
-/*
-Objectif mobile :
-- 1 colonne de base (baseCols=1).
-- 5 boutons catégorie en D2 (taille = w/2), alternance gauche/droite.
-- Entre deux boutons successifs : espace vertical = w/4.
-- Aspect : fond noir (pas d'image).
-- Pas d'overlays, pas d'images sur mobile.
-*/
-
-// Mobile : ordre des catégories (5)
-const USE_MOBILE_DETERMINISTIC = true;
-const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
-
-// Construit 5 gros carrés w/2 en diagonale (AUCUN espace avant le 1er)
-// interlignes = w/4 entre les boutons uniquement
-function buildMobileButtonsDeterministic(){
-  const { w, contentTop } = getLayoutMetrics();
-
-  const side = w;
-  const gap  = w / 2;  // ⬅️ au lieu de w / 4
-  const stepY = side + gap;
-  const half = side / 2;
-
-  // Centres des colonnes
-  const xLeft  = camera.left + w * 0.5;
-  const xRight = camera.left + w * 1.5;
-
-  // 1er bouton : collé sous le header (pas de gap en haut)
-  const firstCy = contentTop - half;
-
-  // Nettoyage des anciens boutons mobiles éventuels
-  if (persistentButtonPaths && persistentButtonPaths.length){
-    for (const p of persistentButtonPaths){ targetState.delete(p); }
-  }
-  persistentButtonPaths = [];
-  buttonCells.clear();
-
-  const N = REQUIRED_BUTTONS; // 5
-  for (let i = 0; i < N; i++){
-    const onLeft = (i % 2 === 1);      // 0: droite, 1: gauche, 2: droite, ...
-    const cx = onLeft ? xLeft : xRight;
-    const cy = firstCy - i * stepY;
-
-    const path = `btn/${i}`;
-    targetState.set(path, {
-      x: cx,
-      y: cy,
-      size: side - config.borderWidth,
-      depth: 1,
-      path,
-      originalSize: side
-    });
-
-    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length];
-    const cat = CATEGORIES.find(c => c.key === key);
-    if (cat){
-      buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
-      persistentButtonPaths.push(path);
-    }
-  }
-
-  // Hauteur totale : N * side + (N - 1) * gap (plus de gap supérieur)
-  mobileWorldContentHeight = N * side + (N - 1) * gap;
-  updateScrollDocHeight();
-
-  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
-}
-
-
-
-function ensureFallbackButtons(){
-  // En mobile on retombe sur le layout déterministe
-  if (isMobileBucket()){
-    buildMobileButtonsDeterministic();
-  }
-  // Desktop / tablette : rien à faire, presetForBucket() couvre le cas.
-}
-  
-  
-// Layout helpers
 function getLayoutMetrics(){
   const viewHeight = camera.top - camera.bottom;
   const viewWidth  = camera.right - camera.left;
 
-  // largeur d’une case D1 en unités monde
   const w = viewWidth / baseCols;
 
-  // *** Mesure DOM du header réel (pixels CSS) ***
+  // Mesure exacte du header réel (px -> monde)
   const headerEl = document.getElementById('ui-header');
   const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-
-  // conversion px -> monde
   const headerWorld = (headerPx / window.innerHeight) * viewHeight;
 
-  // 1 px CSS en unités monde
   const onePxWorld = viewHeight / window.innerHeight;
 
-  // Verrouille la gouttière à 1 px CSS
+  // Verrouille la gouttière à 1px CSS
   if (Math.abs(config.borderWidth - onePxWorld) > 1e-6) {
     config.borderWidth = onePxWorld;
   }
 
-  // ✅ Correction : on AJOUTE le scroll pour faire monter le contenu
-  // (avant: camera.top - headerWorld - scrollOffsetWorld)
+  // NOTE mobile: on AJOUTE le scroll pour faire monter le contenu
   const contentTop = camera.top - headerWorld + scrollOffsetWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
@@ -775,8 +662,8 @@ async function bootstrap(){
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
 
-  // Desktop / tablettes : on suit la grille du bucket
   if (currentBucket !== 'mobile-h' && currentBucket !== 'mobile-v'){
+    // Desktop / tablettes : comportement actuel
     if (config.baseColsOverride != null) {
       baseCols = Math.max(1, config.baseColsOverride);
       baseRowsPrimary = b?.grid.rows || 2;
@@ -788,7 +675,7 @@ function applyBucket(){
       baseRowsPrimary = b?.grid.rows || 2;
     }
   } else {
-    // Mobile : grille logique à 2 colonnes, le reste est géré par notre layout déterministe
+    // Mobile : grille logique minimale, layout déterministe gère le reste
     baseCols = 2;
     baseRowsPrimary = 2;
   }
@@ -798,12 +685,14 @@ function applyBucket(){
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
-  // ↓↓↓ NOUVEAU : profondeur max -1 en MOBILE (évite les plus petits carrés)
-  if (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') {
-    TARGET_DEPTH = (prefersReducedMotion ? 4 : 6); // desktop: 5/7 → mobile: 4/6
-  } else {
-    TARGET_DEPTH = (prefersReducedMotion ? 5 : 7);
-  }
+  // Profondeur cible (inchangé)
+  TARGET_DEPTH = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v')
+    ? (prefersReducedMotion ? 4 : 6)
+    : (prefersReducedMotion ? 5 : 7);
+
+  // *** NOUVEAU : variation de profondeur différente selon le device ***
+  // Desktop/tablette -> 7 ; Mobile -> 6
+  config.maxDepthVariation = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') ? 6 : 7;
 
   updateScrollDocHeight();
 }
@@ -822,15 +711,49 @@ function createGrainPlane(){
   updateGrainPlaneSize();
 }
 function createMenuPlane(){
-  menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), darkMaterial); menuPlane.position.z = 0.1; menuPlane.renderOrder = 0; scene.add(menuPlane);
-  menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial); menuBorderBottom.position.z = 0.11; menuBorderBottom.renderOrder = 1; scene.add(menuBorderBottom);
+  // On garde les objets mais on délègue l’occlusion au header DOM
+  menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), darkMaterial);
+  menuPlane.position.z = 0.1;
+  menuPlane.renderOrder = 0;
+  scene.add(menuPlane);
+
+  menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial);
+  menuBorderBottom.position.z = 0.11;
+  menuBorderBottom.renderOrder = 1;
+  scene.add(menuBorderBottom);
+
+  // Désactive le plan WebGL (barre noire) et la "fausse" bordure :
+  menuPlane.visible = false;
+  menuBorderBottom.visible = false; // la vraie ligne bleue est en CSS dans #ui-header::after
+
+  // VRAIE barre noire (DOM) pour masquer les labels qui "passent dessous"
+  const header = document.getElementById('ui-header');
+  if (header) header.style.background = '#11190c';
+
   updateMenuGeometry();
 }
+
+
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
+
+  // Barre noire en WebGL (menuPlane)
   menuPlane.scale.set(viewWidth, menuHeight, 1);
   menuPlane.position.set((camera.left + camera.right) / 2, camera.top - menuHeight / 2, 0.1);
+
+  // Masque DOM : force les labels à "passer sous" la barre noire
+  const headerEl = document.getElementById('ui-header');
+  const layer = document.getElementById('labels-layer');
+  if (headerEl && layer){
+    const headerPx = Math.round(headerEl.getBoundingClientRect().height);
+    // Coupe tout ce qui occupe la zone du header
+    layer.style.clipPath = `inset(${headerPx}px 0 0 0)`;
+    layer.style.webkitClipPath = `inset(${headerPx}px 0 0 0)`;
+    // Assure un empilement cohérent : sous le header (z:4) mais au-dessus du canvas (z:1)
+    layer.style.zIndex = '3';
+  }
 }
+
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
@@ -845,7 +768,6 @@ window.addEventListener('resize', ()=>{
   resizeTimer = setTimeout(()=>{ window.location.reload(); }, 250);
 }, { passive:true });
 
-// Hauteur de document + scroll
 function updateScrollDocHeight(){
   const isMobile = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   const spacer = document.getElementById('scroll-spacer');
@@ -855,7 +777,7 @@ function updateScrollDocHeight(){
 
   let contentWorld;
   if (isMobile){
-    // Utilise la hauteur calculée par le layout mobile déterministe (fallback si non calculée)
+    // si le layout mobile a déjà calculé sa hauteur totale, on la respecte
     contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
@@ -870,9 +792,16 @@ function updateScrollDocHeight(){
 }
 
 
+
 function onScroll(){
-  const isMobile = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
-  if (!isMobile){ scrollOffsetWorld = 0; return; }
+  const isMobile =
+    (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' ||
+     currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+
+  if (!isMobile){
+    scrollOffsetWorld = 0;
+    return;
+  }
 
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
   const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
@@ -885,8 +814,19 @@ function onScroll(){
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
   scrollOffsetWorld = t * worldScrollable;
 
-  needsBaseUpdate = true; // recalcule la grille pile sous le menu
+  // Si on a une ancre pour le curseur, on met à jour la cible (pas d’animation ici)
+  const a = mouseSquare?.userData?.anchor;
+  if (a){
+    const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
+    mouseSquare.userData.targetPosition.set(a.x, a.y + mobDelta, 4);
+    mouseSquare.userData.targetScale.set(a.size, a.size, 1);
+    cursorBorder.userData.targetPosition.set(a.x, a.y + mobDelta, 3);
+    cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
+  }
 }
+
+
+
 
 // QuadTree / Build
 function resetFractalRandom(){
@@ -908,38 +848,20 @@ function resetFractalRandom(){
 }
 function createQuadTree(x, y, size, depth, path, maxDepthOverride=-1){
   const noiseVal = (noise2D(x*config.noiseScale, y*config.noiseScale)+1)/2;
-
-  // profondeur max locale pilotée par le bruit
-  const baseMaxDepth =
-    (maxDepthOverride !== -1)
-      ? maxDepthOverride
-      : (config.minDepth + Math.floor(noiseVal * config.maxDepthVariation));
-
-  // ↓↓↓ NOUVEAU : en mobile on retire 1 niveau de profondeur max
-  const regionalMaxDepth = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v')
-    ? Math.max(config.minDepth, baseMaxDepth - 1)
-    : baseMaxDepth;
-
+  const regionalMaxDepth = maxDepthOverride !== -1 ? maxDepthOverride : config.minDepth + Math.floor(noiseVal * config.maxDepthVariation);
   const currentProbability = config.initialProbabilityToSubdivide - depth * config.depthDecayFactor;
-
-  const stop =
-    depth >= regionalMaxDepth ||
-    (depth > 0 && Math.random() > currentProbability) ||
-    size/2 <= config.borderWidth;
-
+  const stop = depth >= regionalMaxDepth || (depth>0 && Math.random()>currentProbability) || size/2 <= config.borderWidth;
   if (stop){
     const scale = size - config.borderWidth;
     if (scale > 0) targetState.set(path, { x, y, size:scale, depth, path, originalSize:size });
     return;
   }
-
   const ns = size/2, o = size/4, d = depth+1;
   createQuadTree(x-o, y+o, ns, d, path+'/0', maxDepthOverride);
   createQuadTree(x+o, y+o, ns, d, path+'/1', maxDepthOverride);
   createQuadTree(x-o, y-o, ns, d, path+'/2', maxDepthOverride);
   createQuadTree(x+o, y-o, ns, d, path+'/3', maxDepthOverride);
 }
-
 
 // On conçoit le contenu sur 4 colonnes "virtuelles" (preset desktop-16:9)
 // Colonnes "centrales" où w est interdit (Motion = col 1, Creative Coding = col 2)
@@ -995,31 +917,37 @@ function addPrimaryRowSideFillers(row, offsetCols){
 }
 
 function updateFractalBase(forceFull = false){
-  // on repart de zéro à chaque build
   targetState.clear();
 
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
 
-  // S'il n'y a pas de preset on retombe sur le fallback de boutons
   if (!preset) {
     ensureFallbackButtons();
     return true;
   }
 
-  // === 1) Construire la grille de base (content + fillers) ===
+  // 1) Construction de la grille de base (content + fillers)
   const FORCE_D1 = new Set();
   (preset?.buttons  || []).forEach(b  => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
   (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
   (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-  // En mobile on prévoit un minimum de lignes pour avoir de la matière autour,
-  // mais on ne laissera rien passer sous les boutons (voir étape 4).
-  const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
-  const minRows = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16')
-    ? Math.max(baseRowsPrimary, 5)
-    : baseRowsPrimary;
-  const totalRows = Math.max(minRows, visibleRows);
+  // Nombre de rangées à générer
+  let totalRows;
+  if (isMobileBucket()){
+    // si la hauteur totale est déjà connue -> couvrir toute la hauteur
+    if (mobileWorldContentHeight && mobileWorldContentHeight > 0){
+      totalRows = Math.max(baseRowsPrimary, Math.ceil(mobileWorldContentHeight / w));
+    } else {
+      // sinon on anticipe la hauteur pour N boutons espacés de w/2 : N*w + (N-1)*w/2
+      const rowsForButtons = Math.ceil(REQUIRED_BUTTONS + (REQUIRED_BUTTONS - 1) * 0.5); // ex: 5 -> 7
+      totalRows = Math.max(baseRowsPrimary, rowsForButtons);
+    }
+  } else {
+    const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
+    totalRows = Math.max(baseRowsPrimary, visibleRows);
+  }
 
   const offsetCols = contentOffsetColsForBucket();
 
@@ -1035,15 +963,13 @@ function updateFractalBase(forceFull = false){
       const y = contentTop - row * w - w/2;
 
       const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
-      // Desktop/tablette : profondeur “normale”.
-      // Mobile : on ajustera juste après.
       createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
     }
 
     if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
 
-  // === 2) Règles desktop/tablette (interdictions et quotas) ===
+  // 2) Règles desktop/tablette
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
     if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers();
@@ -1055,26 +981,22 @@ function updateFractalBase(forceFull = false){
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
   }
 
-  // === 3) Pattern mobile (pas de D1 plein, on force au moins du D2) ===
+  // 3) Pattern mobile : casser les D1 non “fixées” en D2
   if (isMobileBucket()){
-    forceMobilePattern(); // remplace les D1 visibles par 4 D2 sauf exceptions fixées
+    forceMobilePattern();
   }
 
-  // === 4) Placer les boutons ===
-  // - Desktop/tablette : via le preset
-  // - Mobile : layout déterministe 'btn/*'
+  // 4) Boutons/Images
   const okButtons = chooseButtonsThenImages(forceFull);
 
-  // ★★★ NOUVEAU : en mobile on supprime TOUTE tuile (content/filler)
-  // qui recouvre la surface de l’un des boutons 'btn/*' → plus de grille derrière.
+  // 4bis) Mobile : occlusion sous les boutons + suppression immédiate dessous
   if (okButtons && isMobileBucket()){
-    cutOutUnderButtons();   // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    cutOutUnderButtons();
   }
 
-  // === 5) Raffinements d'ambiance (hors boutons/images) ===
+  // 5) Raffinements d’ambiance
   if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
 
-  // Rappel des règles desktop si besoin (après raffinements)
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
   }
@@ -1083,80 +1005,67 @@ function updateFractalBase(forceFull = false){
 }
 
 
-
-
-// Motif mobile : garde les D1 du preset et subdivise le reste en D2
 function forceMobilePattern(){
   if (!isMobileBucket()) return;
-  const { w, contentTop } = getLayoutMetrics();
+
+  const { w } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
+
+  // D1 "fixées" en content (si jamais un preset mobile en définissait)
   const fixed = new Set(
     (preset?.buttons || [])
       .filter(b => b.size === 'D1')
       .map(b => `content/${b.row}/${b.col}`)
   );
+
+  // helper : remplace un D1 par ses 4 enfants D2 (sans tests de visibilité)
+  const subdivideToD2 = (path, s) => {
+    if (Math.abs(s.originalSize - w) > 1e-6) return; // seulement les plein-w
+    targetState.delete(path);
+
+    const size = s.originalSize;
+    const ns   = size / 2;
+    const d    = 2;
+    const o    = size / 4;
+    const childSize = Math.max(0, ns - config.borderWidth);
+
+    const add = (suffix, dx, dy) => {
+      const p = path + suffix;
+      targetState.set(p, {
+        x: s.x + dx, y: s.y + dy,
+        size: childSize,
+        depth: d, path: p, originalSize: ns
+      });
+    };
+    add('/0', -o, +o);
+    add('/1', +o, +o);
+    add('/2', -o, -o);
+    add('/3', +o, -o);
+  };
+
+  // 1) CONTENT : D1 non fixées -> D2
   for (const [path, s] of Array.from(targetState.entries())){
     if (!path.startsWith('content/')) continue;
-    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
-    const isD1 = Math.abs(s.originalSize - w) < 1e-6;
-    if (!isD1) continue;
     if (fixed.has(path)) continue;
-    targetState.delete(path);
-    const size = s.originalSize, ns = size/2, d = 2, o = size/4;
-    const quads = [
-      {x:s.x-o, y:s.y+o, suffix:'/0'},
-      {x:s.x+o, y:s.y+o, suffix:'/1'},
-      {x:s.x-o, y:s.y-o, suffix:'/2'},
-      {x:s.x+o, y:s.y-o, suffix:'/3'},
-    ];
-    for (const q of quads){
-      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
-      const p = path + q.suffix;
-      targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
-    }
+    subdivideToD2(path, s);
   }
-}
 
-// Supprime toutes les tuiles de la grille qui passent sous les boutons mobiles
-// Supprime uniquement les tuiles 100% sous les boutons, garde une "gouttière" 1px
-function cutOutUnderButtons(keepGutterPx = 1){
-  const { onePxWorld } = getLayoutMetrics();
-  const guard = Math.max(keepGutterPx, 1) * onePxWorld; // ≈1px CSS en monde
-
-  // Rectangles "intérieurs" des boutons (réduits de guard)
-  const btnRects = [];
-  for (const [path, s] of targetState.entries()){
-    if (!path.startsWith('btn/')) continue;
-    const innerHalf = (s.originalSize / 2) - guard; // anneau de sécurité
-    btnRects.push({ x: s.x, y: s.y, half: innerHalf });
-  }
-  if (!btnRects.length) return;
-
-  // Supprime seulement les tuiles complètement incluses dans l'un de ces inner rects
+  // 2) FILLER : D1 -> D2 (donc toujours un cran plus petit que les boutons)
   for (const [path, s] of Array.from(targetState.entries())){
-    if (path.startsWith('btn/')) continue;
-    if (!(path.startsWith('content/') || path.startsWith('filler/'))) continue;
-
-    const half   = s.originalSize / 2;
-    const left   = s.x - half;
-    const right  = s.x + half;
-    const bottom = s.y - half;
-    const top    = s.y + half;
-
-    let fullyInside = false;
-    for (const b of btnRects){
-      if (left  >= b.x - b.half &&
-          right <= b.x + b.half &&
-          bottom>= b.y - b.half &&
-          top   <= b.y + b.half){
-        fullyInside = true; break;
-      }
-    }
-    if (fullyInside) targetState.delete(path);
+    if (!path.startsWith('filler/')) continue;
+    subdivideToD2(path, s);
   }
 }
 
-  
+
+
+
+// --- FIX MOBILE ---
+// Ne supprime plus aucune tuile sous les boutons (on masque visuellement).
+function cutOutUnderButtons(){
+  // no-op on purpose
+}
+
   
 // Force: pas de D1 (w) dans certaines colonnes de la grille "content"
 function enforceNoD1InColumns(colsSet){
@@ -1263,23 +1172,126 @@ function specToPath(spec, contentTop, w) {
   }
   return null;
 }
+
+function chooseButtonsThenImages(forceFull){
+  imageCells.clear();
+  buttonCells.clear();
+  imageSlots.clear();
+  buttonSlots.clear();
+
+  // MOBILE : 5 boutons w/2 déterministes, pas d’images dédiées
+  if (isMobileBucket() && USE_MOBILE_DETERMINISTIC){
+    return buildMobileButtonsDeterministic();
+  }
+
+  // Desktop / tablettes : preset + FALLBACK garanti
+  const { w, contentTop } = getLayoutMetrics();
+  const preset = presetForBucket(currentBucket);
+
+  persistentButtonPaths = [];
+  for (const b of (preset?.buttons || [])) {
+    const path = specToPath(b, contentTop, w);
+    if (!path) continue;
+    const cat = CATEGORIES.find(c => c.key === b.key);
+    if (!cat) continue;
+    buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+    persistentButtonPaths.push(path);
+  }
+
+  const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
+
+  // >>> FALLBACK : si le preset n’a pas rempli, on complète d’office
+  if (persistentButtonPaths.length < requiredBtnCount){
+    ensureFallbackButtons(); // remplit buttonCells sur des cases visibles
+  }
+
+  // Images D1
+  for (const img of (preset?.imagesD1 || [])){
+    const p = `content/${img.row}/${img.col}`;
+    const s = targetState.get(p);
+    if (s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4) && !buttonCells.has(p)){
+      imageCells.add(p);
+    }
+  }
+
+  // Images D2
+  for (const spec of (preset?.imagesD2 || [])){
+    const path = specToPath(spec, contentTop, w);
+    if (path && !buttonCells.has(path)) imageCells.add(path);
+  }
+
+  // Attribution d’URLs (réutilise persistentImageUrls si dispo)
+  const cells = Array.from(imageCells);
+  let urlsToUse = [];
+
+  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
+    let uniqueUrls = Array.from(new Set(imageTextures));
+    for (let i = uniqueUrls.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
+    }
+    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
+    persistentImageUrls = urlsToUse.slice();
+  } else {
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
+  }
+
+  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
+  for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
+
+  // toujours true : plus de blocage, l’anim de scale peut se lancer
+  return true;
+}
+
+
+
+function reformGridKeepImages(){
+  // garder les mêmes images
+  forceRecreateLabelsOnce = true;
+  reseed();
+
+  // au cas où : vider les suppressions instantanées restantes
+  if (typeof instantKill !== 'undefined' && instantKill.clear) {
+    instantKill.clear();
+  }
+
+  // purge état logique
+  targetState.clear();
+  imageCells.clear();
+  buttonCells.clear();
+  imageAssignment.clear();
+  imageSlots.clear();
+  buttonSlots.clear();
+
+  // rebuild (chooseButtonsThenImages ne peut plus échouer)
+  updateFractalBase(false);
+
+  // pousse l’état vers les meshes (les nouveaux partent bien de scale=0)
+  syncStateToMeshes();
+
+  // forcer un refresh du calcul de curseur/hover au frame suivant
+  needsRefineCheck = true;
+}
+
   
-// === garantir l'existence d'une D2 et renvoyer son path ===
+  
+
+function presetForBucket(id){ return PRESETS[id] || PRESETS['desktop-16:9']; }
+
 function ensureD2Path(row, col, quad, contentTop, w){
   const parent = `content/${row}/${col}`;
   const child  = `${parent}/${quad}`;
 
-  // déjà présent ?
   const sChild = targetState.get(child);
   if (sChild){
     if (!isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null;
     return child;
   }
 
-  // sinon on part d'un D1 plein w et on le subdivise
   const s = targetState.get(parent);
   if (!s) return null;
-  if (Math.abs(s.originalSize - w) > 1e-6) return null;            // pas un D1 plein w
+  if (Math.abs(s.originalSize - w) > 1e-6) return null;
   if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) return null;
 
   targetState.delete(parent);
@@ -1301,196 +1313,29 @@ function ensureD2Path(row, col, quad, contentTop, w){
 }
 
 
-function chooseButtonsThenImages(forceFull){
-  imageCells.clear();
-  buttonCells.clear();
-  imageSlots.clear();
-  buttonSlots.clear();
-
-  // Mobile : on construit les 5 boutons w/2 en diagonale, sans images dédiées
-  if (isMobileBucket() && USE_MOBILE_DETERMINISTIC){
-    return buildMobileButtonsDeterministic();
-  }
-
-  // Desktop / tablettes : logique existante basée sur les presets
+function ensureFallbackButtons(){
   const { w, contentTop } = getLayoutMetrics();
-  const preset = presetForBucket(currentBucket);
-
-  persistentButtonPaths = [];
-  for (const b of (preset?.buttons || [])) {
-    const path = specToPath(b, contentTop, w);
-    if (!path) continue;
-    const cat = CATEGORIES.find(c => c.key === b.key);
-    if (!cat) continue;
-    buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
-    persistentButtonPaths.push(path);
+  const candidates = [];
+  for (const [path,s] of targetState.entries()){
+    if (!path.startsWith('content/')) continue;
+    if (!isFullyVisible(s.x, s.y, s.originalSize, contentTop)) continue;
+    candidates.push({ path, s });
   }
-  const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
-  if (persistentButtonPaths.length < requiredBtnCount) return false;
+  candidates.sort((a,b)=> a.s.y===b.s.y ? a.s.x - b.s.x : b.s.y - a.s.y);
 
-  for (const img of (preset?.imagesD1 || [])){
-    const p = `content/${img.row}/${img.col}`;
-    const s = targetState.get(p);
-    if (s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4) && !buttonCells.has(p)){
-      imageCells.add(p);
-    }
-  }
-  for (const spec of (preset?.imagesD2 || [])){
-    const path = specToPath(spec, contentTop, w);
-    if (path && !buttonCells.has(path)) imageCells.add(path);
-  }
+  const need = Math.min(REQUIRED_BUTTONS, candidates.length);
+  const keys = ['motion','ui','fractal','random','code'];
 
-  const cells = Array.from(imageCells);
-  let urlsToUse = [];
-  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
-    let uniqueUrls = Array.from(new Set(imageTextures));
-    for (let i = uniqueUrls.length - 1; i > 0; i--){
-      const j = Math.floor(Math.random() * (i + 1));
-      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
-    }
-    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
-    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
-    persistentImageUrls = urlsToUse.slice();
-  } else {
-    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
+  for (let i=0; i<need; i++){
+    const p = candidates[i].path;
+    const spec = CATEGORIES.find(c => c.key === keys[i % keys.length]);
+    if (!spec) continue;
+    buttonCells.set(p, { label: spec.label, url: spec.url, key: spec.key });
+    if (!persistentButtonPaths.includes(p)) persistentButtonPaths.push(p);
   }
-  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
-  for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
-
-  return true;
 }
 
 
-function chooseMobileAsciiButtonsAndImages(forceFull){
-  const { w, contentTop } = getLayoutMetrics();
-
-  // 1) Trouver les D2 "parents" des blocs 2x2 de B (boutons)
-  const blocks = findMobileCategoryBlocksD3(); // => {d1row,d1col,quad2}[]
-  const buttonD2Keys = new Set();
-  blocks.forEach(b=>{
-    const p = `content/${b.d1row}/${b.d1col}`;
-    // on s’assure que la D1 existe et est visible
-    const s = targetState.get(p);
-    if (!s || !isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.40)) return;
-    // la D2 fille
-    buttonD2Keys.add(`${p}/${b.quad2}`);
-  });
-
-  // 2) Subdiviser TOUTES les D1 "content/row/col" en D2
-  const toSplitD1 = [];
-  for (const [path, s] of targetState.entries()){
-    if (!/^content\/\d+\/\d+$/.test(path)) continue; // D1 seulement
-    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
-    toSplitD1.push({ path, s });
-  }
-  for (const {path, s} of toSplitD1){
-    targetState.delete(path);
-    const size = s.originalSize, ns = size/2, d = 2, o = size/4;
-    const quads = [
-      {x:s.x-o, y:s.y+o, suffix:'/0'},
-      {x:s.x+o, y:s.y+o, suffix:'/1'},
-      {x:s.x-o, y:s.y-o, suffix:'/2'},
-      {x:s.x+o, y:s.y-o, suffix:'/3'},
-    ];
-    for (const q of quads){
-      if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
-      const p = path + q.suffix;
-      targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
-    }
-  }
-
-  // 3) Parcourir les D2 : garder celles marquées "bouton", subdiviser les autres en D3
-  persistentButtonPaths = [];
-  buttonCells.clear();
-  imageCells.clear();
-  imageSlots.clear();
-  buttonSlots.clear();
-
-  const d2List = [];
-  for (const [path, s] of targetState.entries()){
-    if (!/^content\/\d+\/\d+\/[0-3]$/.test(path)) continue; // D2
-    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
-    d2List.push({ path, s });
-  }
-
-  // Tri stable (lecture haut->bas, gauche->droite)
-  d2List.sort((a,b)=> a.s.y===b.s.y ? a.s.x - b.s.x : b.s.y - a.s.y);
-
-  // Pour attribution des catégories
-  let catIdx = 0;
-
-  for (const {path, s} of d2List){
-    if (buttonD2Keys.has(path)){
-      // garder la D2 telle quelle → bouton + image
-      const key = MOBILE_CATEGORY_ORDER[catIdx % MOBILE_CATEGORY_ORDER.length];
-      catIdx++;
-      const cat = CATEGORIES.find(c => c.key === key);
-      if (cat){
-        buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
-        persistentButtonPaths.push(path);
-        imageCells.add(path); // même tuile porte l'image
-      }
-    } else {
-      // subdiviser en D3 (4 petits carrés A w/4)
-      targetState.delete(path);
-      const size = s.originalSize, ns = size/2, d = 3, o = size/4;
-      const quads = [
-        {x:s.x-o, y:s.y+o, suffix:'/0'},
-        {x:s.x+o, y:s.y+o, suffix:'/1'},
-        {x:s.x-o, y:s.y-o, suffix:'/2'},
-        {x:s.x+o, y:s.y-o, suffix:'/3'},
-      ];
-      for (const q of quads){
-        if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
-        const p = path + q.suffix;
-        targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
-      }
-    }
-  }
-
-  // 4) Attribution images : 1 image par bouton D2
-  const cells = Array.from(imageCells);
-  let urlsToUse = [];
-  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
-    let uniqueUrls = Array.from(new Set(imageTextures));
-    for (let i = uniqueUrls.length - 1; i > 0; i--){
-      const j = Math.floor(Math.random() * (i + 1));
-      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
-    }
-    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
-    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
-    persistentImageUrls = urlsToUse.slice();
-  } else {
-    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
-  }
-  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
-
-  // Nettoyage des images orphelines
-  for (const k of Array.from(imageAssignment.keys())){
-    if (!imageCells.has(k)) imageAssignment.delete(k);
-  }
-
-  // On veut au moins 5 boutons
-  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
-}
-
-function reformGridKeepImages(){
-  // on garde persistentImageUrls tel quel
-  forceRecreateLabelsOnce = true; // reconstruire proprement les labels DOM
-  reseed();                      // nouveau bruit / seed => nouveau quad-tree
-
-  targetState.clear();
-  imageCells.clear();
-  buttonCells.clear();
-  imageAssignment.clear(); // on ré-attribuera les mêmes URLs aux nouvelles cases
-  imageSlots.clear();
-  buttonSlots.clear();
-
-  const ok = updateFractalBase(false); // false => garde persistentImageUrls
-  if (ok) {
-    syncStateToMeshes();
-  }
-}  
 
 function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new Set()){
   const { w, contentTop } = getLayoutMetrics();
@@ -1538,6 +1383,65 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
   }
 }
 
+function buildMobileButtonsDeterministic(){
+  const { w, contentTop } = getLayoutMetrics();
+
+  const side = w;
+  const gap  = w / 2;  // espace vertical entre boutons
+  const stepY = side + gap;
+  const half = side / 2;
+
+  // Centres des colonnes (2 colonnes logiques)
+  const xLeft  = camera.left + w * 0.5;
+  const xRight = camera.left + w * 1.5;
+
+  // 1er bouton : collé sous le header (sans gap haut)
+  const firstCy = contentTop - half;
+
+  // Nettoyer d’éventuels anciens boutons mobiles
+  if (persistentButtonPaths && persistentButtonPaths.length){
+    for (const p of persistentButtonPaths){ targetState.delete(p); }
+  }
+  persistentButtonPaths = [];
+  buttonCells.clear();
+
+  const N = REQUIRED_BUTTONS; // 5
+  for (let i = 0; i < N; i++){
+    const onLeft = (i % 2 === 1); // 0 droite, 1 gauche, 2 droite, ...
+    const cx = onLeft ? xLeft : xRight;
+    const cy = firstCy - i * stepY;
+
+    const path = `btn/${i}`;
+    targetState.set(path, {
+      x: cx,
+      y: cy,
+      size: side - config.borderWidth,
+      depth: 1,
+      path,
+      originalSize: side
+    });
+
+    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length];
+    const cat = CATEGORIES.find(c => c.key === key);
+    if (cat){
+      buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+      persistentButtonPaths.push(path);
+    }
+  }
+
+  // hauteur totale du contenu mobile (5*side + 4*gaps = 7w)
+  mobileWorldContentHeight = N * side + (N - 1) * gap;
+
+  // ancre de scroll au moment de la construction
+  mobileBuildScrollAt = scrollOffsetWorld;
+
+  updateScrollDocHeight();
+
+  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
+}
+
+  
+  
 // Raffinements d’ambiance
 // Raffinements d’ambiance — les D2 (w/2) “content” libres ont une chance d’être raffinés
 function sprinkleRefinements(maxOps = 24){
@@ -1671,7 +1575,7 @@ function pickOverlayUrl() {
   
 function buildFreeOverlays(){
   if (isMobileBucket()){
-    // nettoie d'éventuels overlays déjà créés
+    // nettoie d’éventuels overlays déjà créés
     for (const o of freeOverlays){
       scene.remove(o.mesh);
       if (o.vLeft)   scene.remove(o.vLeft);
@@ -1683,31 +1587,32 @@ function buildFreeOverlays(){
     freeOverlays.length = 0;
     return; // pas d'overlay en mobile
   }
- 
+
   // Création
   for (const spec of FREE_OVERLAYS){
-    // → même pool que la grille, et on évite si possible une image déjà utilisée
+    // même pool d’images que la grille (évite les doublons si possible)
     const urlToUse = spec.url ? spec.url : pickOverlayUrl();
     const mat = getImageMaterial(urlToUse);
 
+    // --- IMAGE OVERLAY ---
     const mesh = new THREE.Mesh(geometry, mat);
-    mesh.renderOrder = 2;
-    // on démarre "collapsé"
+    // Au-dessus des points (3.2) et au-dessus des boutons (3)
+    mesh.renderOrder = 3.6;
     mesh.position.set(0, 0, 0.20);
     mesh.scale.set(0, 0, 1);
     scene.add(mesh);
 
-    // cache bleu sous l'image
+    // --- CACHE BLEU (SOUS l'image visuellement, mais au-dessus des points) ---
     const cover = new THREE.Mesh(geometry, menuBorderMaterial);
-    cover.renderOrder = 2;
+    cover.renderOrder = 3.55;  // < 3.6 (image), > 3.2 (points)
     cover.position.set(0, 0, 0.19);
     cover.scale.set(0, 0, 1);
     scene.add(cover);
 
-    // bandes 1px (fond bleu) au-dessus de l'image
+    // Usine à bandes/gouttières 1px (dessus de tout ça)
     const makeStripe = () => {
       const m = new THREE.Mesh(geometry, menuBorderMaterial);
-      m.renderOrder = 3;
+      m.renderOrder = 3.7;     // le plus haut: masque les bords proprement
       m.position.set(0, 0, 0.21);
       m.scale.set(0, 0, 1);
       m._tPos   = new THREE.Vector3();  // cibles pour lerp
@@ -1757,7 +1662,6 @@ function buildFreeOverlays(){
     }
   }
 }
-
 
 
 
@@ -1836,72 +1740,128 @@ function destroyDomLabel(st){
 
 function rebuildDomLabel(st, label){
   destroyDomLabel(st);
-  const el = makeDomLabelEl(label);
-  document.getElementById('labels-layer')?.appendChild(el);
-  st.domLabelEl = el;
-  st.labelText = label; // garde le texte courant
 
-  if (window.baffle){
+  // Les labels passent SOUS le header (z-index cohérent)
+  const layer = document.getElementById('labels-layer');
+  if (layer) layer.style.zIndex = '3';
+
+  const el = makeDomLabelEl(label);
+  // ancre (top-right) côté CSS déjà: transform-origin:100% 0%;
+  // on force quand même pour éviter un override éventuel
+  el.style.transformOrigin = '100% 0%';
+  el.style.willChange = 'transform, width, left, top';
+
+  layer?.appendChild(el);
+  st.domLabelEl = el;
+  st.labelText = label;
+
+  // ❌ Pas d’effet "baffle/hover" en mobile
+  if (!isMobileBucket() && window.baffle){
     const lines = Array.from(el.querySelectorAll('.line'));
-    const speed = Math.max(1, (config.labelBaffleSpeedMs|0) || 1);
     st.baffles = lines.map(line =>
-      window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed })
+      window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed:100 })
     );
+  } else {
+    st.baffles = null;
   }
 }
 
+
+
   
-// Sync meshes
+  
 function syncStateToMeshes(){
+  const getOccluderMaterial = () => {
+    if (!scene.userData.occluderMaterial) {
+      scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({
+        color: config.darkColor,
+        depthTest: false,
+        depthWrite: false
+      });
+    }
+    return scene.userData.occluderMaterial;
+  };
+
   const newKeys = new Set(targetState.keys());
 
-  // 1) Retirer ce qui n'existe plus
+  // Retirer ce qui n'existe plus
   for (const [key, st] of Array.from(fractalState.entries())){
     if (!newKeys.has(key)) {
-      st.targetScale.set(0,0,0);
-      if (st.dotMesh) st.dotMesh.scale.set(0,0,0);
-      if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
-      destroyDomLabel(st);
-      forceRecreateLabelsOnce = false;  // on a tout reconstruit pour ce cycle
+      if (instantKill.has(key)) {
+        scene.remove(st.mesh); meshPool.push(st.mesh);
+        if (st.dotMesh){ scene.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
+        if (st.labelSprite){ scene.remove(st.labelSprite); }
+        if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
+        if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+        if (st.occluderMesh){ scene.remove(st.occluderMesh); st.occluderMesh = null; }
+        fractalState.delete(key);
+        instantKill.delete(key);
+      } else {
+        st.targetScale.set(0,0,0);
+        if (st.dotMesh) st.dotMesh.scale.set(0,0,0);
+        if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
+        if (st.occluderMesh){ scene.remove(st.occluderMesh); st.occluderMesh = null; }
+        if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
+        if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+        forceRecreateLabelsOnce = false;
+      }
     }
   }
 
-  // 2) Créer/mettre à jour ce qui doit exister
+  // Créer/mettre à jour ce qui doit exister
   for (const key of newKeys){
     const t   = targetState.get(key);
     const ex  = fractalState.get(key);
     const isImg = imageCells.has(key);
     const isBtn = buttonCells.has(key);
 
-    let material = darkMaterial;
+    let material = darkMaterial;            // bouton = noir
     if (isImg) {
       const url = imageAssignment.get(key);
       material  = getImageMaterial(url);
     }
 
-
     if (ex){
-      // --- UPDATE ---
+      if (!ex.anchorPosition) ex.anchorPosition = new THREE.Vector3();
+      ex.anchorPosition.set(t.x, t.y, 0);
       ex.targetPosition.set(t.x, t.y, 0);
       ex.targetScale.set(t.size, t.size, 1);
+
       if (ex.mesh.material !== material) ex.mesh.material = material;
       ex.isButton = isBtn; ex.isImage = isImg;
-      ex.mesh.renderOrder = isBtn ? 3 : 0;   // boutons devant la grille
+      ex.mesh.renderOrder = isBtn ? 3 : 0;
+
       if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
 
-      // labels DOM + baffle (robuste au reset)
       if (isBtn){
         const label = buttonCells.get(key)?.label || '';
         if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce){
-          rebuildDomLabel(ex, label);  // ← recrée proprement spans + baffle
+          rebuildDomLabel(ex, label);
         }
       } else {
         destroyDomLabel(ex);
       }
 
+      // --- MOBILE : occluder NOIR SOUS le bouton (en retrait pour laisser le liseré bleu)
+      if (isBtn && isMobileBucket()){
+        const { onePxWorld } = getLayoutMetrics();
+        const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1); // au moins 1px d'inset
+        const inset   = insetPx * onePxWorld;
+
+        if (!ex.occluderMesh){
+          ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+          scene.add(ex.occluderMesh);
+        }
+        ex.occluderMesh.renderOrder = 2.95; // sous le bouton, au-dessus de la grille
+        ex.occluderMesh.position.set(t.x, t.y, 0.05);
+        const sz = Math.max(0, t.size - inset * 2);
+        ex.occluderMesh.scale.set(sz, sz, 1);
+      } else if (ex.occluderMesh){
+        scene.remove(ex.occluderMesh);
+        ex.occluderMesh = null;
+      }
 
     } else {
-      // --- CREATION ---
       const mesh = meshPool.pop() || new THREE.Mesh(geometry);
       mesh.material = material;
       mesh.position.set(t.x, t.y, 0);
@@ -1912,10 +1872,12 @@ function syncStateToMeshes(){
       const st = {
         mesh,
         dotMesh: null,
-        labelSprite: null,         // ancien système, gardé à null
+        labelSprite: null,
         domLabelEl: null,
         baffles: null,
+        occluderMesh: null,
         hovering: false,
+        anchorPosition: new THREE.Vector3(t.x, t.y, 0),
         targetPosition: new THREE.Vector3(t.x, t.y, 0),
         targetScale:    new THREE.Vector3(t.size, t.size, 1),
         originalSize:   t.originalSize,
@@ -1929,20 +1891,53 @@ function syncStateToMeshes(){
       if (isBtn){
         const label = buttonCells.get(key)?.label || '';
         rebuildDomLabel(st, label);
-      }
 
+        if (isMobileBucket()){
+          const { onePxWorld } = getLayoutMetrics();
+          const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+          const inset   = insetPx * onePxWorld;
+
+          st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+          st.occluderMesh.renderOrder = 2.95;
+          st.occluderMesh.position.set(t.x, t.y, 0.05);
+          const sz = Math.max(0, t.size - inset * 2);
+          st.occluderMesh.scale.set(sz, sz, 1);
+          scene.add(st.occluderMesh);
+        }
+      }
     }
   }
 }
 
-function getDotScale(state){
-  // ✅ Mobile : point fixe de 3 px
-  if (isMobileBucket()) {
-    const { onePxWorld } = getLayoutMetrics(); // 1 px CSS en unités "monde"
-    return 1.5 * onePxWorld;
-  }
 
-  // 🖥️ Desktop / tablette : on garde ton comportement actuel
+
+
+
+function addDotToState(st){
+  const m = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
+
+  // En mobile, les points des carrés NON-boutons passent derrière les boutons.
+  const nonButtonOrder = isMobileBucket() ? 2.9 : 3.2; // < 2.95 (occluder), < 3 (carré bouton)
+  m.renderOrder = st.isButton ? 3.4 : nonButtonOrder;
+
+  // Centre de la tuile
+  m.position.set(st.targetPosition.x, st.targetPosition.y, 0.02);
+
+  const sc = getDotScale(st);
+  m.scale.set(sc, sc, 1);
+
+  scene.add(m);
+  st.dotMesh = m;
+}
+
+
+
+
+function getDotScale(state){
+  if (isMobileBucket()) {
+    const { onePxWorld } = getLayoutMetrics();
+    return 1.5 * onePxWorld; // ≈3px de côté
+  }
   const cappedDotSize = Math.min(0.5, config.dotSize);
   if (config.dotSizeIsRelative) return state.mesh.scale.x * cappedDotSize;
   const viewHeight = camera.top - camera.bottom;
@@ -1951,171 +1946,206 @@ function getDotScale(state){
   return (gridSize / 256) * cappedDotSize;
 }
 
-function addDotToState(st){
-  if (st.dotMesh) return;
-  st.dotMesh = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
-  st.dotMesh.position.copy(st.mesh.position);
-  st.dotMesh.position.z = 0.02;  // au-dessus des cases
-  st.dotMesh.renderOrder = 1;    // devant les cases, sous les overlays
-  scene.add(st.dotMesh);
-  const sc = getDotScale(st);
-  st.dotMesh.scale.set(sc, sc, 1);
-}
 
-// Anim
-// Remplace toute ta fonction animate() par celle-ci
 function animate(){
   requestAnimationFrame(animate);
 
-  if (needsBaseUpdate){ 
+  if (needsBaseUpdate){
     const ok = updateFractalBase(false);
     if (ok) { syncStateToMeshes(); }
-    needsBaseUpdate = false;
+    needsBaseUpdate=false;
   }
 
   if (needsRefineCheck){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     if (refineTargetStateAt(wp)) syncStateToMeshes();
     updateMouseSquareTarget(wp);
-    needsRefineCheck = false;
+    needsRefineCheck=false;
   }
 
-  // curseur carré (canvas)
-  mouseSquare.position.lerp(mouseSquare.userData.targetPosition, config.mouseSquareAnimationSpeed);
-  mouseSquare.scale.lerp(mouseSquare.userData.targetScale, config.mouseSquareAnimationSpeed);
-  cursorBorder.position.lerp(cursorBorder.userData.targetPosition, config.mouseSquareAnimationSpeed);
-  cursorBorder.scale.lerp(cursorBorder.userData.targetScale, config.mouseSquareAnimationSpeed);
+  const isMobile = isMobileBucket();
+  const mobDelta = isMobile ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
-  // animer les tuiles
+  // Curseur (carré jaune)
+  if (isMobile){
+    mouseSquare.position.copy(mouseSquare.userData.targetPosition);
+    mouseSquare.scale.copy(mouseSquare.userData.targetScale);
+    cursorBorder.position.copy(cursorBorder.userData.targetPosition);
+    cursorBorder.scale.copy(cursorBorder.userData.targetScale);
+  } else {
+    mouseSquare.position.lerp(mouseSquare.userData.targetPosition, config.mouseSquareAnimationSpeed);
+    mouseSquare.scale.lerp(mouseSquare.userData.targetScale, config.mouseSquareAnimationSpeed);
+    cursorBorder.position.lerp(cursorBorder.userData.targetPosition, config.mouseSquareAnimationSpeed);
+    cursorBorder.scale.lerp(cursorBorder.userData.targetScale, config.mouseSquareAnimationSpeed);
+  }
+
+  // Métriques
+  const lm = getLayoutMetrics();
+  const contentTop = lm.contentTop;
+  const eps = config.borderWidth * 2;
+
+  // Boîtes des boutons (⚠️ basées sur l'AFFICHAGE courant, pas les cibles)
+  const buttonBoxes = [];
+  for (const st of fractalState.values()){
+    if (!st.isButton) continue;
+    const half = Math.max(0, st.mesh.scale.x) / 2;
+    buttonBoxes.push({ x: st.mesh.position.x, y: st.mesh.position.y, half });
+  }
+  const isInsideAnyButton = (x, y) => {
+    for (const b of buttonBoxes){
+      if (x >= b.x - b.half && x <= b.x + b.half &&
+          y >= b.y - b.half && y <= b.y + b.half) return true;
+    }
+    return false;
+  };
+
+  // ----- Grille -----
   for (const [key, st] of Array.from(fractalState.entries())){
-    if (st.isButton) {
-      // boutons : pas de lerp (snap)
-      st.mesh.position.copy(st.targetPosition);
-      st.mesh.scale.copy(st.targetScale);
-      if (st.labelSprite){
-        const m = st.targetScale.x * 0.03;
-        st.labelSprite.position.set(
-          st.targetPosition.x + (st.targetScale.x/2 - m),
-          st.targetPosition.y + (st.targetScale.x/2 - m),
-          0.2
-        );
-        st.labelSprite.scale.set(st.targetScale.x, st.targetScale.x*0.75, 1);
-      }
-    } else {
-      // reste de la grille : lerp doux
-      st.mesh.position.lerp(st.targetPosition, config.gridAnimationSpeed);
-      st.mesh.scale.lerp(st.targetScale, config.gridAnimationSpeed);
+    // target = ancre + delta scroll mobile
+    if (st.anchorPosition){
+      st.targetPosition.x = st.anchorPosition.x;
+      st.targetPosition.y = st.anchorPosition.y + mobDelta;
     }
 
-    // >>> BLOC LABELS DOM — VERSION CORRIGÉE (UNIQUE) <<<
+    // Position: en mobile tout suit en "copy"; sinon les boutons copient, le reste lerp
+    const copyPos = isMobile ? true : st.isButton;
+    if (copyPos) {
+      st.mesh.position.copy(st.targetPosition);
+    } else {
+      st.mesh.position.lerp(st.targetPosition, config.gridAnimationSpeed);
+    }
+    // Scale: toujours en lerp (création de la grille)
+    st.mesh.scale.lerp(st.targetScale, config.gridAnimationSpeed);
+
+    // Occluder mobile sous les boutons — calé sur l'AFFICHÉ
+    if (st.occluderMesh){
+      const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+      const inset   = insetPx * lm.onePxWorld;
+      st.occluderMesh.position.set(st.mesh.position.x, st.mesh.position.y, 0.05);
+      const szX = Math.max(0, st.mesh.scale.x - inset * 2);
+      const szY = Math.max(0, st.mesh.scale.y - inset * 2);
+      st.occluderMesh.scale.set(szX, szY, 1);
+    }
+
+    // Sprite éventuel (calé sur l'affiché)
+    if (st.labelSprite){
+      const m = st.mesh.scale.x * 0.03;
+      st.labelSprite.position.set(
+        st.mesh.position.x + (st.mesh.scale.x/2 - m),
+        st.mesh.position.y + (st.mesh.scale.x/2 - m),
+        0.2
+      );
+      st.labelSprite.scale.set(st.mesh.scale.x, st.mesh.scale.x*0.75, 1);
+    }
+
+    // ---- Labels DOM -> même ancre, même vitesse que le carré ----
     if (st.isButton && st.domLabelEl){
-      const { w, contentTop } = getLayoutMetrics();
+      const { w } = lm;
 
-      // marges internes (en "monde")
-      const btnSide = st.mesh.scale.x; // côté réel du bouton (déjà "snap")
-      const mRightWorld = btnSide * LABEL_MARGIN_PCT_RIGHT;
-      const mTopWorld   = btnSide * LABEL_MARGIN_PCT_TOP;
+      // marges (référence grille) — OK de rester fixes vs w
+      const mobilePadFactor = isMobile ? 2 : 1;
+      const mRightWorld = (w / Math.pow(2, LABEL_MARGIN_DEPTH_RIGHT - 1)) * mobilePadFactor;
+      const mTopWorld   = (w / Math.pow(2, LABEL_MARGIN_DEPTH_TOP   - 1)) * mobilePadFactor;
 
+      // Utiliser la position/échelle AFFICHÉES (et pas target*)
+      const dispX = st.mesh.position.x;
+      const dispY = st.mesh.position.y;
+      const dispS = Math.max(0, st.mesh.scale.x);
+      const half  = dispS / 2;
 
-      const half = st.mesh.scale.x / 2;
+      const tx = dispX + half - mRightWorld;   // ancre top-right - marge
+      const ty = dispY + half - mTopWorld;
 
-      // ancre haut-droite de la tuile
-      const tx = st.mesh.position.x + half - mRightWorld;
-      let   ty = st.mesh.position.y + half - mTopWorld;
-
-      // ne pas dépasser le top du contenu
-      ty = Math.min(ty, contentTop - mTopWorld);
-
-      // monde -> pixels
       const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
       const pxPerWorldX = window.innerWidth  / (camera.right - camera.left);
-      const boxWidthPx  = Math.max(0, (st.mesh.scale.x - 2 * mRightWorld) * pxPerWorldX);
+      const extraRightWorld = LABEL_RIGHT_EXTRA_PX / pxPerWorldX;
+      const rightWorld = mRightWorld + extraRightWorld;
+      const leftWorld  = mRightWorld;
+      const boxWidthPx = Math.max(0, (dispS - leftWorld - rightWorld) * pxPerWorldX);
 
-    // clamp "anti-chevauchement header" : top >= (headerBottom + SAFE_TOP_GAP_PX)
-      const contentTopPx = worldToClientXY(new THREE.Vector3(0, contentTop, 0)).y;
-      const minTopPx     = contentTopPx + SAFE_TOP_GAP_PX;
-      const finalTopPx   = Math.max(p.y, minTopPx);
+      st.domLabelEl.style.left    = p.x + 'px';
+      st.domLabelEl.style.top     = (p.y + LABEL_NUDGE_PX_Y) + 'px';
+      st.domLabelEl.style.width   = boxWidthPx + 'px';
+      st.domLabelEl.style.fontSize= Math.max(12, dispS * pxPerWorldX * 0.1) + 'px';
 
-      // placement + sizing
-      st.domLabelEl.style.left     = p.x + 'px';
-      st.domLabelEl.style.top      = (finalTopPx + LABEL_NUDGE_PX_Y) + 'px';
-      st.domLabelEl.style.width    = boxWidthPx + 'px';
-      st.domLabelEl.style.fontSize = Math.max(12, st.mesh.scale.x * pxPerWorldX * 0.1) + 'px';
+      if (isMobile){
+        // Pas de hover/baffle en mobile
+        st.domLabelEl.style.color = '#f3f1ee';
+        st.hovering = false;
+      } else {
+        // Hover desktop/tablette (calculé sur l'affiché)
+        const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+        const inside = (
+          wp.x >= dispX - half && wp.x <= dispX + half &&
+          wp.y >= dispY - half && wp.y <= dispY + half
+        );
 
-      // hover précis (pas de parallaxe)
-      const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-      const inside = (
-        wp.x >= st.mesh.position.x - half && wp.x <= st.mesh.position.x + half &&
-        wp.y >= st.mesh.position.y - half && wp.y <= st.mesh.position.y + half
-      );
-
-      st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
-
-      if (inside && !st.hovering){
-        st.hovering = true;
-        if (st.baffles){
-          st.baffles.forEach(b=>{
-            b.start();
-            b.reveal(Math.max(0, (config.labelRevealMs|0)));
-          });
+        if (inside){
+          st.domLabelEl.style.color = '#f3ff00';
+          if (!st.hovering){
+            st.hovering = true;
+            if (st.baffles){ st.baffles.forEach(b=>{ b.start(); b.reveal(600); }); }
+          }
+        } else {
+          st.domLabelEl.style.color = '#f3f1ee';
+          st.hovering = false;
         }
       }
-      if (!inside) st.hovering = false;
     }
-    // >>> FIN BLOC LABELS DOM <<<
 
-
-    // point brillant central (option)
+    // Points jaunes (centroïdes) — calés sur l'affiché
     if (st.dotMesh){
-      st.dotMesh.position.copy(st.mesh.position);
-      st.dotMesh.position.z = 0.02;
+      const nonButtonOrder = isMobile ? 2.9 : 3.2; // < 3.0 (bouton), < 2.95 (occluder)
+      st.dotMesh.renderOrder = st.isButton ? 3.4 : nonButtonOrder;
+      st.dotMesh.position.set(st.mesh.position.x, st.mesh.position.y, 0.02);
+
+      const cx = st.mesh.position.x;
+      const cy = st.mesh.position.y;
+      const centerVisible =
+        cx >= camera.left + eps &&
+        cx <= camera.right - eps &&
+        cy >= camera.bottom + eps &&
+        cy <= contentTop - eps &&
+        st.mesh.scale.x > 0.0001;
+
       const sc = getDotScale(st);
-      if (st.isImage) st.dotMesh.scale.set(0, 0, 0);
-      else            st.dotMesh.scale.set(sc, sc, 1);
+      const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(cx, cy));
+
+      if (showDot) {
+        st.dotMesh.scale.set(sc, sc, 1);
+      } else {
+        st.dotMesh.scale.set(0, 0, 0);
+      }
     }
 
-    // retrait des tuiles disparues
-    if (st.mesh.scale.x < 0.001 && st.targetScale.x === 0){
+    // Cleanup
+    if (st.mesh.scale.x < 0.001 && st.targetScale.x===0){
       scene.remove(st.mesh); meshPool.push(st.mesh);
       if (st.dotMesh){ scene.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
       if (st.labelSprite){ scene.remove(st.labelSprite); }
       if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
       if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+      if (st.occluderMesh){ scene.remove(st.occluderMesh); st.occluderMesh = null; }
       fractalState.delete(key);
     }
   }
 
-  // MAJ overlays libres + gouttières (1px)
+  // Overlays : anim “grille” classique
   updateFreeOverlays();
   for (const o of freeOverlays){
     o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
     o.mesh.scale.lerp(o.targetScale,       config.gridAnimationSpeed);
-
-    if (o.vLeft){
-      o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed);
-      o.vLeft.scale.lerp(   o.vLeft._tScale, config.gridAnimationSpeed);
-    }
-    if (o.vRight){
-      o.vRight.position.lerp(o.vRight._tPos,   config.gridAnimationSpeed);
-      o.vRight.scale.lerp(   o.vRight._tScale, config.gridAnimationSpeed);
-    }
-    if (o.hTop){
-      o.hTop.position.lerp(o.hTop._tPos,   config.gridAnimationSpeed);
-      o.hTop.scale.lerp(   o.hTop._tScale, config.gridAnimationSpeed);
-    }
-    if (o.hBottom){
-      o.hBottom.position.lerp(o.hBottom._tPos,   config.gridAnimationSpeed);
-      o.hBottom.scale.lerp(   o.hBottom._tScale, config.gridAnimationSpeed);
-    }
+    if (o.vLeft){   o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed); o.vLeft.scale.lerp(o.vLeft._tScale, config.gridAnimationSpeed); }
+    if (o.vRight){  o.vRight.position.lerp(o.vRight._tPos,  config.gridAnimationSpeed); o.vRight.scale.lerp(o.vRight._tScale, config.gridAnimationSpeed); }
+    if (o.hTop){    o.hTop.position.lerp(o.hTop._tPos,     config.gridAnimationSpeed); o.hTop.scale.lerp(o.hTop._tScale, config.gridAnimationSpeed); }
+    if (o.hBottom){ o.hBottom.position.lerp(o.hBottom._tPos,config.gridAnimationSpeed); o.hBottom.scale.lerp(o.hBottom._tScale, config.gridAnimationSpeed); }
   }
 
-  // rendu
   renderer.render(scene, camera);
-
-  // fade-in du canvas une fois prêt
   const canvas = document.getElementById('webgl-canvas');
-  if (canvas && canvas.style.opacity !== '1') canvas.style.opacity = '1';
+  if (canvas && canvas.style.opacity!=='1') canvas.style.opacity='1';
 }
+
 
 function isMobileBucket(){ return currentBucket==='mobile-h' || currentBucket==='mobile-v'; }
 
@@ -2128,11 +2158,16 @@ function findLeafAt(worldPos, stateMap){
   }
   return best;
 }
+  
 function refineTargetStateAt(worldPos){
+  const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
+  const wp = worldPos.clone();
+  wp.y -= mobDelta; // on revient dans le repère "ancré"
+
   let refined=false, it=0;
   while (it<64){
     it++;
-    const leaf = findLeafAt(worldPos, targetState); if (!leaf) break;
+    const leaf = findLeafAt(wp, targetState); if (!leaf) break;
     if (imageCells.has(leaf.path) || buttonCells.has(leaf.path)) break;
     if (leaf.depth < TARGET_DEPTH){
       refined=true; targetState.delete(leaf.path);
@@ -2145,19 +2180,18 @@ function refineTargetStateAt(worldPos){
   }
   return refined;
 }
-function updateMouseSquareTarget(worldPos){
-  const { w, contentTop, menuHeight } = getLayoutMetrics();
 
-  // --- Dans le header : on réutilise la dernière taille "grille" ---
+function updateMouseSquareTarget(worldPos){
+  const { w, contentTop } = getLayoutMetrics();
+  const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
+
+  // Si la souris est dans le header : pas d’ancre, comportement habituel
   if (worldPos.y >= contentTop) {
-    // si on n'a pas encore d'historique (ex: souris spawn dans le header),
-    // on prend une valeur raisonnable: demi-case D1
+    mouseSquare.userData.anchor = null; // <- important : on oublie l’ancre
     const baseFs = lastGridCursorSizeWorld || Math.max(0, (w/2) - config.borderWidth);
     const fs = Math.max(0, baseFs);
     const half = fs / 2;
-    updateDomCursorOverlay(fs, true);
 
-    // Centre = souris, clampé pour rester visible
     let nx = worldPos.x;
     let ny = worldPos.y;
     nx = Math.max(camera.left + half,  Math.min(camera.right - half, nx));
@@ -2167,62 +2201,74 @@ function updateMouseSquareTarget(worldPos){
     mouseSquare.userData.targetScale.set(fs, fs, 1);
     cursorBorder.userData.targetPosition.set(nx, ny, 3);
     cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
-
-    cursorInHeader = true;
+    lastGridCursorSizeWorld = fs;
     return;
   }
 
-  // --- Dans le contenu : comportement normal (snap grille) ---
-  cursorInHeader = false;
+  // Repère ancré (sans scroll)
+  const wp = worldPos.clone();
+  wp.y -= mobDelta;
 
-  const leaf = findLeafAt(worldPos, targetState); if (!leaf) return;
-  const dd = Math.max(0, TARGET_DEPTH - leaf.depth);
+  const leaf = findLeafAt(wp, targetState);
+  if (!leaf) return;
+
+  const dd   = Math.max(0, TARGET_DEPTH - leaf.depth);
   const cell = leaf.originalSize / Math.pow(2, dd);
-  const lx = worldPos.x - (leaf.x - leaf.originalSize/2);
-  const ly = worldPos.y - (leaf.y - leaf.originalSize/2);
-  const ix = Math.max(0, Math.min(Math.floor(lx / cell), Math.pow(2, dd)-1));
-  const iy = Math.max(0, Math.min(Math.floor(ly / cell), Math.pow(2, dd)-1));
-  const nx = (leaf.x - leaf.originalSize/2) + ix*cell + cell/2;
-  const ny = (leaf.y - leaf.originalSize/2) + iy*cell + cell/2;
+  const lx   = wp.x - (leaf.x - leaf.originalSize/2);
+  const ly   = wp.y - (leaf.y - leaf.originalSize/2);
+  const ix   = Math.max(0, Math.min(Math.floor(lx / cell), Math.pow(2, dd)-1));
+  const iy   = Math.max(0, Math.min(Math.floor(ly / cell), Math.pow(2, dd)-1));
+  const nx   = (leaf.x - leaf.originalSize/2) + ix*cell + cell/2;
+  const ny   = (leaf.y - leaf.originalSize/2) + iy*cell + cell/2;
+
   const fs = Math.max(0, cell - config.borderWidth);
 
-  // >>> ICI la ligne qu'il te manquait <<<
-  updateDomCursorOverlay(fs, false);
+  // ➜ on MÉMORISE l’ancre en coordonnées monde (sans scroll)
+  mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
 
-  mouseSquare.userData.targetPosition.set(nx, ny, 4);
+  // Affichage = ancre + décalage de scroll
+  mouseSquare.userData.targetPosition.set(nx, ny + mobDelta, 4);
   mouseSquare.userData.targetScale.set(fs, fs, 1);
-  cursorBorder.userData.targetPosition.set(nx, ny, 3);
+  cursorBorder.userData.targetPosition.set(nx, ny + mobDelta, 3);
   cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
 
-  // ⬅️ on mémorise la taille "grille" pour s'en servir dans le header
   lastGridCursorSizeWorld = fs;
 }
 
 
-function updateDomCursorOverlay(fsWorld, inHeader){
-  if (!domCursorEl) return;
-  const { viewHeight } = getLayoutMetrics();
 
-  // world -> pixels
-  const pxPerWorldY = window.innerHeight / viewHeight;
-  const sidePx = Math.max(0, Math.round(fsWorld * pxPerWorldY));
-
-  // récupère la position souris en pixels depuis lastMouseScreenPos
-  const cx = (lastMouseScreenPos.x * 0.5 + 0.5) * window.innerWidth;
-  const cy = (-lastMouseScreenPos.y * 0.5 + 0.5) * window.innerHeight;
-
-  domCursorEl.style.left = cx + 'px';
-  domCursorEl.style.top  = cy + 'px';
-  domCursorEl.style.width  = sidePx + 'px';
-  domCursorEl.style.height = sidePx + 'px';
-  domCursorEl.style.opacity = inHeader ? '1' : '0';
-}
-  
-// Mouse & Click
 function onMouseMove(e){
+  // logique existante : position normalisée + raffinement
   lastMouseScreenPos.set((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
   needsRefineCheck = true;
+
+  // --- curseur DOM jaune dans le header ---
+  if (!domCursorEl) return;
+
+  const headerEl = document.getElementById('ui-header');
+  const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
+  const inHeader = e.clientY <= headerPx;
+
+  if (inHeader){
+    // taille = même logique que la case "grille" mémorisée (fallback = w/2)
+    const { w } = getLayoutMetrics();
+    const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
+      ? lastGridCursorSizeWorld
+      : Math.max(0, (w/2) - config.borderWidth);
+
+    const pxPerWorldX = window.innerWidth / (camera.right - camera.left);
+    const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
+
+    domCursorEl.style.opacity = '1';
+    domCursorEl.style.width  = sidePx + 'px';
+    domCursorEl.style.height = sidePx + 'px';
+    domCursorEl.style.left = e.clientX + 'px';
+    domCursorEl.style.top  = e.clientY + 'px';
+  } else {
+    domCursorEl.style.opacity = '0';
+  }
 }
+
 function onClick(e){
   if (e.altKey){
     const wp = new THREE.Vector3(lastMouseScreenPos.x,lastMouseScreenPos.y,0).unproject(camera);
@@ -2236,12 +2282,13 @@ function onClick(e){
   // ignore les clics dans le header
   if (wp.y >= contentTop) return;
 
-  for (const [key, st] of fractalState.entries()){
+  // Navigation si on clique dans un bouton
+  for (const [key, st] of Array.from(fractalState.entries())){
     if (!st.isButton) continue;
-    const half = st.mesh.scale.x/2;
+    const half = st.targetScale.x/2;
     const inside =
-      (wp.x >= st.mesh.position.x - half && wp.x <= st.mesh.position.x + half &&
-       wp.y >= st.mesh.position.y - half && wp.y <= st.mesh.position.y + half);
+      (wp.x >= st.targetPosition.x - half && wp.x <= st.targetPosition.x + half &&
+       wp.y >= st.targetPosition.y - half && wp.y <= st.targetPosition.y + half);
     if (inside && buttonCells.has(key)){
       const { url } = buttonCells.get(key);
       window.location.href = url;
@@ -2249,8 +2296,14 @@ function onClick(e){
     }
   }
 
+  // Sinon : “reform” de la grille sans recharger/réchanger les images
   reformGridKeepImages();
+
+  // sécurité : on s'assure d'un refresh input/cursor au prochain frame
+  needsRefineCheck = true;
 }
+
+
 
 // Outil de repérage
 function logD2At(wp){
