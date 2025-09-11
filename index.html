@@ -52,8 +52,8 @@
     /* Loader overlay */
     #loader-overlay {
       position: fixed;
-      bottom: calc(100vw / 16);
-      right: calc(100vw / 16);
+      bottom: calc(100vw / 16);   /* mobile & tablettes */
+      right:  calc(100vw / 16);   /* mobile & tablettes */
       z-index: 9999;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
       font-size: 32px;
@@ -61,9 +61,18 @@
       letter-spacing: .02em;
       opacity: 1;
       pointer-events: none;
-      transition: opacity .4s ease; /* nécessaire pour le fallback si baffle n'est pas dispo */
+      transition: opacity .4s ease;
     }
 
+    /* Desktop : marge ÷2 */
+    @media (min-width: 1025px) {
+      #loader-overlay {
+        bottom: calc(100vw / 32);
+        right:  calc(100vw / 32);
+      }
+    }
+
+  
 
   body {
     margin: 0; overflow: auto;
