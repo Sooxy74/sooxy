@@ -48,6 +48,21 @@
       opacity: .85;
       box-shadow: 0 0 0 1px #11190c inset;
     }
+    
+    /* Loader overlay */
+    #loader-overlay {
+      position: fixed;
+      bottom: calc(100vw / 16);
+      right: calc(100vw / 16);
+      z-index: 9999;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+      font-size: 32px;
+      color: #f3f1ee;
+      letter-spacing: .02em;
+      opacity: 1;
+      pointer-events: none;
+      transition: opacity .4s ease; /* nécessaire pour le fallback si baffle n'est pas dispo */
+    }
 
 
   body {
@@ -177,6 +192,9 @@
 </head>
 <body>
 
+<!-- Loader -->
+<div id="loader-overlay">[ 0% ]</div>
+  
 <header id="ui-header" aria-label="Top menu">
   <div id="header-inner">
     <a id="mobile-left" href="#about" aria-label="About / Info">
@@ -218,7 +236,10 @@
 // Imports
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
+// --- Loader
+let loaderOverlay;
 
+  
 // Buckets (avec hystérésis)
 const BUCKETS = [
   { id:'desktop-32:9', match:(w,h)=> w>=1025 && (w/h)>=3.1,                  grid:{cols:6, rows:2} },
@@ -449,7 +470,7 @@ const IMG_PAD = 2;
 const MAX_INDEX = 200;
 const STOP_AFTER_MISSES = 10;
 
-async function scanLocalImages() {
+async function scanLocalImages(onProgress){
   imageTextures = [];
   let misses = 0;
   for (let i = 1; i <= MAX_INDEX; i++) {
@@ -461,8 +482,8 @@ async function scanLocalImages() {
       misses++;
       if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break;
     }
+    if (onProgress) onProgress(i, MAX_INDEX);
   }
-  // pas de duplication automatique : on garde uniquement les fichiers réellement présents
 }
 
 
@@ -539,7 +560,29 @@ function depth1SlotKey(x, y, w, contentTop){
 // THREE init
 const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; document.body.appendChild(canvas);
 
-(async () => { init(); await bootstrap(); animate(); })();
+// Boot sequence + loader
+(async () => {
+  init();
+  await bootstrap();
+  animate();
+
+  // Disparition du loader
+  if (loaderOverlay && window.baffle) {
+    const loaderBaffle = window.baffle(loaderOverlay);
+    loaderBaffle.set({ characters: '!/|~#.^+*$#', speed: 120 });
+    loaderBaffle.start();
+    setTimeout(() => {
+      loaderBaffle.text(() => ' ').reveal(500);
+      setTimeout(() => { if (loaderOverlay) loaderOverlay.remove(); }, 600);
+    }, 300);
+  } else if (loaderOverlay) {
+    loaderOverlay.style.opacity = '0';
+    loaderOverlay.addEventListener('transitionend', () => {
+      if (loaderOverlay) loaderOverlay.remove();
+    }, { once: true });
+  }
+})();
+
 
 function init(){
   scene = new THREE.Scene(); scene.background = new THREE.Color(config.backgroundColor);
@@ -548,6 +591,7 @@ function init(){
   renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, canvas, powerPreference:'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  loaderOverlay = document.getElementById('loader-overlay');
   geometry = new THREE.PlaneGeometry(1,1);
   cursorMaterial = new THREE.MeshBasicMaterial({ color: config.cursorColor, transparent:true, opacity:0.85 });
   darkMaterial   = new THREE.MeshBasicMaterial({ color: config.darkColor });
@@ -644,19 +688,26 @@ function setupAnimatedNavButton(button){
   document.documentElement.style.setProperty('--menu-h', menuHeightPx + 'px');
 })();
   
+  
 async function bootstrap(){
-  await scanLocalImages();
+  const onProgress = (current, total) => {
+    if (loaderOverlay) {
+      const percent = Math.min(100, Math.floor((current / total) * 100));
+      loaderOverlay.textContent = `[ ${percent}% ]`;
+    }
+  };
+
+  // Charge/sonde tes images locales avec progression
+  await scanLocalImages(onProgress);
+
+  // Suite de ton bootstrap "normal"
   const w = window.innerWidth, h = window.innerHeight;
   currentBucket = pickBucket(w, h);
   applyBucket();
-
-  // 1) construit la grille et assigne ses images (gauche/droite)
   resetFractalRandom();
-
-  // 2) maintenant que imageAssignment est rempli, l’overlay du milieu
-  // peut piocher dans la même liste en évitant les doublons
   buildFreeOverlays();
 }
+
 
 
 function applyBucket(){
