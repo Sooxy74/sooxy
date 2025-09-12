@@ -18,10 +18,7 @@
     --menu-gap: 16px;
     --doc-h: 100vh;
   }
-  html, body {
-    height: 100%;
-    overscroll-behavior-y: none;
-  }
+  html, body { height: 100%; }
 
     /* Masquer la souris au-dessus de la scène (canvas + labels) */
     #webgl-canvas,
@@ -166,25 +163,38 @@
     height: calc(var(--menu-h) * 1.00);
   }
 
-  @media (max-width: 640px) {
-    #header-inner { justify-content: center; }
-    #nav-links { display: none; }
+  /* Téléphone vertical ET tablette vertical */
+  @media (max-width: 640px), (max-width: 1024px) and (orientation: portrait) {
+    #header-inner { justify-content: center; }               /* logo centré */
+    #nav-links { display: none !important; }                 /* cacher les libellés */
     #logo-link { margin-left: 0; }
-    #mobile-left, #mobile-right { display: inline-flex; align-items: center; }
+    #mobile-left, #mobile-right {                            /* afficher les icônes */
+      display: inline-flex;
+      align-items: center;
+    }
   }
+
   #scroll-spacer { height: var(--doc-h); }
   
   #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
 .hover-label{
-  position:absolute;
-  font:700 18px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;
-  color:#f3f1ee; line-height:1;
-  transition:opacity .15s ease, color .15s ease;
-  transform:translate(-100%,0);
-  transform-origin:100% 0%;
-  text-align:right; white-space:normal;
-  will-change:transform,opacity,color,width;
+  position: absolute;
+
+  /* force Space Mono (gras 700) pour les 1re/2e lignes */
+  font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-weight: 700;
+  font-size: 18px; /* sera recalculée par ton JS, garde une base */
+
+  color: #f3f1ee;
+  line-height: 1;
+  transition: opacity .15s ease, color .15s ease;
+  transform: translate(-100%, 0);
+  transform-origin: 100% 0%;
+  text-align: right;
+  white-space: normal;
+  will-change: transform, opacity, color, width;
 }
+
 
 .hover-label .line{ display:block; }
 
@@ -362,35 +372,32 @@ const LAYOUT_WISH = {
   'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
 };
 
-// Presets déterministes par bucket
-//  row/col = case D1 (grille de base), quad ∈ {0,1,2,3} = sous-carré D2 :
-//  0: haut-gauche, 1: haut-droit, 2: bas-gauche, 3: bas-droit
+// Desktop 16:9 — 5 boutons en D2, images : D1 à gauche, D2 à droite (à la place du gros D1)
 const PRESETS = {
-  // Desktop 16:9 — suit la maquette : 5 boutons (rouges) en D2, images (vertes) en D1 et D2
   'desktop-16:9': {
-  // Boutons (inchangé)
+  // Boutons (nouvelle disposition)
   buttons: [
     { size:'D2', row:0, col:1, quad:0, key:'motion'  },
-    { size:'D2', row:0, col:2, quad:2, key:'ui'     },
+    { size:'D2', row:1, col:2, quad:1, key:'ui'      },
     { size:'D2', row:1, col:0, quad:1, key:'fractal' },
-    { size:'D2', row:1, col:3, quad:2, key:'random'  },
-    { size:'D2', row:0, col:2, quad:1, key:'code'    }
+    { size:'D2', row:0, col:3, quad:3, key:'random'  },
+    { size:'D2', row:1, col:1, quad:3, key:'code'    }
   ],
 
-  // Images plein w (D1) : on laisse seulement celles du haut
+  // Grande image plein W : déplacée d'un W vers la droite (col 0 → 1)
   imagesD1: [
-    { row:0, col:0 },
-    { row:0, col:3 }
+    { row:0, col:0 }
   ],
 
-  // Aucune image w/2 ici
-  imagesD2: []
+  // Petite image : au-dessus de l'emplacement du bouton UI design
+  // (UI était en row:0,col:2, on la met en quad:0 = top-left)
+  imagesD2: [
+    { size:'D2', row:0, col:2, quad:1 }
+  ],
 },
 
 
-
-
-  // Tablettes/Mobiles : inchangé par rapport à ton code actuel
+  // (le reste du PRESETS inchangé)
   'tablet-4:3': {
     buttons: [
       { size:'D2', row:0, col:0, quad:0, key:'motion' },
@@ -422,31 +429,30 @@ const PRESETS = {
     imagesD1: [], imagesD2: [],
   },
   'mobile-v': {
-  // Grille base 2x4 (bucket mobile-v) : 5 boutons en D2 disposés en colonne lisible
-  buttons: [
-    { size:'D2', row:0, col:0, quad:1, key:'motion'  },
-    { size:'D2', row:1, col:1, quad:2, key:'ui'      },
-    { size:'D2', row:2, col:0, quad:3, key:'fractal' },
-    { size:'D2', row:3, col:1, quad:0, key:'random'  },
-    { size:'D2', row:1, col:0, quad:0, key:'code'    },
-  ],
-  imagesD1: [], imagesD2: [],
-},
-'mobile-h': {
-  // Grille base 3x2 (bucket mobile-h) : 5 boutons en D2 répartis
-  buttons: [
-    { size:'D2', row:0, col:0, quad:1, key:'motion'  },
-    { size:'D2', row:0, col:1, quad:2, key:'ui'      },
-    { size:'D2', row:1, col:2, quad:0, key:'fractal' },
-    { size:'D2', row:1, col:0, quad:3, key:'random'  },
-    { size:'D2', row:0, col:2, quad:2, key:'code'    },
-  ],
-  imagesD1: [], imagesD2: [],
-},
+    buttons: [
+      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
+      { size:'D2', row:1, col:1, quad:2, key:'ui'      },
+      { size:'D2', row:2, col:0, quad:3, key:'fractal' },
+      { size:'D2', row:3, col:1, quad:0, key:'random'  },
+      { size:'D2', row:1, col:0, quad:0, key:'code'    },
+    ],
+    imagesD1: [], imagesD2: [],
+  },
+  'mobile-h': {
+    buttons: [
+      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
+      { size:'D2', row:0, col:1, quad:2, key:'ui'      },
+      { size:'D2', row:1, col:2, quad:0, key:'fractal' },
+      { size:'D2', row:1, col:0, quad:3, key:'random'  },
+      { size:'D2', row:0, col:2, quad:2, key:'code'    },
+    ],
+    imagesD1: [], imagesD2: [],
+  },
 
   'desktop-21:9': null,
   'desktop-32:9': null,
 };
+
 
 // Catégories (5 uniques)
 const CATEGORIES = [
@@ -474,6 +480,7 @@ let domCursorEl = null;
 let cursorInHeader = false;
 let lastGridCursorSizeWorld = 0;   // mémorise la taille utilisée dans la grille
 let persistentImageUrls = null;
+let freeOverlays = [];
 // === AJOUTS GLOBAUX (mobile uniquement) ===
 const USE_MOBILE_DETERMINISTIC = true;
 const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
@@ -881,80 +888,16 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize intelligent (sans reload) — ignore les micro-variations de hauteur du viewport mobile
-let lastViewport = {
-  w: window.innerWidth,
-  h: window.innerHeight,
-  bucket: null
-};
-
-// ➊ handler central
-function handleResizeSmart(reason = 'resize'){
-  const w = Math.max(1, window.innerWidth);
-  const h = Math.max(1, window.innerHeight);
-
-  const widthDelta  = Math.abs(w - lastViewport.w);
-  const heightDelta = Math.abs(h - lastViewport.h);
-
-  const prevBucket = currentBucket;
-  const nextBucket = pickBucket(w, h);
-
-  const widthChanged   = widthDelta >= 8;            // <— seuil : variations minimes ignorées
-  const bucketChanged  = nextBucket !== prevBucket;
-  const orientationChanged = ((w > h) !== (lastViewport.w > lastViewport.h));
-
-  // — toujours tenir le canvas à la bonne taille —
-  const aspect = w / h;
-  const camH = 10;
-  const camW = camH * aspect;
-  camera.left = -camW/2;
-  camera.right = camW/2;
-  camera.top = camH/2;
-  camera.bottom = -camH/2;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-  updateGrainPlaneSize();
-  updateMenuGeometry();
-  updateScrollDocHeight();
-
-  // — ne reconstruire la grille que si nécessaire —
-  if (bucketChanged || orientationChanged) {
-    currentBucket = nextBucket;
-    applyBucket();            // recalcule colonnes/lignes/paramètres
-    reformGridKeepImages();   // reconstruit SANS recharger ni perdre les images
-  } else if (widthChanged) {
-    // changement de largeur (split view, rotation lente, etc.)
-    reformGridKeepImages();
-  } else {
-    // changement de hauteur seul (barres du navigateur qui montent/descendent) → on ne touche pas à la grille
-  }
-
-  lastViewport = { w, h, bucket: currentBucket };
-}
-
-// ➋ throttle le resize (évite les rafales)
-let resizeRAF = null;
-function onResizeThrottled(){
-  if (resizeRAF) return;
-  resizeRAF = requestAnimationFrame(() => {
-    resizeRAF = null;
-    handleResizeSmart('resize');
-  });
-}
-
-// ➌ écouteurs
-window.addEventListener('resize', onResizeThrottled, { passive: true });
-
-// Certains mobiles déclenchent surtout sur visualViewport
-if (window.visualViewport) {
-  window.visualViewport.addEventListener('resize', onResizeThrottled, { passive: true });
-}
-
-// Orientation : petit délai pour laisser innerHeight se stabiliser
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => handleResizeSmart('orientationchange'), 60);
-}, { passive: true });
-
+// Resize (reload léger à la fin)
+let resizeTimer=null;
+window.addEventListener('resize', ()=>{
+  const aspect = window.innerWidth / window.innerHeight; const height = 10; const width = height * aspect;
+  camera.left=-width/2; camera.right=width/2; camera.top=height/2; camera.bottom=-height/2; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  updateGrainPlaneSize(); updateMenuGeometry(); updateScrollDocHeight();
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{ window.location.reload(); }, 250);
+}, { passive:true });
 
 function updateScrollDocHeight(){
   // Mobile = portrait + tablettes très verticales
@@ -1824,38 +1767,77 @@ function getImageMaterial(url){
   return mat;
 }
   
-// --- Overlays libres + gouttières 1px (traits bleus) -----------------------
-// Chaque overlay peut demander des "gutters" (left/right/top/bottom)
-// qui sont des bandes de 1px CSS couleur fond, rendues AU-DESSUS de l'image.
+
+
+// --- Overlays libres + gouttières 1px -----------------------
+// 1) On garde l'image 1×1 déjà présente (rangée 1, colonne 2).
+// 2) On DÉPLACE l'image sous "Fractal Art" de w/2 vers la GAUCHE.
+// 3) On AJOUTE une image w/2 AU-DESSUS de "Random Stuff".
 
 const FREE_OVERLAYS = [
+  // (existant) : image 1x1 posée à cheval sur la colonne 2, rangée 1
   {
     row: 1,
     col: 2,
-    offsetCols: -0.5,
+    offsetCols: 1.0,   // marge horizontale en largeur de case
     offsetRows: 0,
     wMul: 1,
     hMul: 1,
-    url: null, // auto: prendra dans imageTextures (BY-pics), en évitant si possible une image déjà utilisée
+    url: null,
     gutters: { left: true, right: true, top: false, bottom: false }
   },
+
+  // DÉPLACÉE : mini-image 0.5×0.5 SOUS "Fractal Art"
+  // Avant : offsetCols:+0.25 (quad bas-droit). Maintenant on la décale de -w/2 → -0.25.
+  {
+    row: 1,
+    col: 0,
+    offsetCols: -0.25,   // était +0.25 → -0.25 = +0.25 - 0.5 (déplacement de w/2 vers la gauche)
+    offsetRows: +0.25,   // bas (comme avant)
+    wMul: 0.5,
+    hMul: 0.5,
+    url: null,           // auto-pick (évite les doublons)
+    gutters: { left: true, right: true, top: true, bottom: true }
+  },
+
+  // NOUVEAU : image w/2 AU-DESSUS de "Random Stuff"
+  // Le bouton Random est en {row:1, col:1, quad:3} (bas-droit) → on place l'image en haut-droit (quad:1)
+  {
+    row: 1,
+    col: 1,
+    offsetCols: +0.25,   // droite
+    offsetRows: -0.25,   // haut
+    wMul: 0.5,
+    hMul: 0.5,
+    url: null,           // auto-pick
+    gutters: { left: true, right: true, top: true, bottom: true }
+  },
+  
+  
 ];
 
 
-let freeOverlays = [];
-
-function pickOverlayUrl() {
-  // images déjà utilisées par la grille (D1 & D2)
+function pickOverlayUrl(extraUsed = new Set()) {
+  // images déjà utilisées par la grille (D1/D2)
   const used = new Set(imageAssignment.values());
-  // on essaie de prendre une image de la même liste non encore utilisée
+
+  // + images déjà choisies par d'autres overlays existants
+  for (const o of freeOverlays) {
+    if (o.url) used.add(o.url);
+  }
+
+  // + images "réservées" pendant cette construction
+  for (const u of extraUsed) used.add(u);
+
+  // On choisit une image non encore utilisée
   for (const u of imageTextures) {
     if (!used.has(u)) return u;
   }
-  // fallback si tout est utilisé ou liste vide
+
+  // Fallback si tout est utilisé ou si la liste est vide
   return imageTextures[0] || 'img/logo-sooxy-art.png';
 }
 
-  
 function buildFreeOverlays(){
   if (isMobileBucket()){
     // nettoie d’éventuels overlays déjà créés
@@ -1868,13 +1850,28 @@ function buildFreeOverlays(){
       if (o.cover)   scene.remove(o.cover);
     }
     freeOverlays.length = 0;
-    return; // pas d'overlay en mobile
+    return; // pas d'overlay en mobile (formats verticaux)
   }
+
+  // On reconstruit tout
+  for (const o of freeOverlays){
+    scene.remove(o.mesh);
+    if (o.vLeft)   scene.remove(o.vLeft);
+    if (o.vRight)  scene.remove(o.vRight);
+    if (o.hTop)    scene.remove(o.hTop);
+    if (o.hBottom) scene.remove(o.hBottom);
+    if (o.cover)   scene.remove(o.cover);
+  }
+  freeOverlays.length = 0;
+
+  // Ensemble accumulant les URLs choisies pour cette passe
+  const accUsed = new Set();
 
   // Création
   for (const spec of FREE_OVERLAYS){
     // même pool d’images que la grille (évite les doublons si possible)
-    const urlToUse = spec.url ? spec.url : pickOverlayUrl();
+    const urlToUse = spec.url ? spec.url : pickOverlayUrl(accUsed);
+    accUsed.add(urlToUse);
     const mat = getImageMaterial(urlToUse);
 
     // --- IMAGE OVERLAY ---
@@ -1912,7 +1909,8 @@ function buildFreeOverlays(){
     const targetPosition = new THREE.Vector3();
     const targetScale    = new THREE.Vector3(0, 0, 1);
 
-    freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom, targetPosition, targetScale, cover });
+    // on mémorise aussi l'URL choisie pour éviter les doublons
+    freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom, targetPosition, targetScale, cover, url: urlToUse });
   }
 
   // Calcule les cibles (centre + tailles)
