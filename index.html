@@ -746,6 +746,7 @@ async function bootstrap(){
   applyBucket();
   resetFractalRandom();
   buildFreeOverlays();
+  lastGridCursorSizeWorld = computeDefaultGridCursorSize();
 }
 
 
@@ -759,17 +760,27 @@ function applyBucket(){
   // Paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
   const forceSubDesktopLandscape = isSubDesktopLandscape();
 
+  // seuil ultrawide demandé
+  const ULTRAWIDE_AR = 22/9; // ≈ 2.444...
+  const aspect = window.innerWidth / window.innerHeight;
+
   if (forceSubDesktopLandscape) {
     // 4 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
     baseCols = 5;
     baseRowsPrimary = 2;
+
   } else if (isTabletPortrait) {
     // 2 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
     baseCols = 3;
-    baseRowsPrimary = b?.grid.rows || 3;   // on garde tes rows de bucket
+    baseRowsPrimary = b?.grid.rows || 3;
+
   } else if (!isPhonePortrait) {
     // Desktop / autres cas
-    if (config.baseColsOverride != null) {
+    if (aspect >= ULTRAWIDE_AR) {
+      // ➜ ≥ 22:9 : 4 colonnes de contenu + 2 colonnes de marge de chaque côté
+      baseCols = 8;                         // offset = (8 - 4)/2 = 2 colonnes de marge par côté
+      baseRowsPrimary = b?.grid.rows || 2;
+    } else if (config.baseColsOverride != null) {
       baseCols = Math.max(1, config.baseColsOverride);
       baseRowsPrimary = b?.grid.rows || 2;
     } else if (config.targetCellPx) {
@@ -779,6 +790,7 @@ function applyBucket(){
       baseCols = b?.grid.cols || 4;
       baseRowsPrimary = b?.grid.rows || 2;
     }
+
   } else {
     // Mobile portrait
     baseCols = 2;
@@ -803,6 +815,7 @@ function applyBucket(){
 
   updateScrollDocHeight();
 }
+
 
   
 
@@ -2399,17 +2412,42 @@ function refineTargetStateAt(worldPos){
   return refined;
 }
 
+function computeDefaultGridCursorSize(){
+  const { w, contentTop } = getLayoutMetrics();
+
+  const offsetCols = contentOffsetColsForBucket();
+  const sampleX = camera.left + (offsetCols + 0.5) * w;
+  const sampleY = contentTop - (w * 0.5);
+
+  const wp = new THREE.Vector3(sampleX, sampleY, 0);
+  const leaf = findLeafAt(wp, targetState);
+
+  if (!leaf) return Math.max(0, (w/2) - config.borderWidth);
+
+  const dd   = Math.max(0, TARGET_DEPTH - leaf.depth);
+  const cell = leaf.originalSize / Math.pow(2, dd);
+  return Math.max(0, cell - config.borderWidth);
+}
+  
+  
 function updateMouseSquareTarget(worldPos){
   const { w, contentTop } = getLayoutMetrics();
   const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
-  // Si la souris est dans le header : pas d’ancre, comportement habituel
+  // Souris dans le header (menu)
   if (worldPos.y >= contentTop) {
-    mouseSquare.userData.anchor = null; // <- important : on oublie l’ancre
-    const baseFs = lastGridCursorSizeWorld || Math.max(0, (w/2) - config.borderWidth);
-    const fs = Math.max(0, baseFs);
+    mouseSquare.userData.anchor = null; // pas d'ancre
+
+    // ✅ Si on n’a pas encore une taille "grille" en mémoire,
+    // on la calcule comme si on survolait déjà la grille.
+    const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
+      ? lastGridCursorSizeWorld
+      : computeDefaultGridCursorSize();
+
+    const fs = Math.max(0, fsWorld);
     const half = fs / 2;
 
+    // clamp dans le header
     let nx = worldPos.x;
     let ny = worldPos.y;
     nx = Math.max(camera.left + half,  Math.min(camera.right - half, nx));
@@ -2419,6 +2457,8 @@ function updateMouseSquareTarget(worldPos){
     mouseSquare.userData.targetScale.set(fs, fs, 1);
     cursorBorder.userData.targetPosition.set(nx, ny, 3);
     cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+
+    // mémorise la bonne taille pour onMouseMove (overlay DOM)
     lastGridCursorSizeWorld = fs;
     return;
   }
@@ -2454,13 +2494,12 @@ function updateMouseSquareTarget(worldPos){
 }
 
 
-
 function onMouseMove(e){
-  // logique existante : position normalisée + raffinement
+  // MàJ position normalisée + demande de raffinement
   lastMouseScreenPos.set((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
   needsRefineCheck = true;
 
-  // --- curseur DOM jaune dans le header ---
+  // Overlay DOM jaune dans le header
   if (!domCursorEl) return;
 
   const headerEl = document.getElementById('ui-header');
@@ -2468,11 +2507,12 @@ function onMouseMove(e){
   const inHeader = e.clientY <= headerPx;
 
   if (inHeader){
-    // taille = même logique que la case "grille" mémorisée (fallback = w/2)
-    const { w } = getLayoutMetrics();
+    // ✅ Taille = "grille" réelle :
+    //    - si déjà mémorisée -> on la réutilise,
+    //    - sinon -> on la calcule comme si la souris survolait la grille.
     const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
       ? lastGridCursorSizeWorld
-      : Math.max(0, (w/2) - config.borderWidth);
+      : computeDefaultGridCursorSize();
 
     const pxPerWorldX = window.innerWidth / (camera.right - camera.left);
     const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
@@ -2486,6 +2526,7 @@ function onMouseMove(e){
     domCursorEl.style.opacity = '0';
   }
 }
+
 
 function onClick(e){
   if (e.altKey){
