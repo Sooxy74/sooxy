@@ -18,7 +18,10 @@
     --menu-gap: 16px;
     --doc-h: 100vh;
   }
-  html, body { height: 100%; }
+  html, body {
+    height: 100%;
+    overscroll-behavior-y: none;
+  }
 
     /* Masquer la souris au-dessus de la scène (canvas + labels) */
     #webgl-canvas,
@@ -878,16 +881,80 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (reload léger à la fin)
-let resizeTimer=null;
-window.addEventListener('resize', ()=>{
-  const aspect = window.innerWidth / window.innerHeight; const height = 10; const width = height * aspect;
-  camera.left=-width/2; camera.right=width/2; camera.top=height/2; camera.bottom=-height/2; camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  updateGrainPlaneSize(); updateMenuGeometry(); updateScrollDocHeight();
-  if (resizeTimer) clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(()=>{ window.location.reload(); }, 250);
-}, { passive:true });
+// Resize intelligent (sans reload) — ignore les micro-variations de hauteur du viewport mobile
+let lastViewport = {
+  w: window.innerWidth,
+  h: window.innerHeight,
+  bucket: null
+};
+
+// ➊ handler central
+function handleResizeSmart(reason = 'resize'){
+  const w = Math.max(1, window.innerWidth);
+  const h = Math.max(1, window.innerHeight);
+
+  const widthDelta  = Math.abs(w - lastViewport.w);
+  const heightDelta = Math.abs(h - lastViewport.h);
+
+  const prevBucket = currentBucket;
+  const nextBucket = pickBucket(w, h);
+
+  const widthChanged   = widthDelta >= 8;            // <— seuil : variations minimes ignorées
+  const bucketChanged  = nextBucket !== prevBucket;
+  const orientationChanged = ((w > h) !== (lastViewport.w > lastViewport.h));
+
+  // — toujours tenir le canvas à la bonne taille —
+  const aspect = w / h;
+  const camH = 10;
+  const camW = camH * aspect;
+  camera.left = -camW/2;
+  camera.right = camW/2;
+  camera.top = camH/2;
+  camera.bottom = -camH/2;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  updateGrainPlaneSize();
+  updateMenuGeometry();
+  updateScrollDocHeight();
+
+  // — ne reconstruire la grille que si nécessaire —
+  if (bucketChanged || orientationChanged) {
+    currentBucket = nextBucket;
+    applyBucket();            // recalcule colonnes/lignes/paramètres
+    reformGridKeepImages();   // reconstruit SANS recharger ni perdre les images
+  } else if (widthChanged) {
+    // changement de largeur (split view, rotation lente, etc.)
+    reformGridKeepImages();
+  } else {
+    // changement de hauteur seul (barres du navigateur qui montent/descendent) → on ne touche pas à la grille
+  }
+
+  lastViewport = { w, h, bucket: currentBucket };
+}
+
+// ➋ throttle le resize (évite les rafales)
+let resizeRAF = null;
+function onResizeThrottled(){
+  if (resizeRAF) return;
+  resizeRAF = requestAnimationFrame(() => {
+    resizeRAF = null;
+    handleResizeSmart('resize');
+  });
+}
+
+// ➌ écouteurs
+window.addEventListener('resize', onResizeThrottled, { passive: true });
+
+// Certains mobiles déclenchent surtout sur visualViewport
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', onResizeThrottled, { passive: true });
+}
+
+// Orientation : petit délai pour laisser innerHeight se stabiliser
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => handleResizeSmart('orientationchange'), 60);
+}, { passive: true });
+
 
 function updateScrollDocHeight(){
   // Mobile = portrait + tablettes très verticales
