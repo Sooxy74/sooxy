@@ -252,24 +252,39 @@ let loaderOverlay;
 // Buckets (avec hystérésis)
 const BUCKETS = [
   { id:'desktop-32:9', match:(w,h)=> w>=1025 && (w/h)>=3.1,                  grid:{cols:6, rows:2} },
-  { id:'desktop-21:9', match:(w,h)=> w>=1025 && (w/h)>=2.0 && (w/h)<3.1,     grid:{cols:5, rows:2} },
-  { id:'desktop-16:9', match:(w,h)=> (w/h)>=1.6 && (w/h)<2.0 && w>=768,      grid:{cols:4, rows:2} },
+  { id:'desktop-21:9', match:(w,h)=> w>=1025 && (w/h)>=1.8 && (w/h)<3.1,     grid:{cols:5, rows:2} },
+  { id:'desktop-16:9', match:(w,h)=> (w/h)>=1.6 && (w/h)<1.8 && w>=768,      grid:{cols:4, rows:2} },
   { id:'tablet-4:3',   match:(w,h)=> (w/h)>=1.28 && (w/h)<1.6 && w>=641 && w<1025, grid:{cols:3, rows:2} },
   { id:'tablet-3:4',   match:(w,h)=> (h/w)>=1.2  && (h/w)<1.5 && w>=641 && w<1025, grid:{cols:2, rows:3} },
   { id:'tablet-9:16',  match:(w,h)=> (h/w)>=1.5  && w>=641 && w<1025,              grid:{cols:2, rows:4} },
-  { id:'mobile-h',     match:(w,h)=> w<=640 && w>h, grid:{cols:3, rows:2} },
+  { id:'mobile-h',     match:(w,h)=> w<=640 && w>h, grid:{cols:6, rows:2} },
   { id:'mobile-v',     match:(w,h)=> w<=640 && h>=w, grid:{cols:2, rows:4} },
 ];
 const HYST = 0.03;
 let currentBucket = null;
 let lastAspect = null;
+  
 function pickBucket(w, h){
-  const a = w/h;
+  const a = w / h;
   if (currentBucket && lastAspect && Math.abs(a - lastAspect) < HYST) return currentBucket;
-  for (const b of BUCKETS) { if (b.match(w, h)) { lastAspect = a; return b.id; } }
+
+  // 👉 Tous les paysages "sous-desktop" forcent le preset desktop-16:9
+  if (isSubDesktopLandscape()){
+    lastAspect = a;
+    return 'desktop-16:9';
+  }
+
+  for (const b of BUCKETS) {
+    if (b.match(w, h)) {
+      lastAspect = a;
+      return b.id;
+    }
+  }
   lastAspect = a;
   return 'desktop-16:9';
 }
+
+
 
 // Couleurs & config
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -482,18 +497,30 @@ const STOP_AFTER_MISSES = 10;
 async function scanLocalImages(onProgress){
   imageTextures = [];
   let misses = 0;
+
   for (let i = 1; i <= MAX_INDEX; i++) {
     const num = String(i).padStart(IMG_PAD, '0');
     const url = `${LOCAL_IMG_DIR}${num}${IMG_EXT}`;
     const ok = await imageExists(url);
+
     if (ok) { imageTextures.push(url); misses = 0; }
-    else {
-      misses++;
-      if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break;
+    else { misses++; }
+
+    // total "attendu" = ce qu'il faudrait au max pour terminer si tout le reste était des miss
+    // ainsi, quand on atteint le seuil d'arrêt, current == expectedTotal -> 100%
+    if (onProgress) {
+      const expectedTotal = Math.min(MAX_INDEX, i + Math.max(0, STOP_AFTER_MISSES - misses));
+      onProgress(i, expectedTotal);
     }
-    if (onProgress) onProgress(i, MAX_INDEX);
+
+    // arrêt anticipé (mais uniquement si on a trouvé au moins 1 image)
+    if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break;
   }
+
+  // sécurité : forcer 100% à la fin du scan, quel que soit le motif d'arrêt
+  if (onProgress) onProgress(1, 1);
 }
+
 
 
 function imageExists(url) {
@@ -691,11 +718,14 @@ function setupAnimatedNavButton(button){
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
 }
 
-(function syncCssHeaderHeight(){
-  const { menuHeight, viewHeight } = getLayoutMetrics();
-  const menuHeightPx = Math.round((menuHeight / viewHeight) * window.innerHeight);
-  document.documentElement.style.setProperty('--menu-h', menuHeightPx + 'px');
-})();
+function syncCssHeaderHeight(){
+  const headerEl = document.getElementById('ui-header');
+  const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
+}
+syncCssHeaderHeight();
+window.addEventListener('resize', syncCssHeaderHeight, { passive: true });
+
   
   
 async function bootstrap(){
@@ -708,7 +738,8 @@ async function bootstrap(){
 
   // Charge/sonde tes images locales avec progression
   await scanLocalImages(onProgress);
-
+  if (loaderOverlay) loaderOverlay.textContent = `[ 100% ]`;
+  
   // Suite de ton bootstrap "normal"
   const w = window.innerWidth, h = window.innerHeight;
   currentBucket = pickBucket(w, h);
@@ -722,8 +753,22 @@ async function bootstrap(){
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
 
-  if (currentBucket !== 'mobile-h' && currentBucket !== 'mobile-v'){
-    // Desktop / tablettes : comportement actuel
+  const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+  const isPhonePortrait  = (currentBucket === 'mobile-v');
+
+  // Paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
+  const forceSubDesktopLandscape = isSubDesktopLandscape();
+
+  if (forceSubDesktopLandscape) {
+    // 4 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
+    baseCols = 5;
+    baseRowsPrimary = 2;
+  } else if (isTabletPortrait) {
+    // 2 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
+    baseCols = 3;
+    baseRowsPrimary = b?.grid.rows || 3;   // on garde tes rows de bucket
+  } else if (!isPhonePortrait) {
+    // Desktop / autres cas
     if (config.baseColsOverride != null) {
       baseCols = Math.max(1, config.baseColsOverride);
       baseRowsPrimary = b?.grid.rows || 2;
@@ -735,28 +780,31 @@ function applyBucket(){
       baseRowsPrimary = b?.grid.rows || 2;
     }
   } else {
-    // Mobile : grille logique minimale, layout déterministe gère le reste
+    // Mobile portrait
     baseCols = 2;
     baseRowsPrimary = 2;
   }
 
-  const wish = LAYOUT_WISH[currentBucket] || { wantD1:1, wantD2:4, buttonsOnD2:true };
+  // Vœux de D1/D2 (inchangé)
+  const wishKey =
+    forceSubDesktopLandscape ? 'desktop-16:9'
+    : (currentBucket === 'mobile-h' ? 'desktop-16:9' : currentBucket);
+
+  const wish = LAYOUT_WISH[wishKey] || { wantD1:1, wantD2:4, buttonsOnD2:true };
   WANT_D1 = wish.wantD1;
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
-  // Profondeur cible (inchangé)
-  TARGET_DEPTH = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v')
-    ? (prefersReducedMotion ? 4 : 6)
-    : (prefersReducedMotion ? 5 : 7);
-
-  // *** NOUVEAU : variation de profondeur différente selon le device ***
-  // Desktop/tablette -> 7 ; Mobile -> 6
-  config.maxDepthVariation = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v') ? 6 : 7;
+  // Profondeur: on traite téléphone ET tablettes portrait comme "mobile-like"
+  const portraitMobileLike = isPhonePortrait || isTabletPortrait;
+  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
+                                    : (prefersReducedMotion ? 5 : 7);
+  config.maxDepthVariation = portraitMobileLike ? 6 : 7;
 
   updateScrollDocHeight();
 }
 
+  
 
 // Grain + Menu
 function createGrainPlane(){
@@ -797,22 +845,22 @@ function createMenuPlane(){
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
 
-  // Barre noire en WebGL (menuPlane)
+  // Plan (désactivé visuellement, mais on garde la géométrie cohérente)
   menuPlane.scale.set(viewWidth, menuHeight, 1);
   menuPlane.position.set((camera.left + camera.right) / 2, camera.top - menuHeight / 2, 0.1);
 
-  // Masque DOM : force les labels à "passer sous" la barre noire
+  // Masque DOM pour les labels + synchronisation de --menu-h
   const headerEl = document.getElementById('ui-header');
   const layer = document.getElementById('labels-layer');
   if (headerEl && layer){
     const headerPx = Math.round(headerEl.getBoundingClientRect().height);
-    // Coupe tout ce qui occupe la zone du header
     layer.style.clipPath = `inset(${headerPx}px 0 0 0)`;
     layer.style.webkitClipPath = `inset(${headerPx}px 0 0 0)`;
-    // Assure un empilement cohérent : sous le header (z:4) mais au-dessus du canvas (z:1)
     layer.style.zIndex = '3';
+    document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
   }
 }
+
 
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
@@ -829,7 +877,8 @@ window.addEventListener('resize', ()=>{
 }, { passive:true });
 
 function updateScrollDocHeight(){
-  const isMobile = (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+  // Mobile = portrait + tablettes très verticales
+  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
@@ -837,7 +886,6 @@ function updateScrollDocHeight(){
 
   let contentWorld;
   if (isMobile){
-    // si le layout mobile a déjà calculé sa hauteur totale, on la respecte
     contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
@@ -853,10 +901,10 @@ function updateScrollDocHeight(){
 
 
 
+
 function onScroll(){
-  const isMobile =
-    (currentBucket === 'mobile-h' || currentBucket === 'mobile-v' ||
-     currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+  // Mobile = portrait + tablettes très verticales
+  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
   if (!isMobile){
     scrollOffsetWorld = 0;
@@ -874,7 +922,6 @@ function onScroll(){
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
   scrollOffsetWorld = t * worldScrollable;
 
-  // Si on a une ancre pour le curseur, on met à jour la cible (pas d’animation ici)
   const a = mouseSquare?.userData?.anchor;
   if (a){
     const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
@@ -884,6 +931,7 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
+
 
 
 
@@ -931,50 +979,60 @@ const NO_D1_CONTENT_COLS = new Set([1, 2]);
 const D1_EXCEPTIONS = new Set();
 
   
-// Décalage horizontal (en colonnes) pour centrer CONTENT_COLS dans baseCols
 function contentOffsetColsForBucket(){
-  return Math.max(0, (baseCols - CONTENT_COLS) / 2); // 21:9 -> 0.5, 32:9 -> 1, etc.
+  // Centre le "contenu" (2 ou 4 colonnes selon le bucket) dans la grille totale.
+  // Ex. tablette portrait: baseCols = 3, contentCols = 2 => offset = 0.5 (½ colonne à gauche/droite)
+  const contentCols = contentColsForBucket();
+  return Math.max(0, (baseCols - contentCols) / 2);
 }
 
-// Ajoute des "filler" sur les côtés des rangées primaires.
-// Ancrage sur la LIMITE INTÉRIEURE, génération vers l’extérieur.
-// Si la bande fait w/2 (21:9), on tuile verticalement 2 carrés w/2.
-// Ajoute des fillers latéraux en VRAIES cases D1 (largeur = w), alignées sur la grille contenu.
-// Origine = bord gauche intérieur du contenu (offsetCols), on prolonge
-// vers la GAUCHE (colonnes -1, -2, ...) et vers la DROITE (colonnes 4, 5, ...)
-// jusqu'à recouvrir tout l'écran (on accepte le dépassement qui sera croppé).
-function addPrimaryRowSideFillers(row, offsetCols){
-  if (isMobileBucket()) return;
 
+// >>> NEW <<< : nb de colonnes "contenu" selon le bucket
+function contentColsForBucket(){
+  // Mobile portrait ET tablettes portrait => 2 colonnes de contenu
+  if (currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'){
+    return 2;
+  }
+  // Sinon: design desktop (4 colonnes de contenu)
+  return CONTENT_COLS;
+}
+  
+  
+function addPrimaryRowSideFillers(row, offsetCols){
+  // Pas de fillers en "mobile-like" ? On les garde pour les tablettes portrait
+  // (on ne les désactive que si tu le souhaites)
   const { w, contentTop } = getLayoutMetrics();
   const y = contentTop - row * w - w/2;  // centre de la rangée
 
+  const contentCols = contentColsForBucket();
+
   // Bords INTÉRIEURS du contenu (en monde)
   const innerLeftEdge  = camera.left + offsetCols * w;
-  const innerRightEdge = camera.left + (offsetCols + CONTENT_COLS) * w;
+  const innerRightEdge = camera.left + (offsetCols + contentCols) * w;
 
-  // --- FILLER GAUCHE : colonnes -1, -2, ... (centres à innerLeftEdge - (k+0.5)*w)
+  // --- FILLER GAUCHE ---
   {
     let i = 0;
-    let x = innerLeftEdge - 0.5 * w;           // première colonne juste à gauche du contenu
-    while (x + w/2 >= camera.left - 1e-6) {    // on continue tant que la case recouvre (ou dépasse) le bord gauche
+    let x = innerLeftEdge - 0.5 * w;
+    while (x + w/2 >= camera.left - 1e-6) {
       const p = `filler/L/${row}/${i++}`;
       createQuadTree(x, y, w, 1, p, -1);
-      x -= w;                                   // on avance d'une colonne vers la gauche
+      x -= w;
     }
   }
 
-  // --- FILLER DROITE : colonnes 4, 5, ... (centres à innerRightEdge + (k+0.5)*w)
+  // --- FILLER DROITE ---
   {
     let i = 0;
-    let x = innerRightEdge + 0.5 * w;          // première colonne juste à droite du contenu
-    while (x - w/2 <= camera.right + 1e-6) {   // on continue tant que la case recouvre (ou dépasse) le bord droit
+    let x = innerRightEdge + 0.5 * w;
+    while (x - w/2 <= camera.right + 1e-6) {
       const p = `filler/R/${row}/${i++}`;
       createQuadTree(x, y, w, 1, p, -1);
-      x += w;                                   // on avance d'une colonne vers la droite
+      x += w;
     }
   }
 }
+
 
 function updateFractalBase(forceFull = false){
   targetState.clear();
@@ -996,11 +1054,9 @@ function updateFractalBase(forceFull = false){
   // Nombre de rangées à générer
   let totalRows;
   if (isMobileBucket()){
-    // si la hauteur totale est déjà connue -> couvrir toute la hauteur
     if (mobileWorldContentHeight && mobileWorldContentHeight > 0){
       totalRows = Math.max(baseRowsPrimary, Math.ceil(mobileWorldContentHeight / w));
     } else {
-      // sinon on anticipe la hauteur pour N boutons espacés de w/2 : N*w + (N-1)*w/2
       const rowsForButtons = Math.ceil(REQUIRED_BUTTONS + (REQUIRED_BUTTONS - 1) * 0.5); // ex: 5 -> 7
       totalRows = Math.max(baseRowsPrimary, rowsForButtons);
     }
@@ -1010,10 +1066,12 @@ function updateFractalBase(forceFull = false){
   }
 
   const offsetCols = contentOffsetColsForBucket();
+  const contentCols = contentColsForBucket();
 
   for (let row = 0; row < totalRows; row++) {
     const isPrimary = row < baseRowsPrimary;
-    const colsThisRow = isPrimary ? Math.min(CONTENT_COLS, baseCols) : baseCols;
+    // >>> clé: pour tablettes portrait, on limite à 2 colonnes contenu
+    const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
 
     for (let col = 0; col < colsThisRow; col++) {
       const pref = isPrimary ? 'content' : 'filler';
@@ -1029,7 +1087,7 @@ function updateFractalBase(forceFull = false){
     if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
 
-  // 2) Règles desktop/tablette
+  // 2) Règles desktop/tablette paysage – on saute si "mobile-like" portrait
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
     if (baseCols > CONTENT_COLS) enforceNoD1InSideFillers();
@@ -1041,7 +1099,7 @@ function updateFractalBase(forceFull = false){
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
   }
 
-  // 3) Pattern mobile : casser les D1 non “fixées” en D2
+  // 3) Pattern mobile-like : casser les D1 en D2
   if (isMobileBucket()){
     forceMobilePattern();
   }
@@ -1049,13 +1107,13 @@ function updateFractalBase(forceFull = false){
   // 4) Boutons/Images
   const okButtons = chooseButtonsThenImages(forceFull);
 
-  // 4bis) Mobile : occlusion sous les boutons + suppression immédiate dessous
+  // 4bis) Mobile-like : occlusion et cutout sous les boutons
   if (okButtons && isMobileBucket()){
     cutOutUnderButtons();
   }
 
   // 5) Raffinements d’ambiance
-  if (okButtons) sprinkleRefinements(isMobileBucket() ? 128 : 24);
+  sprinkleRefinements(isMobileBucket() ? 128 : 24);
 
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
@@ -1065,22 +1123,21 @@ function updateFractalBase(forceFull = false){
 }
 
 
+
+// --- REMPLACEMENT COMPLET ---
+// En mobile-like (mobile portrait + tablettes portrait), on interdit
+// toute tuile pleine largeur (D1) dans la grille "content" et les "fillers".
+// Seuls les VRAIS boutons (créés ensuite sur des paths "btn/*") restent taille max.
 function forceMobilePattern(){
   if (!isMobileBucket()) return;
 
   const { w } = getLayoutMetrics();
-  const preset = presetForBucket(currentBucket);
 
-  // D1 "fixées" en content (si jamais un preset mobile en définissait)
-  const fixed = new Set(
-    (preset?.buttons || [])
-      .filter(b => b.size === 'D1')
-      .map(b => `content/${b.row}/${b.col}`)
-  );
-
-  // helper : remplace un D1 par ses 4 enfants D2 (sans tests de visibilité)
+  // Remplace un D1 par ses 4 enfants D2
   const subdivideToD2 = (path, s) => {
-    if (Math.abs(s.originalSize - w) > 1e-6) return; // seulement les plein-w
+    // On ne cible que les feuilles plein-w (D1)
+    if (Math.abs(s.originalSize - w) > 1e-6) return;
+
     targetState.delete(path);
 
     const size = s.originalSize;
@@ -1092,30 +1149,42 @@ function forceMobilePattern(){
     const add = (suffix, dx, dy) => {
       const p = path + suffix;
       targetState.set(p, {
-        x: s.x + dx, y: s.y + dy,
+        x: s.x + dx,
+        y: s.y + dy,
         size: childSize,
-        depth: d, path: p, originalSize: ns
+        depth: d,
+        path: p,
+        originalSize: ns
       });
     };
+
+    // 0: HG, 1: HD, 2: BG, 3: BD
     add('/0', -o, +o);
     add('/1', +o, +o);
     add('/2', -o, -o);
     add('/3', +o, -o);
   };
 
-  // 1) CONTENT : D1 non fixées -> D2
+  // 1) "content/*" : TOUT D1 -> D2 (aucune exception preset)
   for (const [path, s] of Array.from(targetState.entries())){
     if (!path.startsWith('content/')) continue;
-    if (fixed.has(path)) continue;
     subdivideToD2(path, s);
   }
 
-  // 2) FILLER : D1 -> D2 (donc toujours un cran plus petit que les boutons)
+  // 2) "filler/*" : TOUT D1 -> D2 (on garde les bords fins aussi petits)
   for (const [path, s] of Array.from(targetState.entries())){
     if (!path.startsWith('filler/')) continue;
     subdivideToD2(path, s);
   }
+
+  // 3) Sécurité : si un D1 s’est glissé ailleurs (pas "btn/*"), on le casse aussi
+  for (const [path, s] of Array.from(targetState.entries())){
+    if (path.startsWith('btn/')) continue;                 // les vrais boutons seront posés après
+    if (Math.abs(s.originalSize - w) > 1e-6) continue;     // seulement D1
+    subdivideToD2(path, s);
+  }
 }
+
 
 
 
@@ -1301,12 +1370,12 @@ function chooseButtonsThenImages(forceFull){
   imageSlots.clear();
   buttonSlots.clear();
 
-  // MOBILE : 5 boutons w/2 déterministes, pas d’images dédiées
+  // MOBILE (portrait) : 5 boutons déterministes, pas d’images dédiées
   if (isMobileBucket() && USE_MOBILE_DETERMINISTIC){
     return buildMobileButtonsDeterministic();
   }
 
-  // Desktop / tablettes : preset + FALLBACK garanti
+  // Desktop / tablettes : preset + fallback si nécessaire
   const { w, contentTop } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
 
@@ -1322,9 +1391,10 @@ function chooseButtonsThenImages(forceFull){
 
   const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
 
-  // >>> FALLBACK : si le preset n’a pas rempli, on complète d’office
-  if (persistentButtonPaths.length < requiredBtnCount){
-    ensureFallbackButtons(); // remplit buttonCells sur des cases visibles
+  // Fallback désactivé pour TOUS les paysages sous-desktop (inclut mobile paysage)
+  const allowFallback = !isSubDesktopLandscape();
+  if (allowFallback && persistentButtonPaths.length < requiredBtnCount){
+    ensureFallbackButtons();
   }
 
   // Images D1
@@ -1362,9 +1432,10 @@ function chooseButtonsThenImages(forceFull){
   for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
   for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
 
-  // toujours true : plus de blocage, l’anim de scale peut se lancer
+  // Toujours true : l’anim peut se lancer
   return true;
 }
+
 
 
 
@@ -1399,23 +1470,29 @@ function reformGridKeepImages(){
   
   
 
-function presetForBucket(id){ return PRESETS[id] || PRESETS['desktop-16:9']; }
+function presetForBucket(id){
+  if (id === 'mobile-h') return PRESETS['desktop-16:9'];
+  return PRESETS[id] || PRESETS['desktop-16:9'];
+}
 
 function ensureD2Path(row, col, quad, contentTop, w){
+  const force = isSubDesktopLandscape(); // ⇐ paysage sous-desktop : on ignore les seuils
+
   const parent = `content/${row}/${col}`;
   const child  = `${parent}/${quad}`;
 
   const sChild = targetState.get(child);
   if (sChild){
-    if (!isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null;
+    if (!force && !isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null;
     return child;
   }
 
   const s = targetState.get(parent);
   if (!s) return null;
   if (Math.abs(s.originalSize - w) > 1e-6) return null;
-  if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) return null;
+  if (!force && !isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) return null;
 
+  // subdivise le D1 en 4 D2 (sans filtrage de visibilité si force)
   targetState.delete(parent);
   const size = s.originalSize, ns = size/2, d = 2, o = size/4;
   const quads = [
@@ -1425,14 +1502,18 @@ function ensureD2Path(row, col, quad, contentTop, w){
     {x:s.x+o, y:s.y-o, suffix:'/3'},
   ];
   for (const q of quads){
-    if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
+    if (!force && !isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
     const p = parent + q.suffix;
     targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:d, path:p, originalSize:ns });
   }
 
   const sNew = targetState.get(child);
-  return (sNew && isVisibleEnough(sNew.x, sNew.y, sNew.originalSize, contentTop, 0.40)) ? child : null;
+  if (!sNew) return null;
+  if (!force && !isVisibleEnough(sNew.x, sNew.y, sNew.originalSize, contentTop, 0.40)) return null;
+  return child;
 }
+
+
 
 
 function ensureFallbackButtons(){
@@ -1513,9 +1594,10 @@ function buildMobileButtonsDeterministic(){
   const stepY = side + gap;
   const half = side / 2;
 
-  // Centres des colonnes (2 colonnes logiques)
-  const xLeft  = camera.left + w * 0.5;
-  const xRight = camera.left + w * 1.5;
+  // Centres des 2 colonnes "contenu" (dépendent de l'offset)
+  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile, 0.5 en tablette portrait
+  const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne 0
+  const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne 1
 
   // 1er bouton : collé sous le header (sans gap haut)
   const firstCy = contentTop - half;
@@ -1551,16 +1633,15 @@ function buildMobileButtonsDeterministic(){
     }
   }
 
-  // hauteur totale du contenu mobile (5*side + 4*gaps = 7w)
+  // hauteur totale du contenu mobile-like (5*side + 4*gaps = 7w)
   mobileWorldContentHeight = N * side + (N - 1) * gap;
-
-  // ancre de scroll au moment de la construction
   mobileBuildScrollAt = scrollOffsetWorld;
 
   updateScrollDocHeight();
 
   return persistentButtonPaths.length >= REQUIRED_BUTTONS;
 }
+
 
   
   
@@ -2269,8 +2350,23 @@ function animate(){
 }
 
 
-function isMobileBucket(){ return currentBucket==='mobile-h' || currentBucket==='mobile-v'; }
+function isMobileBucket(){
+  // "mobile-like" portrait = mobile-v + tablet-3:4 + tablet-9:16
+  return currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+}
 
+
+function isMobileLandscapeHard(){
+  return window.innerWidth <= 640 && window.innerWidth > window.innerHeight;
+}  
+
+function isSubDesktopLandscape(){
+  // Tous les formats paysage sous le palier "desktop" (w < 1025)
+  // → iPhone 14 Max 932×430, iPads en paysage 1024×..., etc.
+  return window.innerWidth < 1025 && window.innerWidth > window.innerHeight;
+}
+  
+  
 function findLeafAt(worldPos, stateMap){
   let best=null, smallest=Infinity;
   for (const sq of stateMap.values()){
