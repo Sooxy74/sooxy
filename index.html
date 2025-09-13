@@ -368,10 +368,27 @@ function worldToClientXY(v3){
 function makeDomLabelEl(text){
   const el = document.createElement('div');
   el.className = 'hover-label';
+
+  // Contenu : 1 <span class="line"> par ligne
   const parts = String(text).replace(/\\n/g, '\n').split('\n');
-  el.innerHTML = parts.map((s,i)=>`<span class="line${i===2?' sub':''}">${s}</span>`).join('');
+  el.innerHTML = parts
+    .map((s,i)=>`<span class="line${i===2?' sub':''}">${s}</span>`)
+    .join('');
+
+  // Ferrage à droite (inline pour forcer le rendu quel que soit le CSS global)
+  el.style.textAlign = 'right';
+  el.style.direction  = 'ltr';
+
+  // Chaque ligne hérite aussi explicitement de l’alignement à droite
+  el.querySelectorAll('.line').forEach(line => {
+    line.style.display = 'block';
+    line.style.whiteSpace = 'nowrap';
+    line.style.textAlign = 'right';
+  });
+
   return el;
 }
+
   
 // Vœux d’images par bucket
 const LAYOUT_WISH = {
@@ -2377,17 +2394,21 @@ function rebuildDomLabel(st, label){
 
   // DOM du label
   const el = makeDomLabelEl(label);
-  // ancre top-right, on n’animera QUE la translation (plus de scale)
+
+  // Ancre top-right + rendu net
   el.style.transformOrigin = '100% 0%';
   el.style.position = 'absolute';
   el.style.left = '0px';
   el.style.top  = '0px';
-  // petit plus pour la netteté
   el.style.textRendering = 'optimizeLegibility';
   el.style.webkitFontSmoothing = 'antialiased';
 
-  // pas de wrap dynamique pendant l’anim
-  el.querySelectorAll('.line').forEach(line => { line.style.whiteSpace = 'nowrap'; });
+  // Ferrage à droite (sécurité : réaffirme sur le conteneur)
+  el.style.textAlign = 'right';
+  el.style.direction  = 'ltr';
+  el.querySelectorAll('.line').forEach(line => {
+    line.style.textAlign = 'right';
+  });
 
   layer?.appendChild(el);
   st.domLabelEl = el;
@@ -2395,7 +2416,7 @@ function rebuildDomLabel(st, label){
 
   // Mesures "base" (à font-size courant, sans transform)
   const prev = el.style.transform;
-  el.style.transform = 'translate(-10000px,-10000px)'; // 2D ⇒ pas de 3D
+  el.style.transform = 'translate(-10000px,-10000px)';
   try {
     const cs = window.getComputedStyle(el);
     st.baseFontPx = parseFloat(cs.fontSize) || 18;
@@ -2500,11 +2521,18 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.color = '#f3f1ee';
   }
 
+  // Sécurité : s’assure que l’alignement reste bien à droite
+  st.domLabelEl.style.textAlign = 'right';
+  st.domLabelEl.querySelectorAll('.line').forEach(line => {
+    line.style.textAlign = 'right';
+  });
+
   // Positionnement pixel-perfect (ancre haut-droit), coordonnées STABLE
   const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
   st.domLabelEl.style.transform =
     `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
 }
+
 
 
 
