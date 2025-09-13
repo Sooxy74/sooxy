@@ -938,35 +938,46 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (sans reload + ignore les faux "resize" dus aux barres d’adresse / scrollbars)
-{
-  let lastW = window.innerWidth;
-  let lastH = window.innerHeight;
+// Resize (stabilisé iOS URL bar) — remplace tout l'ancien bloc
+(function installStableResizeHandlers(){
+  let lastW = Math.round(window.visualViewport?.width  || window.innerWidth);
+  let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
   let raf = 0;
 
-  // Seuils :
-  const MIN_H_DELTA_TO_IGNORE = 120; // ignorer les petites variations de hauteur (barre d’adresse)
-  const MIN_W_DELTA_TO_IGNORE = 20;  // ignorer les petites variations de largeur (scrollbar qui apparaît)
+  // Seuils "micro-bouge" (iOS URL bar)
+  const WIDTH_JIGGLE  = 32;   // petites variations de largeur (safe areas, scrollbar)
+  const HEIGHT_JIGGLE = 200;  // grandes variations de hauteur acceptées comme "jiggle"
+
+  function snapshotViewport(){
+    return {
+      w: Math.round(window.visualViewport?.width  || window.innerWidth),
+      h: Math.round(window.visualViewport?.height || window.innerHeight),
+    };
+  }
+
+  function isOrientationFlip(pw, ph, w, h){
+    const prevPortrait = ph >= pw;
+    const nowPortrait  = h  >= w;
+    return prevPortrait !== nowPortrait;
+  }
 
   function handleResizeNow() {
     raf = 0;
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const { w, h } = snapshotViewport();
+    const dw = Math.abs(w - lastW);
+    const dh = Math.abs(h - lastH);
 
-    const widthChanged  = w !== lastW;
-    const heightChanged = h !== lastH;
+    const orientationFlip = isOrientationFlip(lastW, lastH, w, h);
 
-    const smallHeightOnly =
-      !widthChanged && heightChanged && Math.abs(h - lastH) < MIN_H_DELTA_TO_IGNORE;
+    // Cas "jiggle" de viewport (barre d’URL iOS qui s’anime) :
+    // - petits changements de largeur ET de hauteur
+    // - ou hauteur qui bouge mais largeur quasi stable
+    const smallBoth       = dw <= WIDTH_JIGGLE  && dh <= HEIGHT_JIGGLE;
+    const smallHeightOnly = dw <= WIDTH_JIGGLE  && dh > 0 && dh <= HEIGHT_JIGGLE;
 
-    const smallWidthOnly =
-      widthChanged && !heightChanged && Math.abs(w - lastW) <= MIN_W_DELTA_TO_IGNORE;
-
-    // Cas 1 : micro-changement (barre d'adresse qui bouge, ou scrollbar qui apparaît)
-    // → NE PAS toucher à la caméra ni au renderer (sinon “zoom”).
-    if (smallHeightOnly || smallWidthOnly) {
-      // On garde l’échelle monde ⇄ pixels stable, mais on synchronise l’UI DOM
+    if (!orientationFlip && (smallBoth || smallHeightOnly)) {
+      // ➜ on ne touche pas à la caméra/renderer/STABLE_VP_*
       syncCssHeaderHeight();
       updateMenuGeometry();
       updateScrollDocHeight();
@@ -977,8 +988,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       return;
     }
 
-    // Cas 2 : vrai resize (orientation, breakpoint, fenêtre réellement redimensionnée)
-    // → on accepte la nouvelle taille et on met à jour la caméra/renderer
+    // VRAI resize (rotation, changement de largeur réel, split view, etc.)
     const aspect = w / h;
     const height = 10;
     const width  = height * aspect;
@@ -991,7 +1001,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
     renderer.setSize(w, h);
 
-    // Met à jour le "verrou" de dimensions stables (base de conversion px → monde)
+    // Verrou stable pour toutes les conversions px↔monde
     STABLE_VP_W = w;
     STABLE_VP_H = h;
 
@@ -1000,16 +1010,14 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     updateMenuGeometry();
 
     const newBucket = pickBucket(w, h);
-
     if (newBucket !== currentBucket) {
       currentBucket = newBucket;
-      applyBucket();              // recalcule colonnes/rows/params
-      reformGridKeepImages();     // rebuild SANS changer les URLs d’images
-      buildFreeOverlays();        // recalc overlays libres (si paysage)
+      applyBucket();
+      reformGridKeepImages();
+      buildFreeOverlays();
       lastGridCursorSizeWorld = computeDefaultGridCursorSize();
       needsRefineCheck = true;
     } else {
-      // Même bucket : juste réaligner ce qui dépend de la taille réelle
       updateScrollDocHeight();
       updateFreeOverlays();
       needsRefineCheck = true;
@@ -1024,11 +1032,13 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
   }
 
   window.addEventListener('resize', onResize, { passive: true });
+  window.addEventListener('orientationchange', onResize, { passive: true });
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', onResize, { passive: true });
+    // iOS déclenche aussi 'scroll' sur visualViewport durant l’anim de la barre d’URL
+    visualViewport.addEventListener('scroll', onResize, { passive: true });
   }
-}
-
+})();
 
 
 function updateScrollDocHeight(){
@@ -2537,11 +2547,9 @@ function updateDomLabelLayout(st, lm){
 }
 
 
-
-
-// === Helpers label : "Creative" = 66% de la largeur intérieure du carré ===
+// Remplacement complet
 function computeSquareInnerWidthPx(squareSizeWorld){
-  const pxPerWorldX = window.innerWidth / (camera.right - camera.left);
+  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
 
   const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
   const marginWorld    = squareSizeWorld * marginPctRight;
@@ -2550,6 +2558,7 @@ function computeSquareInnerWidthPx(squareSizeWorld){
   const innerWidthPx   = Math.max(0, squareWidthPx - 2 * (marginWorld * pxPerWorldX));
   return innerWidthPx;
 }
+
 
 function isShortPortrait(){
   return window.innerHeight < 1000 && window.innerHeight >= window.innerWidth;
@@ -3089,9 +3098,10 @@ function updateMouseSquareTarget(worldPos){
 }
 
 
+// Remplacement complet
 function onMouseMove(e){
   // MàJ position normalisée + demande de raffinement
-  lastMouseScreenPos.set((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
+  lastMouseScreenPos.set((e.clientX/(STABLE_VP_W || window.innerWidth))*2-1, -(e.clientY/(STABLE_VP_H || window.innerHeight))*2+1);
   needsRefineCheck = true;
 
   // Overlay DOM jaune dans le header
@@ -3102,14 +3112,12 @@ function onMouseMove(e){
   const inHeader = e.clientY <= headerPx;
 
   if (inHeader){
-    // ✅ Taille = "grille" réelle :
-    //    - si déjà mémorisée -> on la réutilise,
-    //    - sinon -> on la calcule comme si la souris survolait la grille.
+    // Taille = taille "grille" en monde → convertie avec la largeur STABLE
     const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
       ? lastGridCursorSizeWorld
       : computeDefaultGridCursorSize();
 
-    const pxPerWorldX = window.innerWidth / (camera.right - camera.left);
+    const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
     const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
 
     domCursorEl.style.opacity = '1';
@@ -3121,6 +3129,7 @@ function onMouseMove(e){
     domCursorEl.style.opacity = '0';
   }
 }
+
 
 
 function onClick(e){
