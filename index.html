@@ -355,9 +355,16 @@ function viewportLabelScaleFactor() {
   
   
 function worldToClientXY(v3){
+  // Utilise la taille "stable" quand elle existe, sinon la taille courante.
   const v = v3.clone().project(camera);
-  return { x:(v.x*0.5+0.5)*window.innerWidth, y:(-v.y*0.5+0.5)*window.innerHeight };
+  const pxW = STABLE_VP_W || window.innerWidth;
+  const pxH = STABLE_VP_H || window.innerHeight;
+  return {
+    x: (v.x * 0.5 + 0.5) * pxW,
+    y: (-v.y * 0.5 + 0.5) * pxH
+  };
 }
+
 function makeDomLabelEl(text){
   const el = document.createElement('div');
   el.className = 'hover-label';
@@ -935,7 +942,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     const smallWidthOnly =
       widthChanged && !heightChanged && Math.abs(w - lastW) <= MIN_W_DELTA_TO_IGNORE;
 
-    // ⚠️ Cas 1 : micro-changement (barre d'adresse qui bouge, ou scrollbar qui apparaît)
+    // Cas 1 : micro-changement (barre d'adresse qui bouge, ou scrollbar qui apparaît)
     // → NE PAS toucher à la caméra ni au renderer (sinon “zoom”).
     if (smallHeightOnly || smallWidthOnly) {
       // On garde l’échelle monde ⇄ pixels stable, mais on synchronise l’UI DOM
@@ -949,7 +956,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       return;
     }
 
-    // ✅ Cas 2 : vrai resize (orientation, breakpoint, fenêtre réellement redimensionnée)
+    // Cas 2 : vrai resize (orientation, breakpoint, fenêtre réellement redimensionnée)
     // → on accepte la nouvelle taille et on met à jour la caméra/renderer
     const aspect = w / h;
     const height = 10;
@@ -1011,21 +1018,26 @@ function updateScrollDocHeight(){
 
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
+  // Rangées supplémentaires sous l’écran pour la marge de fin de scroll
+  const EXTRA_BOTTOM_ROWS = 2;
+
   let contentWorld;
   if (isMobile){
     contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
+    contentWorld += EXTRA_BOTTOM_ROWS * w;
   } else {
     const totalRows = baseRowsPrimary;
-    contentWorld = totalRows * w;
+    contentWorld = totalRows * w + EXTRA_BOTTOM_ROWS * w;
   }
 
   const worldTotal = menuHeight + contentWorld;
+
+  // On reste dans l’espace DOM courant pour éviter les rebonds
   const docPx = Math.max(window.innerHeight, Math.ceil((worldTotal / viewHeight) * window.innerHeight));
   spacer.style.height = docPx + 'px';
 }
-
 
 
 
@@ -1038,7 +1050,8 @@ function onScroll(){
     return;
   }
 
-  const { viewHeight, w, menuHeight } = getLayoutMetrics();
+  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
+
   const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
     ? mobileWorldContentHeight
     : Math.max(baseRowsPrimary, 5) * w;
@@ -1047,8 +1060,13 @@ function onScroll(){
   const t = maxScrollPx > 0 ? window.scrollY / maxScrollPx : 0;
 
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
-  scrollOffsetWorld = t * worldScrollable;
 
+  // 🔒 Quantifie au pixel CSS (en unités "monde") pour éviter les micro-gaps
+  const raw = t * worldScrollable;
+  const quantized = Math.round(raw / onePxWorld) * onePxWorld;
+  scrollOffsetWorld = Math.max(0, Math.min(worldScrollable, quantized));
+
+  // Maintien du curseur ancré pendant le scroll
   const a = mouseSquare?.userData?.anchor;
   if (a){
     const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
@@ -1058,7 +1076,6 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
-
 
 
 
@@ -1164,7 +1181,6 @@ function addPrimaryRowSideFillers(row, offsetCols){
 }
 
 
-
 function updateFractalBase(forceFull = false){
   targetState.clear();
 
@@ -1175,6 +1191,9 @@ function updateFractalBase(forceFull = false){
     ensureFallbackButtons();
     return true;
   }
+
+  // ➕ rangées supplémentaires sous l’écran pour avoir de la marge en bas
+  const EXTRA_BOTTOM_ROWS = 2;
 
   // 1) Construction de la grille de base (content + fillers)
   const FORCE_D1 = new Set();
@@ -1196,12 +1215,14 @@ function updateFractalBase(forceFull = false){
     totalRows = Math.max(baseRowsPrimary, visibleRows);
   }
 
+  // 🔽 Ajout de filler off-screen en bas
+  totalRows += EXTRA_BOTTOM_ROWS;
+
   const offsetCols = contentOffsetColsForBucket();
   const contentCols = contentColsForBucket();
 
   for (let row = 0; row < totalRows; row++) {
     const isPrimary = row < baseRowsPrimary;
-    // >>> clé: pour tablettes portrait, on limite à 2 colonnes contenu
     const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
 
     for (let col = 0; col < colsThisRow; col++) {
@@ -1238,7 +1259,7 @@ function updateFractalBase(forceFull = false){
   // 4) Boutons/Images
   const okButtons = chooseButtonsThenImages(forceFull);
 
-  // 4bis) Mobile-like : occlusion et cutout sous les boutons
+  // 4bis) Mobile-like : occlusion et cutout sous les boutons/images
   if (okButtons && isMobileBucket()){
     cutOutUnderButtons();
   }
@@ -1252,7 +1273,6 @@ function updateFractalBase(forceFull = false){
 
   return okButtons;
 }
-
 
 
 // --- REMPLACEMENT COMPLET ---
@@ -2391,13 +2411,12 @@ function rebuildDomLabel(st, label){
 }
 
 
-
 function updateDomLabelLayout(st, lm){
   if (!st.domLabelEl) return;
 
   const { w } = lm;
 
-  // Taille/position "affichées" du carré (après lerp)
+  // Taille/position affichées du carré (après lerp)
   const dispS = Math.max(0, st.mesh.scale.x);
   const half  = dispS / 2;
   const dispX = st.mesh.position.x;
@@ -2413,8 +2432,8 @@ function updateDomLabelLayout(st, lm){
   const tx = dispX + half - mRightWorld;
   const ty = dispY + half - mTopWorld;
 
-  // Monde → pixels pour la place horizontale disponible
-  const pxPerWorldX   = window.innerWidth / (camera.right - camera.left);
+  // Monde → pixels : utilise la largeur STABLE pour rester calé sur le canvas
+  const pxPerWorldX   = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
   const squareWidthPx = dispS * pxPerWorldX;
   const marginPx      = mRightWorld * pxPerWorldX;
   const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx);
@@ -2435,12 +2454,10 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.transform = prev || '';
   }
 
-  // --- Calcul du font-size ---
-  // 1) Essaye d'utiliser le font-size GLOBAL (uniforme) basé sur "Creative"
+  // 1) font-size global basé sur "Creative"
   let uniformFontPx = ensureGlobalLabelFontPx(lm);
 
-  // 2) Sécurité : clamp au max pour rentrer dans la largeur dispo
-  //    La largeur ~ (labelBaseWidthPx / baseFontPx) * fontPx
+  // 2) clamp si nécessaire pour tenir dans la largeur dispo
   const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
     ? (st.labelBaseWidthPx / st.baseFontPx)
     : 0;
@@ -2448,13 +2465,12 @@ function updateDomLabelLayout(st, lm){
   const fitFontPx = perPx > 0 ? (availablePx / perPx) : (uniformFontPx || st.baseFontPx);
   let finalFontPx = uniformFontPx ? Math.min(uniformFontPx, fitFontPx) : fitFontPx;
 
-  // Quantification douce + garde-fous lisibilité
-  finalFontPx = Math.round(finalFontPx * 2) / 2; // pas de 0.5px
+  // Quantification douce + garde-fous
+  finalFontPx = Math.round(finalFontPx * 2) / 2;
   finalFontPx = Math.max(10, Math.min(96, finalFontPx));
-
   st.domLabelEl.style.fontSize = finalFontPx + 'px';
 
-  // Couleur / effet hover
+  // Couleur / baffle
   if (!isMobileBucket()){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     const inside =
@@ -2470,11 +2486,12 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.color = '#f3f1ee';
   }
 
-  // Positionnement pixel-perfect (ancre haut-droit) — SANS scale ni 3D
+  // Positionnement pixel-perfect (ancre haut-droit), coordonnées STABLE
   const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
   st.domLabelEl.style.transform =
     `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
 }
+
 
 
 // === Helpers label : "Creative" = 66% de la largeur intérieure du carré ===
