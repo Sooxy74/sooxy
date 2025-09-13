@@ -177,34 +177,31 @@
   #scroll-spacer { height: var(--doc-h); }
   
   #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+  
 .hover-label{
   position: absolute;
-
-  /* force Space Mono (gras 700) pour les 1re/2e lignes */
   font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
   font-weight: 700;
-  font-size: 18px; /* sera recalculée par ton JS, garde une base */
-
+  font-size: 18px;          /* taille de base, on ne l’animera plus */
   color: #f3f1ee;
   line-height: 1;
-  transition: opacity .15s ease, color .15s ease;
-  transform: translate(-100%, 0);
-  transform-origin: 100% 0%;
-  text-align: right;
-  white-space: normal;
-  will-change: transform, opacity, color, width;
+  transform-origin: 100% 0%; /* ancre top-right */
+  will-change: transform;    /* plus left/top/width en live */
+  pointer-events: none;
+  white-space: normal;       /* OK, mais on va figer le wrap par ligne ci-dessous */
 }
 
+.hover-label .line{
+  display:block;
+  white-space: nowrap;       /* ❗️empêche le reflow d’une ligne pendant l’anim */
+}
 
-.hover-label .line{ display:block; }
-
-/* même interlignage au pixel près entre toutes les lignes */
 .hover-label .line.sub{
   font-style: italic;
-  font-weight: 400;          /* pas bold */
-  font-size: .6em;           /* 60% */
-  line-height: 1.6667;       /* = 1 / 0.6 -> 1em en absolu */
-  font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-weight: 400;
+  font-size: .6em;
+  line-height: 1.6667;
+  white-space: nowrap;       /* idem, pas de wrap */
 }
   
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
@@ -346,6 +343,17 @@ const LABEL_NUDGE_PX_Y         = -2;  // micro-ajustement vertical
 const LABEL_RIGHT_EXTRA_PX     = 1;   // petit décalage à droite
 const SAFE_TOP_GAP_PX          = 0;   // pas d’espace fixe ; on suit le menu réel
 
+
+function viewportLabelScaleFactor() {
+  // utilise la plus petite dimension de l’écran pour rester cohérent en portrait/paysage
+  const s = Math.min(window.innerWidth, window.innerHeight);
+  const MIN = 360; // petits téléphones
+  const OK  = 912; // Surface Pro 7 vertical (référence de "taille OK")
+  const t = (s - MIN) / (OK - MIN);           // interpolation 360px → 912px
+  return Math.max(0.70, Math.min(1.00, t));   // réduit jusqu’à -30% sur petit écran, 100% à 912px+
+}
+  
+  
 function worldToClientXY(v3){
   const v = v3.clone().project(camera);
   return { x:(v.x*0.5+0.5)*window.innerWidth, y:(-v.y*0.5+0.5)*window.innerHeight };
@@ -372,36 +380,34 @@ const LAYOUT_WISH = {
   'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
 };
 
-// Desktop 16:9 — 5 boutons en D2, images : D1 à gauche, D2 à droite (à la place du gros D1)
+// Desktop 16:9 — 5 boutons en D2, images : D1 à gauche, D2 au-dessus d’UI
 const PRESETS = {
   'desktop-16:9': {
-  // Boutons (nouvelle disposition)
-  buttons: [
-    { size:'D2', row:0, col:1, quad:0, key:'motion'  },
-    { size:'D2', row:1, col:2, quad:1, key:'ui'      },
-    { size:'D2', row:1, col:0, quad:1, key:'fractal' },
-    { size:'D2', row:0, col:3, quad:3, key:'random'  },
-    { size:'D2', row:1, col:1, quad:3, key:'code'    }
-  ],
+    // Boutons
+    buttons: [
+      { size:'D2', row:0, col:1, quad:0, key:'motion'  },
+      { size:'D2', row:1, col:2, quad:1, key:'ui'      },
+      { size:'D2', row:1, col:0, quad:1, key:'fractal' },
+      { size:'D2', row:0, col:3, quad:3, key:'random'  },
+      { size:'D2', row:1, col:1, quad:3, key:'code'    }
+    ],
 
-  // Grande image plein W : déplacée d'un W vers la droite (col 0 → 1)
-  imagesD1: [
-    { row:0, col:0 }
-  ],
+    // Grande image plein W : colonne de gauche
+    imagesD1: [
+      { row:0, col:0 }
+    ],
 
-  // Petite image : au-dessus de l'emplacement du bouton UI design
-  // (UI était en row:0,col:2, on la met en quad:0 = top-left)
-  imagesD2: [
-    { size:'D2', row:0, col:2, quad:1 }
-  ],
-},
+    // Petite image : au-dessus de l’emplacement du bouton UI (quad haut-droit)
+    imagesD2: [
+      { size:'D2', row:0, col:2, quad:1 }
+    ],
+  },
 
-
-  // (le reste du PRESETS inchangé)
+  // Tablettes & mobiles (inchangés)
   'tablet-4:3': {
     buttons: [
       { size:'D2', row:0, col:0, quad:0, key:'motion' },
-      { size:'D2', row:0, col:1, quad:0, key:'ui'    },
+      { size:'D2', row:0, col:1, quad:0, key:'ui'     },
       { size:'D2', row:0, col:2, quad:2, key:'fractal'},
       { size:'D2', row:1, col:0, quad:1, key:'random' },
       { size:'D2', row:1, col:2, quad:2, key:'code'   },
@@ -411,7 +417,7 @@ const PRESETS = {
   'tablet-3:4': {
     buttons: [
       { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'     },
+      { size:'D1', row:1, col:0, key:'ui'      },
       { size:'D1', row:2, col:1, key:'fractal' },
       { size:'D1', row:3, col:0, key:'random'  },
       { size:'D1', row:4, col:1, key:'code'    },
@@ -421,7 +427,7 @@ const PRESETS = {
   'tablet-9:16': {
     buttons: [
       { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'     },
+      { size:'D1', row:1, col:0, key:'ui'      },
       { size:'D1', row:2, col:1, key:'fractal' },
       { size:'D1', row:3, col:0, key:'random'  },
       { size:'D1', row:4, col:1, key:'code'    },
@@ -452,6 +458,7 @@ const PRESETS = {
   'desktop-21:9': null,
   'desktop-32:9': null,
 };
+
 
 
 // Catégories (5 uniques)
@@ -819,9 +826,11 @@ function applyBucket(){
 
   // Profondeur: on traite téléphone ET tablettes portrait comme "mobile-like"
   const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
-                                    : (prefersReducedMotion ? 5 : 7);
-  config.maxDepthVariation = portraitMobileLike ? 6 : 7;
+TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
+                                  : (prefersReducedMotion ? 5 : 7);
+
+  // Désactive le raffinage “D2 → plus petit” en mobile-like
+  config.refineChanceD2 = portraitMobileLike ? 0.0 : 0.55;
 
   updateScrollDocHeight();
 }
@@ -1212,72 +1221,78 @@ function forceMobilePattern(){
 
 
 
-// --- CUTOUT MOBILE : supprime réellement les tuiles sous les boutons,
+// --- CUTOUT MOBILE : supprime réellement les tuiles sous les boutons ET SOUS LES IMAGES,
 // avec une TOLÉRANCE (inset) pour ne pas supprimer celles qui ne font que toucher.
 function cutOutUnderButtons(){
-  // Seulement en mobile
+  // Seulement en mobile-like (portrait mobile + tablettes portrait)
   if (!isMobileBucket()) return;
 
   // On a besoin des tailles en "monde" et de l'équivalent 1px CSS
   const { onePxWorld } = getLayoutMetrics();
 
-  // Tolérance (px CSS) déjà déclarée globalement dans ton code :
+  // Tolérance (px CSS) déjà déclarée globalement :
   // MOBILE_BTN_OCCLUDER_PAD_PX (par défaut = 1). Tu peux la monter à 2 ou 3.
   const insetPx = (typeof MOBILE_BTN_OCCLUDER_PAD_PX === 'number' ? MOBILE_BTN_OCCLUDER_PAD_PX : 1);
   const insetWorld = Math.max(insetPx, 0) * onePxWorld;
 
-  // 1) Construire les rectangles "bouton" (avec inset/tolérance)
-  //    On s'appuie sur targetState (les boutons existent déjà : paths 'btn/i' en mobile)
-  const buttonRects = [];
-  for (const [btnPath, _meta] of buttonCells.entries()){
-    const s = targetState.get(btnPath);
-    if (!s) continue; // sécurité
-    const half = s.originalSize / 2;
+  // 1) Construire les rectangles "à protéger" (boutons + images), insets compris
+  const rects = [];
 
-    // On RÉTRÉCIT le rectangle du bouton d'une marge 'insetWorld' de chaque côté
-    // pour éviter de supprimer les carrés qui ne font que toucher le bord.
+  // Boutons
+  for (const [btnPath] of buttonCells.entries()){
+    const s = targetState.get(btnPath);
+    if (!s) continue;
+    const half = s.originalSize / 2;
     const left   = s.x - half + insetWorld;
     const right  = s.x + half - insetWorld;
     const bottom = s.y - half + insetWorld;
     const top    = s.y + half - insetWorld;
-
-    // Si l'inset est trop grand et inverse le rect, on skip
-    if (left >= right || bottom >= top) continue;
-
-    buttonRects.push({ left, right, bottom, top });
+    if (left < right && bottom < top) rects.push({ left, right, bottom, top });
   }
 
-  if (buttonRects.length === 0) return;
+  // Images (ex: 'btn/imgL0', 'btn/imgS1', etc. déjà présentes dans imageCells)
+  for (const imgPath of imageCells){
+    const s = targetState.get(imgPath);
+    if (!s) continue;
+    const half = s.originalSize / 2;
+    const left   = s.x - half + insetWorld;
+    const right  = s.x + half - insetWorld;
+    const bottom = s.y - half + insetWorld;
+    const top    = s.y + half - insetWorld;
+    if (left < right && bottom < top) rects.push({ left, right, bottom, top });
+  }
+
+  if (rects.length === 0) return;
 
   // 2) Parcourir toutes les tuiles de la grille et supprimer celles dont
-  //    le CENTRE est à l'intérieur d'un rect de bouton (contracté).
-  //    -> Le test sur le centre garantit que les tuiles qui ne font QUE toucher le bord
-  //       (centre hors du rect) NE seront PAS supprimées.
+  //    le CENTRE est à l'intérieur d'un de ces rectangles (contractés).
+  //    -> Le test sur le centre évite de supprimer ce qui ne fait que toucher le bord.
   for (const [path, s] of Array.from(targetState.entries())){
-    // Ne jamais supprimer les boutons eux-mêmes
-    if (buttonCells.has(path)) continue;
+    // Ne jamais supprimer les boutons ni les images eux-mêmes
+    if (buttonCells.has(path) || imageCells.has(path)) continue;
 
     const cx = s.x;
     const cy = s.y;
 
-    let underAButton = false;
-    for (const r of buttonRects){
+    let under = false;
+    for (const r of rects){
       if (cx > r.left && cx < r.right && cy > r.bottom && cy < r.top){
-        underAButton = true;
+        under = true;
         break;
       }
     }
 
-    if (underAButton){
+    if (under){
       // Supprime immédiatement de l'état logique…
       targetState.delete(path);
-      // …et marque pour kill instantané côté mesh (pas d'anim de scale à 0 -> pas de flash)
+      // …et marque pour kill instantané côté mesh (pas d'anim -> pas de flash noir)
       if (typeof instantKill !== 'undefined' && instantKill.add) {
         instantKill.add(path);
       }
     }
   }
 }
+
 
 
   
@@ -1610,68 +1625,269 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
 }
 
 function buildMobileButtonsDeterministic(){
+  // Mobile = portrait + tablettes portrait
   const { w, contentTop } = getLayoutMetrics();
 
-  const side = w;
-  const gap  = w / 2;  // espace vertical entre boutons
-  const stepY = side + gap;
-  const half = side / 2;
+  // --- TAILLES ---
+  const sideOriginal = w;      // grandes images = 1×1
+  const sideBtn = w / 2;       // boutons & petites images = 1/2 (D2)
+  const gapBtn = sideBtn / 2;  // écart vertical entre boutons
+  const stepY = sideBtn + gapBtn;
 
-  // Centres des 2 colonnes "contenu" (dépendent de l'offset)
-  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile, 0.5 en tablette portrait
-  const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne 0
-  const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne 1
+  // Centres des 2 colonnes "contenu" (jamais dans les colonnes filler)
+  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile-v, 0.5 en tablettes portrait
+  const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne contenu 0
+  const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne contenu 1
 
-  // 1er bouton : collé sous le header (sans gap haut)
-  const firstCy = contentTop - half;
+  // Premier bouton : juste sous le header (moitié de sa hauteur)
+  const firstCy = contentTop - sideBtn / 2;
 
-  // Nettoyer d’éventuels anciens boutons mobiles
+  // Reset des placements précédents
   if (persistentButtonPaths && persistentButtonPaths.length){
-    for (const p of persistentButtonPaths){ targetState.delete(p); }
+    for (const p of persistentButtonPaths) targetState.delete(p);
   }
   persistentButtonPaths = [];
   buttonCells.clear();
 
-  const N = REQUIRED_BUTTONS; // 5
-  for (let i = 0; i < N; i++){
-    const onLeft = (i % 2 === 1); // 0 droite, 1 gauche, 2 droite, ...
+  const allBlocks = []; // pour calculer la hauteur totale (scroll)
+
+  // ---------- 1) Positions "de base" (alternance droite/gauche) ----------
+  const basePosByKey = {};
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length]; // ['motion','fractal','ui','code','random']
+    const onLeft = (i % 2 === 1); // 0: droite, 1: gauche, 2: droite, ...
     const cx = onLeft ? xLeft : xRight;
     const cy = firstCy - i * stepY;
+    basePosByKey[key] = { cx, cy };
+  }
 
-    const path = `btn/${i}`;
+  // ---------- 2) Offsets demandés ----------
+  // NB: +Y = vers le haut ; -Y = vers le bas ; -X = vers la gauche ; +X = vers la droite
+  const dx_w4 =  w/4,  dy_w4 =  w/4;   // aide mémoire
+  const dx_w2 =  w/2,  dy_w2 =  w/2;
+
+  // Bouton Motion Design : w/4 vers la gauche
+  if (basePosByKey['motion']){
+    basePosByKey['motion'].cx -= dx_w4;
+  }
+
+  // Bouton Creative Coding : w/4 vers le haut ET w/4 vers la gauche
+  if (basePosByKey['code']){
+    basePosByKey['code'].cx -= dx_w4;
+    basePosByKey['code'].cy += dy_w4;
+  }
+
+  // Bouton Fractal Art : léger offset (comme dans ta version précédente)
+  if (basePosByKey['fractal']){
+    basePosByKey['fractal'].cx += dx_w4;
+    basePosByKey['fractal'].cy -= dy_w4;
+  }
+
+  // Bouton UI Design : +w/4 vers la droite
+  if (basePosByKey['ui']) {
+    basePosByKey['ui'].cx += dx_w4;
+  }
+
+  // ---------- 3) Création effective des 5 boutons ----------
+  // On écrit dans targetState sous des clés stables 'btn/b0'..'btn/b4' (ordre = MOBILE_CATEGORY_ORDER)
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i];
+    const cat = CATEGORIES.find(c => c.key === key);
+    if (!cat) continue;
+
+    const pos = basePosByKey[key] || { cx: (i%2?xLeft:xRight), cy: firstCy - i*stepY };
+    const path = `btn/b${i}`;
+
     targetState.set(path, {
-      x: cx,
-      y: cy,
-      size: side - config.borderWidth,
+      x: pos.cx,
+      y: pos.cy,
+      size: Math.max(0, sideBtn - config.borderWidth),
       depth: 1,
       path,
-      originalSize: side
+      originalSize: sideBtn
     });
 
-    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length];
-    const cat = CATEGORIES.find(c => c.key === key);
-    if (cat){
-      buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
-      persistentButtonPaths.push(path);
+    buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+    persistentButtonPaths.push(path);
+    allBlocks.push({ cx: pos.cx, cy: pos.cy, side: sideBtn });
+  }
+
+  // Accès rapide aux paths par clé
+  const pathByKey = {};
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i];
+    pathByKey[key] = `btn/b${i}`;
+  }
+
+  // Helpers pour lire/écrire la position d’un bouton déjà créé
+  const readBtn = key => {
+    const p = pathByKey[key];
+    return p ? targetState.get(p) : null;
+  };
+  const moveBtn = (key, nx, ny) => {
+    const p = pathByKey[key];
+    if (!p) return;
+    const st = targetState.get(p);
+    if (!st) return;
+    st.x = nx;
+    st.y = ny;
+    allBlocks.push({ cx: nx, cy: ny, side: sideBtn });
+  };
+
+  // ---------- 4) Petites images + placements relatifs demandés ----------
+  imageCells.clear();
+
+  // Petite image #1 — AU-DESSUS de "UI Design"
+  {
+    const ui = readBtn('ui');
+    if (ui){
+      const small1_cx = ui.x;
+      const small1_cy = ui.y + sideBtn;  // juste au-dessus (1 hauteur de bouton)
+      const p = 'btn/imgS0';
+      targetState.set(p, {
+        x: small1_cx,
+        y: small1_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small1_cx, cy: small1_cy, side: sideBtn });
     }
   }
 
-  // hauteur totale du contenu mobile-like (5*side + 4*gaps = 7w)
-  mobileWorldContentHeight = N * side + (N - 1) * gap;
-  mobileBuildScrollAt = scrollOffsetWorld;
+  // Petite image #2 — à -w/2 en X et -w/2 en Y par rapport à UI (comme avant)
+  {
+    const ui = readBtn('ui');
+    if (ui){
+      const small2_cx = ui.x - dx_w2;
+      const small2_cy = ui.y - dy_w2;
+      const p = 'btn/imgS1';
+      targetState.set(p, {
+        x: small2_cx,
+        y: small2_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small2_cx, cy: small2_cy, side: sideBtn });
+    }
+  }
 
+  // Petite image #3 — SOUS "Creative Coding"
+  {
+    const code = readBtn('code');
+    if (code){
+      const small3_cx = code.x;
+      const small3_cy = code.y - sideBtn;
+      const p = 'btn/imgS2';
+      targetState.set(p, {
+        x: small3_cx,
+        y: small3_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small3_cx, cy: small3_cy, side: sideBtn });
+    }
+  }
+
+  // Random Stuff : même colonne que Fractal (on ajuste l'X maintenant, le Y sera fixé après G2)
+  {
+    const fractal = readBtn('fractal');
+    const random  = readBtn('random');
+    if (fractal && random){
+      moveBtn('random', fractal.x, random.y);
+    }
+  }
+
+  // ---------- 5) Grandes images ----------
+  // G1 : en haut à gauche (inchangé)
+  {
+    const p = 'btn/imgL0';
+    const imgL0_cx = xLeft;
+    const imgL0_cy = contentTop - sideOriginal / 2;
+    targetState.set(p, {
+      x: imgL0_cx,
+      y: imgL0_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
+    imageCells.add(p);
+    allBlocks.push({ cx: imgL0_cx, cy: imgL0_cy, side: sideOriginal });
+  }
+
+  // G2 : remontée d'un w → cy = contentTop - (3*w + sideOriginal/2)
+  {
+    const p = 'btn/imgL1';
+    const imgL1_cx = xRight;
+    const imgL1_cy = contentTop - (3 * w + sideOriginal / 2);
+    targetState.set(p, {
+      x: imgL1_cx,
+      y: imgL1_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
+    imageCells.add(p);
+    allBlocks.push({ cx: imgL1_cx, cy: imgL1_cy, side: sideOriginal });
+  }
+
+  // ---------- 6) ALIGNE Random Stuff sur le BAS de la 2ᵉ grande image ----------
+  {
+  const random = readBtn('random');
+  const imgL1  = targetState.get('btn/imgL1');
+  if (random && imgL1){
+    const bottomImgL1 = imgL1.y - imgL1.originalSize / 2;
+    const topImgL1    = imgL1.y + imgL1.originalSize / 2;
+
+    const t = 0.5; // 0 = ancienne position ; 1 = position actuelle trop haute ; 0.5 = entre-deux
+    const targetBottomY = bottomImgL1 + (topImgL1 - bottomImgL1) * t;
+
+    const newRandomCy = targetBottomY + sideBtn / 2;
+    moveBtn('random', random.x, newRandomCy);
+  }
+}
+
+  // ---------- 7) Attribution d’images (évite les doublons) ----------
+  const urlsPool = (imageTextures && imageTextures.length) ? imageTextures.slice() : ['img/logo-sooxy-art.png'];
+  const startAt = Math.abs(sessionSalt) % urlsPool.length;
+  const takeUrl = (k) => urlsPool[(startAt + k) % urlsPool.length];
+
+  // Collecte des images à attribuer (ordre stable)
+  const imagePaths = ['btn/imgL0','btn/imgL1','btn/imgS0','btn/imgS1','btn/imgS2'].filter(p => targetState.has(p));
+  imagePaths.forEach((p, k) => {
+    imageAssignment.set(p, takeUrl(k));
+  });
+
+  // ---------- 8) Hauteur totale du contenu pour le scroll mobile ----------
+  let minBottomEdge = Infinity;
+  for (const b of allBlocks){
+    const bottom = b.cy - b.side / 2;
+    if (bottom < minBottomEdge) minBottomEdge = bottom;
+  }
+  mobileWorldContentHeight = Math.max(0, contentTop - minBottomEdge);
+  mobileBuildScrollAt = scrollOffsetWorld;
   updateScrollDocHeight();
 
   return persistentButtonPaths.length >= REQUIRED_BUTTONS;
 }
 
 
+
   
   
-// Raffinements d’ambiance
-// Raffinements d’ambiance — les D2 (w/2) “content” libres ont une chance d’être raffinés
 function sprinkleRefinements(maxOps = 24){
   const { w, contentTop } = getLayoutMetrics();
+  const isMobileLike = isMobileBucket(); // mobile-v, tablet-3:4, tablet-9:16
 
   // subdiviser 1 feuille en 4
   const refineOnce = (it) => {
@@ -1686,46 +1902,48 @@ function sprinkleRefinements(maxOps = 24){
 
   let ops = 0;
 
-  // -------- PASS 1 : D2 “content” libres, au hasard (peuvent rester tels quels) --------
-  const front = [];
-  for (const [path, s] of targetState.entries()){
-    if (!path.startsWith('content/')) continue;
-    if (imageCells.has(path) || buttonCells.has(path)) continue;
-    if (Math.abs(s.originalSize - w/2) < 1e-6 &&              // cibles = D2 (w/2)
-        isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05) &&
-        s.depth < TARGET_DEPTH){
-      front.push({ path, s });
+  // -------- PASS 1 : D2 “content” libres, au hasard --------
+  // 👉 En mobile-like on SKIP ce pass pour préserver les D2 (taille boutons)
+  if (!isMobileLike){
+    const front = [];
+    for (const [path, s] of targetState.entries()){
+      if (!path.startsWith('content/')) continue;
+      if (imageCells.has(path) || buttonCells.has(path)) continue;
+      if (Math.abs(s.originalSize - w/2) < 1e-6 &&            // cibles = D2 (w/2)
+          isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05) &&
+          s.depth < TARGET_DEPTH){
+        front.push({ path, s });
+      }
     }
-  }
-  const saltFront = sessionSalt ^ 0x5151;
-  front.sort((a,b)=> saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
+    const saltFront = sessionSalt ^ 0x5151;
+    front.sort((a,b)=> saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
 
-  for (const it of front){
-    if (ops >= maxOps) break;
-    // tirage aléatoire : ce D2 peut être laissé tel quel
-    if (Math.random() < (config.refineChanceD2 ?? 0.5)){
-      refineOnce(it); ops++;
-
-      // parfois un petit raffinement en plus dans un des 4 enfants
-      if (ops < maxOps && Math.random() < (config.extraChildChanceAfterD2 ?? 0.0)){
-        const childIdx = Math.floor(Math.random() * 4);
-        const childPath = it.path + '/' + childIdx;
-        const child = targetState.get(childPath);
-        if (child && child.depth < TARGET_DEPTH && !imageCells.has(childPath) && !buttonCells.has(childPath)){
-          refineOnce({ path: childPath, s: child }); ops++;
+    for (const it of front){
+      if (ops >= maxOps) break;
+      if (Math.random() < (config.refineChanceD2 ?? 0.5)){
+        refineOnce(it); ops++;
+        if (ops < maxOps && Math.random() < (config.extraChildChanceAfterD2 ?? 0.0)){
+          const childIdx = Math.floor(Math.random() * 4);
+          const childPath = it.path + '/' + childIdx;
+          const child = targetState.get(childPath);
+          if (child && child.depth < TARGET_DEPTH && !imageCells.has(childPath) && !buttonCells.has(childPath)){
+            refineOnce({ path: childPath, s: child }); ops++;
+          }
         }
       }
     }
   }
 
   // -------- PASS 2 : ambiance générale (budget restant) --------
-  if (ops >= maxOps) return;
-
   const candidates = [];
   for (const [path, s] of targetState.entries()){
-    if (!isMobileBucket() && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
+    if (!isMobileLike && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
     if (imageCells.has(path) || buttonCells.has(path)) continue;
     if (s.depth >= TARGET_DEPTH) continue;
+
+    // 👉 En mobile-like, on NE TOUCHE PAS aux D2 (w/2)
+    if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) continue;
+
     candidates.push({ path, s });
   }
 
@@ -1737,6 +1955,7 @@ function sprinkleRefinements(maxOps = 24){
     refineOnce(it); ops++;
   }
 }
+
 
 // Materials
 function getImageMaterial(url){
@@ -1769,17 +1988,13 @@ function getImageMaterial(url){
   
 
 
-// --- Overlays libres + gouttières 1px -----------------------
-// 1) On garde l'image 1×1 déjà présente (rangée 1, colonne 2).
-// 2) On DÉPLACE l'image sous "Fractal Art" de w/2 vers la GAUCHE.
-// 3) On AJOUTE une image w/2 AU-DESSUS de "Random Stuff".
-
+// Overlays libres + gouttières 1px — version paysage (corrigé)
 const FREE_OVERLAYS = [
-  // (existant) : image 1x1 posée à cheval sur la colonne 2, rangée 1
+  // Grande image 1×1 (inchangée)
   {
     row: 1,
     col: 2,
-    offsetCols: 1.0,   // marge horizontale en largeur de case
+    offsetCols: 1.0,
     offsetRows: 0,
     wMul: 1,
     hMul: 1,
@@ -1787,60 +2002,53 @@ const FREE_OVERLAYS = [
     gutters: { left: true, right: true, top: false, bottom: false }
   },
 
-  // DÉPLACÉE : mini-image 0.5×0.5 SOUS "Fractal Art"
-  // Avant : offsetCols:+0.25 (quad bas-droit). Maintenant on la décale de -w/2 → -0.25.
+  // Mini-image 0.5×0.5 SOUS “Fractal Art”
+  // ➜ corrige le décalage : -1w en X (0.75 → -0.25) et +¼w en Y (0 → +0.25)
   {
     row: 1,
     col: 0,
-    offsetCols: -0.25,   // était +0.25 → -0.25 = +0.25 - 0.5 (déplacement de w/2 vers la gauche)
-    offsetRows: +0.25,   // bas (comme avant)
+    offsetCols: -0.25,   // ← 1w vers la gauche (était +0.75)
+    offsetRows: +0.25,   // ↓ w/4 vers le bas      (était 0)
     wMul: 0.5,
     hMul: 0.5,
-    url: null,           // auto-pick (évite les doublons)
+    url: null,
     gutters: { left: true, right: true, top: true, bottom: true }
   },
 
-  // NOUVEAU : image w/2 AU-DESSUS de "Random Stuff"
-  // Le bouton Random est en {row:1, col:1, quad:3} (bas-droit) → on place l'image en haut-droit (quad:1)
+  // Mini-image 0.5×0.5 AU-DESSUS de “Creative Coding”
+  // (anciennement positionnée au-dessus de “Random Stuff”)
   {
-    row: 1,
+    row: 1,              // Creative Coding est sur la tuile D1 (row:1, col:1)
     col: 1,
-    offsetCols: +0.25,   // droite
-    offsetRows: -0.25,   // haut
+    offsetCols: +0.25,   // quad haut-droit
+    offsetRows: -0.25,
     wMul: 0.5,
     hMul: 0.5,
-    url: null,           // auto-pick
+    url: null,
     gutters: { left: true, right: true, top: true, bottom: true }
   },
-  
-  
 ];
 
 
-function pickOverlayUrl(extraUsed = new Set()) {
-  // images déjà utilisées par la grille (D1/D2)
-  const used = new Set(imageAssignment.values());
 
-  // + images déjà choisies par d'autres overlays existants
+function pickOverlayUrl(extraUsed = new Set()) {
+  // éviter de réutiliser une image déjà posée
+  const used = new Set(imageAssignment.values());
   for (const o of freeOverlays) {
     if (o.url) used.add(o.url);
   }
-
-  // + images "réservées" pendant cette construction
   for (const u of extraUsed) used.add(u);
 
-  // On choisit une image non encore utilisée
   for (const u of imageTextures) {
     if (!used.has(u)) return u;
   }
-
-  // Fallback si tout est utilisé ou si la liste est vide
   return imageTextures[0] || 'img/logo-sooxy-art.png';
 }
 
+
 function buildFreeOverlays(){
   if (isMobileBucket()){
-    // nettoie d’éventuels overlays déjà créés
+    // Pas d’overlays en formats verticaux
     for (const o of freeOverlays){
       scene.remove(o.mesh);
       if (o.vLeft)   scene.remove(o.vLeft);
@@ -1850,10 +2058,10 @@ function buildFreeOverlays(){
       if (o.cover)   scene.remove(o.cover);
     }
     freeOverlays.length = 0;
-    return; // pas d'overlay en mobile (formats verticaux)
+    return;
   }
 
-  // On reconstruit tout
+  // Reset
   for (const o of freeOverlays){
     scene.remove(o.mesh);
     if (o.vLeft)   scene.remove(o.vLeft);
@@ -1864,38 +2072,34 @@ function buildFreeOverlays(){
   }
   freeOverlays.length = 0;
 
-  // Ensemble accumulant les URLs choisies pour cette passe
   const accUsed = new Set();
 
-  // Création
   for (const spec of FREE_OVERLAYS){
-    // même pool d’images que la grille (évite les doublons si possible)
     const urlToUse = spec.url ? spec.url : pickOverlayUrl(accUsed);
     accUsed.add(urlToUse);
     const mat = getImageMaterial(urlToUse);
 
-    // --- IMAGE OVERLAY ---
+    // Image overlay
     const mesh = new THREE.Mesh(geometry, mat);
-    // Au-dessus des points (3.2) et au-dessus des boutons (3)
     mesh.renderOrder = 3.6;
     mesh.position.set(0, 0, 0.20);
     mesh.scale.set(0, 0, 1);
     scene.add(mesh);
 
-    // --- CACHE BLEU (SOUS l'image visuellement, mais au-dessus des points) ---
+    // Cache bleu sous l’image
     const cover = new THREE.Mesh(geometry, menuBorderMaterial);
-    cover.renderOrder = 3.55;  // < 3.6 (image), > 3.2 (points)
+    cover.renderOrder = 3.55;
     cover.position.set(0, 0, 0.19);
     cover.scale.set(0, 0, 1);
     scene.add(cover);
 
-    // Usine à bandes/gouttières 1px (dessus de tout ça)
+    // Gouttières 1px
     const makeStripe = () => {
       const m = new THREE.Mesh(geometry, menuBorderMaterial);
-      m.renderOrder = 3.7;     // le plus haut: masque les bords proprement
+      m.renderOrder = 3.7;
       m.position.set(0, 0, 0.21);
       m.scale.set(0, 0, 1);
-      m._tPos   = new THREE.Vector3();  // cibles pour lerp
+      m._tPos   = new THREE.Vector3();
       m._tScale = new THREE.Vector3();
       scene.add(m);
       return m;
@@ -1909,14 +2113,11 @@ function buildFreeOverlays(){
     const targetPosition = new THREE.Vector3();
     const targetScale    = new THREE.Vector3(0, 0, 1);
 
-    // on mémorise aussi l'URL choisie pour éviter les doublons
     freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom, targetPosition, targetScale, cover, url: urlToUse });
   }
 
-  // Calcule les cibles (centre + tailles)
+  // Cibles + snap initial
   updateFreeOverlays();
-
-  // Snap initial: image = au bon centre, scale 0 (anim ensuite)
   for (const o of freeOverlays){
     o.mesh.position.copy(o.targetPosition);
     o.mesh.scale.set(0, 0, 1);
@@ -1947,6 +2148,7 @@ function buildFreeOverlays(){
 
 
 
+
 function updateFreeOverlays(){
   if (!freeOverlays.length) return;
 
@@ -1964,7 +2166,7 @@ function updateFreeOverlays(){
     const sx = w * (spec.wMul || 1);
     const sy = w * (spec.hMul || 1);
 
-    // → cibles d’anim de l’image overlay
+    // Cibles de l'image
     o.targetPosition.set(cx, cy, 0.20);
     o.targetScale.set(
       Math.max(0, sx - config.borderWidth),
@@ -1972,25 +2174,26 @@ function updateFreeOverlays(){
       1
     );
 
-    // cibles des traits 1px
+    // Traits 1px
     const leftX   = cx - sx/2;
     const rightX  = cx + sx/2;
     const topY    = cy + sy/2;
     const bottomY = cy - sy/2;
     const bw = config.borderWidth;
 
-    if (o.vLeft){   o.vLeft._tPos.set(leftX,  cy, 0.21);   o.vLeft._tScale.set(bw,     sy + bw, 1); }
-    if (o.vRight){  o.vRight._tPos.set(rightX, cy, 0.21);  o.vRight._tScale.set(bw,     sy + bw, 1); }
-    if (o.hTop){    o.hTop._tPos.set(cx,    topY, 0.21);   o.hTop._tScale.set(sx + bw, bw,     1); }
-    if (o.hBottom){ o.hBottom._tPos.set(cx, bottomY, 0.21);o.hBottom._tScale.set(sx + bw, bw,     1); }
+    if (o.vLeft){   o.vLeft._tPos.set(leftX,  cy, 0.21);    o.vLeft._tScale.set(bw,     sy + bw, 1); }
+    if (o.vRight){  o.vRight._tPos.set(rightX, cy, 0.21);   o.vRight._tScale.set(bw,     sy + bw, 1); }
+    if (o.hTop){    o.hTop._tPos.set(cx,    topY, 0.21);    o.hTop._tScale.set(sx + bw, bw,     1); }
+    if (o.hBottom){ o.hBottom._tPos.set(cx, bottomY, 0.21); o.hBottom._tScale.set(sx + bw, bw,     1); }
 
-    // --- cache bleu : taille finale dès le 1er frame (pas d'anim) ---
+    // Cache bleu (taille finale sans anim)
     if (o.cover){
       o.cover.position.set(cx, cy, 0.19);
       o.cover.scale.set(sx + bw*2, sy + bw*2, 1);
     }
   }
 }
+
 
 
   
@@ -2020,23 +2223,51 @@ function destroyDomLabel(st){
 }
 
 function rebuildDomLabel(st, label){
-  destroyDomLabel(st);
+  // stoppe/retire l’ancienne version
+  if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+  if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
 
-  // Les labels passent SOUS le header (z-index cohérent)
   const layer = document.getElementById('labels-layer');
   if (layer) layer.style.zIndex = '3';
 
+  // crée le DOM du label (3 lignes max, déjà séparées par \n)
   const el = makeDomLabelEl(label);
-  // ancre (top-right) côté CSS déjà: transform-origin:100% 0%;
-  // on force quand même pour éviter un override éventuel
+  // ancre top-right, pas de layout animé (on animera uniquement transform)
   el.style.transformOrigin = '100% 0%';
-  el.style.willChange = 'transform, width, left, top';
+  el.style.willChange = 'transform';
+  el.style.position = 'absolute';
+  el.style.left = '0px';
+  el.style.top  = '0px';
+
+  // évite tout wrap dynamique pendant l’anim
+  el.querySelectorAll('.line').forEach(line => { line.style.whiteSpace = 'nowrap'; });
 
   layer?.appendChild(el);
   st.domLabelEl = el;
   st.labelText = label;
 
-  // ❌ Pas d’effet "baffle/hover" en mobile
+  // Mesure des largeurs "base" (sans scale) : largeur max (bloc) + largeur 1ère ligne
+  try {
+    // on s’assure de mesurer à scale(1), hors écran (pas de flash)
+    const prev = el.style.transform;
+    el.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
+
+    st.labelBaseWidthPx = Math.ceil(el.getBoundingClientRect().width) || 0;
+
+    const firstLineEl = el.querySelector('.line');
+    if (firstLineEl) {
+      st.firstLineBaseWidthPx = Math.ceil(firstLineEl.getBoundingClientRect().width) || 0;
+    } else {
+      st.firstLineBaseWidthPx = st.labelBaseWidthPx || 0;
+    }
+
+    el.style.transform = prev || '';
+  } catch {
+    st.labelBaseWidthPx = 0;
+    st.firstLineBaseWidthPx = 0;
+  }
+
+  // pas de baffle en mobile ; desktop ok (n’affecte pas notre mesure)
   if (!isMobileBucket() && window.baffle){
     const lines = Array.from(el.querySelectorAll('.line'));
     st.baffles = lines.map(line =>
@@ -2049,8 +2280,146 @@ function rebuildDomLabel(st, label){
 
 
 
-  
-  
+function updateDomLabelLayout(st, lm){
+  if (!st.domLabelEl) return;
+
+  const { w } = lm;
+
+  // Taille et position "affichées" du carré (après lerp)
+  const dispS = Math.max(0, st.mesh.scale.x);
+  const half  = dispS / 2;
+  const dispX = st.mesh.position.x;
+  const dispY = st.mesh.position.y;
+
+  // --- marges internes (pourcentage fixe du côté du carré) ---
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2)); // = 1/16 si 6
+  const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2)); // = 1/16 si 6
+
+  const mRightWorld = dispS * marginPctRight;
+  const mTopWorld   = dispS * marginPctTop;
+
+  // Coin haut-droit intérieur du carré (où on ancre le texte)
+  const tx = dispX + half - mRightWorld;
+  const ty = dispY + half - mTopWorld;
+
+  // Monde → pixels pour calculer l’espace dispo horizontal
+  const pxPerWorldX   = window.innerWidth / (camera.right - camera.left);
+  const squareWidthPx = dispS * pxPerWorldX;
+  const marginPx      = mRightWorld * pxPerWorldX;
+  const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx); // marge exclue
+
+  // (re)mesure si la fonte a fini de charger après coup
+  if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
+    const prev = st.domLabelEl.style.transform;
+    st.domLabelEl.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
+    try {
+      st.labelBaseWidthPx = Math.ceil(st.domLabelEl.getBoundingClientRect().width) || 0;
+      const firstLineEl = st.domLabelEl.querySelector('.line');
+      st.firstLineBaseWidthPx = firstLineEl
+        ? Math.ceil(firstLineEl.getBoundingClientRect().width) || 0
+        : (st.labelBaseWidthPx || 0);
+    } catch { /* noop */ }
+    st.domLabelEl.style.transform = prev || '';
+  }
+
+  // --- ÉCHELLE GLOBALE UNIFORME basée sur "Creative" = 66% ---
+  // si la réf n’est pas dispo, on garde un fallback propre.
+  const uniformScale = ensureGlobalLabelScale(lm) ?? 1;
+
+  // clamp de sécurité (ne JAMAIS dépasser l’espace utile)
+  const maxScaleToFit = st.labelBaseWidthPx > 0 ? (availablePx / st.labelBaseWidthPx) : uniformScale;
+  let safeScale = Math.min(uniformScale, maxScaleToFit);
+  // garde-fou lisibilité
+  safeScale = Math.max(0.35, Math.min(8, safeScale));
+
+  // Couleur / effet hover (inchangé)
+  if (!isMobileBucket()){
+    const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+    const inside =
+      wp.x >= dispX - half && wp.x <= dispX + half &&
+      wp.y >= dispY - half && wp.y <= dispY + half;
+    st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
+    if (inside && st.baffles && !st.hovering){
+      st.hovering = true;
+      st.baffles.forEach(b=>{ b.start(); b.reveal(600); });
+    }
+    if (!inside){ st.hovering = false; }
+  } else {
+    st.domLabelEl.style.color = '#f3f1ee';
+  }
+
+  // Positionnement pixel-perfect (ancre haut-droit) + scale uniforme clampé
+  const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
+  st.domLabelEl.style.transform =
+    `translate3d(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px, 0) translateX(-100%) scale(${safeScale})`;
+}
+
+// === Helpers label : "Creative" = 66% de la largeur intérieure du carré ===
+function computeSquareInnerWidthPx(squareSizeWorld){
+  const pxPerWorldX = window.innerWidth / (camera.right - camera.left);
+
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+  const marginWorld    = squareSizeWorld * marginPctRight;
+
+  const squareWidthPx  = Math.max(0, squareSizeWorld) * pxPerWorldX;
+  const innerWidthPx   = Math.max(0, squareWidthPx - 2 * (marginWorld * pxPerWorldX));
+  return innerWidthPx;
+}
+
+// Calcule (et mémoïse) une échelle GLOBALE UNIFORME telle que
+// la 1ʳᵉ ligne "Creative" fasse 66% de la largeur intérieure de SON carré.
+function ensureGlobalLabelScale(lm){
+  const cache = scene.userData._labelScaleCache || (scene.userData._labelScaleCache = { scale:null, refSize:0 });
+  const TARGET_RATIO = 0.66;
+
+  // Trouve le bouton "Creative ..." (clé 'code' dans tes catégories)
+  let refSt = null;
+  for (const st of fractalState.values()){
+    if (!st || !st.isButton || !st.domLabelEl || !st.labelText) continue;
+    const first = String(st.labelText).split('\n')[0].trim().toLowerCase();
+    if (first === 'creative'){ refSt = st; break; }
+  }
+  if (!refSt) return cache.scale; // garde l’ancienne si on ne l’a pas encore
+
+  // Taille visée = taille CIBLE du carré (évite les oscillations pendant le lerp)
+  const refSizeWorld = Math.max(0, (refSt.targetScale?.x || refSt.mesh?.scale?.x || 0));
+  if (!refSizeWorld) return cache.scale;
+
+  // (re)mesure au besoin la largeur "base" de la 1ʳᵉ ligne
+  if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0){
+    const el = refSt.domLabelEl;
+    if (el){
+      const prev = el.style.transform;
+      el.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
+      try{
+        const firstEl = el.querySelector('.line');
+        refSt.firstLineBaseWidthPx = firstEl
+          ? Math.ceil(firstEl.getBoundingClientRect().width) || 0
+          : Math.ceil(el.getBoundingClientRect().width) || 0;
+      }catch{}
+      el.style.transform = prev || '';
+    }
+  }
+  if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0) return cache.scale;
+
+  // Invalide le cache si la taille de référence a changé
+  const needRecalc = (!cache.scale) || Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-4;
+
+  if (needRecalc){
+    const innerPx = computeSquareInnerWidthPx(refSizeWorld);
+    if (innerPx > 0){
+      let s = (TARGET_RATIO * innerPx) / refSt.firstLineBaseWidthPx;
+      s = Math.max(0.35, Math.min(8, s)); // garde-fous
+      cache.scale = s;
+      cache.refSize = refSizeWorld;
+    }
+  }
+
+  return cache.scale;
+}
+
+
+
 function syncStateToMeshes(){
   const getOccluderMaterial = () => {
     if (!scene.userData.occluderMaterial) {
@@ -2096,7 +2465,7 @@ function syncStateToMeshes(){
     const isImg = imageCells.has(key);
     const isBtn = buttonCells.has(key);
 
-    let material = darkMaterial;            // bouton = noir
+    let material = darkMaterial;            // carré par défaut = noir
     if (isImg) {
       const url = imageAssignment.get(key);
       material  = getImageMaterial(url);
@@ -2109,8 +2478,17 @@ function syncStateToMeshes(){
       ex.targetScale.set(t.size, t.size, 1);
 
       if (ex.mesh.material !== material) ex.mesh.material = material;
-      ex.isButton = isBtn; ex.isImage = isImg;
-      ex.mesh.renderOrder = isBtn ? 3 : 0;
+
+      ex.isButton = isBtn;
+      ex.isImage  = isImg;
+
+      // --- ORDRE DE RENDU ---
+      // Boutons au-dessus de tout (3)
+      // En portrait: images au-dessus de la grille pour éviter le "flash" noir (2.96)
+      // Sinon: même ordre que la grille (0)
+      ex.mesh.renderOrder = isBtn
+        ? 3
+        : (isImg && isMobileBucket() ? 2.96 : 0);
 
       if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
 
@@ -2147,7 +2525,12 @@ function syncStateToMeshes(){
       mesh.material = material;
       mesh.position.set(t.x, t.y, 0);
       mesh.scale.set(0, 0, 0);
-      mesh.renderOrder = isBtn ? 3 : 0;
+
+      // --- ORDRE DE RENDU (création) ---
+      mesh.renderOrder = isBtn
+        ? 3
+        : (isImg && isMobileBucket() ? 2.96 : 0);
+
       scene.add(mesh);
 
       const st = {
@@ -2189,6 +2572,7 @@ function syncStateToMeshes(){
     }
   }
 }
+
 
 
 
@@ -2319,60 +2703,11 @@ function animate(){
       st.labelSprite.scale.set(st.mesh.scale.x, st.mesh.scale.x*0.75, 1);
     }
 
-    // ---- Labels DOM -> même ancre, même vitesse que le carré ----
+    // ---- Labels DOM (version sans reflow : trajectoire rectiligne du texte) ----
     if (st.isButton && st.domLabelEl){
-      const { w } = lm;
-
-      // marges (référence grille) — OK de rester fixes vs w
-      const mobilePadFactor = isMobile ? 2 : 1;
-      const mRightWorld = (w / Math.pow(2, LABEL_MARGIN_DEPTH_RIGHT - 1)) * mobilePadFactor;
-      const mTopWorld   = (w / Math.pow(2, LABEL_MARGIN_DEPTH_TOP   - 1)) * mobilePadFactor;
-
-      // Utiliser la position/échelle AFFICHÉES (et pas target*)
-      const dispX = st.mesh.position.x;
-      const dispY = st.mesh.position.y;
-      const dispS = Math.max(0, st.mesh.scale.x);
-      const half  = dispS / 2;
-
-      const tx = dispX + half - mRightWorld;   // ancre top-right - marge
-      const ty = dispY + half - mTopWorld;
-
-      const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
-      const pxPerWorldX = window.innerWidth  / (camera.right - camera.left);
-      const extraRightWorld = LABEL_RIGHT_EXTRA_PX / pxPerWorldX;
-      const rightWorld = mRightWorld + extraRightWorld;
-      const leftWorld  = mRightWorld;
-      const boxWidthPx = Math.max(0, (dispS - leftWorld - rightWorld) * pxPerWorldX);
-
-      st.domLabelEl.style.left    = p.x + 'px';
-      st.domLabelEl.style.top     = (p.y + LABEL_NUDGE_PX_Y) + 'px';
-      st.domLabelEl.style.width   = boxWidthPx + 'px';
-      st.domLabelEl.style.fontSize= Math.max(12, dispS * pxPerWorldX * 0.1) + 'px';
-
-      if (isMobile){
-        // Pas de hover/baffle en mobile
-        st.domLabelEl.style.color = '#f3f1ee';
-        st.hovering = false;
-      } else {
-        // Hover desktop/tablette (calculé sur l'affiché)
-        const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-        const inside = (
-          wp.x >= dispX - half && wp.x <= dispX + half &&
-          wp.y >= dispY - half && wp.y <= dispY + half
-        );
-
-        if (inside){
-          st.domLabelEl.style.color = '#f3ff00';
-          if (!st.hovering){
-            st.hovering = true;
-            if (st.baffles){ st.baffles.forEach(b=>{ b.start(); b.reveal(600); }); }
-          }
-        } else {
-          st.domLabelEl.style.color = '#f3f1ee';
-          st.hovering = false;
-        }
-      }
+      updateDomLabelLayout(st, lm);
     }
+
 
     // Points jaunes (centroïdes) — calés sur l'affiché
     if (st.dotMesh){
