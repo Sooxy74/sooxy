@@ -494,9 +494,6 @@ const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
 const MOBILE_BTN_OCCLUDER_PAD_PX = 1; // marge d’occlusion (px CSS) autour du bouton
 
 let mobileWorldContentHeight = 0; // hauteur totale du contenu en "monde" pour mobile
-// --- Portrait: fillers latéraux conditionnels ---
-let portraitSideFillersWanted = false;  // on veut 0.5 colonne de chaque côté en vertical si tout tient sans scroll
-let portraitSideFillersApplied = false; // garde-fou pour éviter des rebuilds en boucle
 let instantKill = new Set();      // paths supprimés immédiatement (sans lerp)
 
 
@@ -504,8 +501,6 @@ let instantKill = new Set();      // paths supprimés immédiatement (sans lerp)
 // Scroll vertical simulé en coordonnées monde
 let scrollOffsetWorld = 0;
 let mobileBuildScrollAt = 0; // scroll au moment de la construction mobile (sert d’ancre)
-  
-
 
   
 // Images locales (img/BY-pics/01.png, 02.png, 03.png, …)
@@ -779,7 +774,7 @@ function applyBucket(){
   const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   const isPhonePortrait  = (currentBucket === 'mobile-v');
 
-  // Tous les paysages sous le palier desktop
+  // Tous les paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
   const forceSubDesktopLandscape = isSubDesktopLandscape();
 
   // seuil ultrawide demandé
@@ -792,13 +787,19 @@ function applyBucket(){
     baseRowsPrimary = 2;
 
   } else if (isTabletPortrait) {
-    // Tablette portrait : 2 colonnes contenu ; fillers latéraux si pas "short" OU si forcé
-    baseCols = (isShortPortrait() && !portraitSideFillersWanted) ? 2 : 3;
+    // 👉 Si portrait "court" (<1000px de haut) : PAS de fillers latéraux → 2 colonnes plein cadre
+    if (isShortPortrait()){
+      baseCols = 2;                      // = nb de colonnes "contenu" → offset 0, aucun filler
+    } else {
+      // Portrait tablette "grand" : 2 colonnes de contenu centrées avec ½ colonne de chaque côté
+      baseCols = 3;
+    }
     baseRowsPrimary = b?.grid.rows || 3;
 
   } else if (!isPhonePortrait) {
-    // Desktop / autres cas paysage
+    // Desktop / autres cas
     if (aspect >= ULTRAWIDE_AR) {
+      // ≥ 22:9 : 4 colonnes de contenu + 2 colonnes de marge de chaque côté
       baseCols = 8;
       baseRowsPrimary = b?.grid.rows || 2;
     } else if (config.baseColsOverride != null) {
@@ -813,8 +814,8 @@ function applyBucket(){
     }
 
   } else {
-    // Mobile portrait : 2 colonnes contenu ; fillers latéraux si forcé
-    baseCols = portraitSideFillersWanted ? 3 : 2;
+    // Mobile portrait
+    baseCols = 2;
     baseRowsPrimary = 2;
   }
 
@@ -838,6 +839,8 @@ function applyBucket(){
 
   updateScrollDocHeight();
 }
+
+
 
   
 
@@ -900,16 +903,82 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (reload léger à la fin)
-let resizeTimer=null;
-window.addEventListener('resize', ()=>{
-  const aspect = window.innerWidth / window.innerHeight; const height = 10; const width = height * aspect;
-  camera.left=-width/2; camera.right=width/2; camera.top=height/2; camera.bottom=-height/2; camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  updateGrainPlaneSize(); updateMenuGeometry(); updateScrollDocHeight();
-  if (resizeTimer) clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(()=>{ window.location.reload(); }, 250);
-}, { passive:true });
+// Resize (sans reload + ignore les faux "resize" dus aux barres d’adresse)
+{
+  let lastW = window.innerWidth;
+  let lastH = window.innerHeight;
+  let raf = 0;
+
+  // La plupart des barres d’adresse mobiles font varier la hauteur d’~50–100 px.
+  // On ignore ces micro-variations si la largeur ne change pas.
+  const MIN_H_DELTA_TO_IGNORE = 120; // px
+
+  function handleResizeNow() {
+    raf = 0;
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    // Toujours adapter la caméra/le renderer à la nouvelle taille
+    const aspect = w / h;
+    const height = 10;
+    const width  = height * aspect;
+    camera.left   = -width / 2;
+    camera.right  =  width / 2;
+    camera.top    =  height / 2;
+    camera.bottom = -height / 2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+
+    updateGrainPlaneSize();
+    syncCssHeaderHeight();   // garde --menu-h en phase
+    updateMenuGeometry();
+
+    const newBucket = pickBucket(w, h);
+
+    const widthChanged  = w !== lastW;
+    const heightChanged = h !== lastH;
+    const onlySmallHeightChange =
+      !widthChanged && heightChanged && Math.abs(h - lastH) < MIN_H_DELTA_TO_IGNORE;
+
+    // Cas 1 : petit "resize" de hauteur uniquement (barre d’adresse) → pas de rebuild
+    if (onlySmallHeightChange) {
+      updateScrollDocHeight();
+      lastW = w; lastH = h;
+      return;
+    }
+
+    // Cas 2 : vrai changement (orientation, breakpoint, etc.)
+    if (newBucket !== currentBucket) {
+      currentBucket = newBucket;
+      applyBucket();              // recalcule colonnes/rows/params
+      reformGridKeepImages();     // rebuild SANS changer les URLs d’images
+      buildFreeOverlays();        // recalc overlays libres (si paysage)
+      lastGridCursorSizeWorld = computeDefaultGridCursorSize();
+      needsRefineCheck = true;
+    } else {
+      // Même bucket : on remet juste en forme ce qui dépend de la taille
+      updateScrollDocHeight();
+      updateFreeOverlays();
+      needsRefineCheck = true;
+    }
+
+    lastW = w; lastH = h;
+  }
+
+  function onResize() {
+    if (raf) return;
+    raf = requestAnimationFrame(handleResizeNow);
+  }
+
+  window.addEventListener('resize', onResize, { passive: true });
+
+  // Certains navigateurs déclenchent aussi via visualViewport
+  if (window.visualViewport) {
+    visualViewport.addEventListener('resize', onResize, { passive: true });
+  }
+}
+
 
 function updateScrollDocHeight(){
   // Mobile = portrait + tablettes très verticales
@@ -1015,23 +1084,12 @@ const D1_EXCEPTIONS = new Set();
 
   
 function contentOffsetColsForBucket(){
+  // En portrait < 1000px de haut : pas d'offset → pas de fillers latéraux
+  if (isShortPortrait()) return 0;
+
   const contentCols = contentColsForBucket();
-
-  // Mobile portrait : fillers latéraux UNIQUEMENT si on les veut
-  if (currentBucket === 'mobile-v'){
-    return portraitSideFillersWanted ? 0.5 : 0.0;
-  }
-
-  // Tablettes portrait : pas de fillers si "short" SAUF si on force
-  if (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'){
-    if (isShortPortrait() && !portraitSideFillersWanted) return 0.0;
-    return Math.max(0, (baseCols - contentCols) / 2); // 0.5 quand baseCols=3
-  }
-
-  // Cas desktop / paysages
   return Math.max(0, (baseCols - contentCols) / 2);
 }
-
 
 
 
@@ -1083,6 +1141,7 @@ function addPrimaryRowSideFillers(row, offsetCols){
 }
 
 
+
 function updateFractalBase(forceFull = false){
   targetState.clear();
 
@@ -1114,15 +1173,12 @@ function updateFractalBase(forceFull = false){
     totalRows = Math.max(baseRowsPrimary, visibleRows);
   }
 
-  // >>> RALLONGE EN BAS (évite de voir le bleu) — présent aussi après reform
-  const bottomPadRows = isMobileBucket() ? 2 : 1;
-  totalRows += bottomPadRows;
-
   const offsetCols = contentOffsetColsForBucket();
   const contentCols = contentColsForBucket();
 
   for (let row = 0; row < totalRows; row++) {
     const isPrimary = row < baseRowsPrimary;
+    // >>> clé: pour tablettes portrait, on limite à 2 colonnes contenu
     const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
 
     for (let col = 0; col < colsThisRow; col++) {
@@ -1173,6 +1229,7 @@ function updateFractalBase(forceFull = false){
 
   return okButtons;
 }
+
 
 
 // --- REMPLACEMENT COMPLET ---
@@ -1494,21 +1551,21 @@ function chooseButtonsThenImages(forceFull){
 }
 
 
+
+
 function reformGridKeepImages(){
-  // garder les mêmes images
+  // 1) nouveau "nonce" pour faire varier le tri/raffinage à chaque refresh
+  scene.userData = scene.userData || {};
+  scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
+
+  // 2) on conserve les mêmes URLs d'images (persistentImageUrls), mais on relance l'aléa
   forceRecreateLabelsOnce = true;
   reseed();
 
-  // réévalue les fillers latéraux verticaux après reform
-  portraitSideFillersApplied = false;
-  portraitSideFillersWanted  = false;
-
-  // au cas où : vider les suppressions instantanées restantes
+  // 3) purge propre
   if (typeof instantKill !== 'undefined' && instantKill.clear) {
     instantKill.clear();
   }
-
-  // purge état logique
   targetState.clear();
   imageCells.clear();
   buttonCells.clear();
@@ -1516,16 +1573,22 @@ function reformGridKeepImages(){
   imageSlots.clear();
   buttonSlots.clear();
 
-  // rebuild (chooseButtonsThenImages ne peut plus échouer)
-  updateFractalBase(false);
+  // 4) en mobile-like, on force le recalcul de la hauteur de contenu
+  if (isMobileBucket()){
+    mobileWorldContentHeight = 0;
+  }
 
-  // pousse l’état vers les meshes (les nouveaux partent bien de scale=0)
+  // 5) rebuild complet (les images resteront les mêmes grâce à persistentImageUrls)
+  updateFractalBase(false);
   syncStateToMeshes();
 
-  // forcer un refresh du calcul de curseur/hover au frame suivant
+  // 6) s'assurer que le curseur/hover et la hauteur de doc se recalculent
   needsRefineCheck = true;
+  updateScrollDocHeight();
 }
 
+
+  
   
 
 function presetForBucket(id){
@@ -1654,12 +1717,12 @@ function buildMobileButtonsDeterministic(){
   const gapBtn = sideBtn / 2;  // écart vertical entre boutons
   const stepY = sideBtn + gapBtn;
 
-  // Centres des 2 colonnes "contenu"
-  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile-v, 0.5 si fillers actifs
-  const xLeft  = camera.left + (offsetCols + 0.5) * w;
-  const xRight = camera.left + (offsetCols + 1.5) * w;
+  // Centres des 2 colonnes "contenu" (jamais dans les colonnes filler)
+  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile-v, 0.5 en tablettes portrait
+  const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne contenu 0
+  const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne contenu 1
 
-  // Premier bouton
+  // Premier bouton : juste sous le header (moitié de sa hauteur)
   const firstCy = contentTop - sideBtn / 2;
 
   // Reset des placements précédents
@@ -1669,28 +1732,47 @@ function buildMobileButtonsDeterministic(){
   persistentButtonPaths = [];
   buttonCells.clear();
 
-  const allBlocks = []; // pour hauteur totale
+  const allBlocks = []; // pour calculer la hauteur totale (scroll)
 
-  // ---------- 1) Positions de base ----------
+  // ---------- 1) Positions "de base" (alternance droite/gauche) ----------
   const basePosByKey = {};
   for (let i = 0; i < REQUIRED_BUTTONS; i++){
-    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length];
-    const onLeft = (i % 2 === 1);
+    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length]; // ['motion','fractal','ui','code','random']
+    const onLeft = (i % 2 === 1); // 0: droite, 1: gauche, 2: droite, ...
     const cx = onLeft ? xLeft : xRight;
     const cy = firstCy - i * stepY;
     basePosByKey[key] = { cx, cy };
   }
 
   // ---------- 2) Offsets demandés ----------
-  const dx_w4 =  w/4,  dy_w4 =  w/4;
+  // NB: +Y = vers le haut ; -Y = vers le bas ; -X = vers la gauche ; +X = vers la droite
+  const dx_w4 =  w/4,  dy_w4 =  w/4;   // aide mémoire
   const dx_w2 =  w/2,  dy_w2 =  w/2;
 
-  if (basePosByKey['motion'])  basePosByKey['motion'].cx  -= dx_w4;
-  if (basePosByKey['code'])   { basePosByKey['code'].cx   -= dx_w4; basePosByKey['code'].cy += dy_w4; }
-  if (basePosByKey['fractal']){ basePosByKey['fractal'].cx += dx_w4; basePosByKey['fractal'].cy -= dy_w4; }
-  if (basePosByKey['ui'])      basePosByKey['ui'].cx      += dx_w4;
+  // Bouton Motion Design : w/4 vers la gauche
+  if (basePosByKey['motion']){
+    basePosByKey['motion'].cx -= dx_w4;
+  }
 
-  // ---------- 3) Création des 5 boutons ----------
+  // Bouton Creative Coding : w/4 vers le haut ET w/4 vers la gauche
+  if (basePosByKey['code']){
+    basePosByKey['code'].cx -= dx_w4;
+    basePosByKey['code'].cy += dy_w4;
+  }
+
+  // Bouton Fractal Art : léger offset (comme dans ta version précédente)
+  if (basePosByKey['fractal']){
+    basePosByKey['fractal'].cx += dx_w4;
+    basePosByKey['fractal'].cy -= dy_w4;
+  }
+
+  // Bouton UI Design : +w/4 vers la droite
+  if (basePosByKey['ui']) {
+    basePosByKey['ui'].cx += dx_w4;
+  }
+
+  // ---------- 3) Création effective des 5 boutons ----------
+  // On écrit dans targetState sous des clés stables 'btn/b0'..'btn/b4' (ordre = MOBILE_CATEGORY_ORDER)
   for (let i = 0; i < REQUIRED_BUTTONS; i++){
     const key = MOBILE_CATEGORY_ORDER[i];
     const cat = CATEGORIES.find(c => c.key === key);
@@ -1713,99 +1795,163 @@ function buildMobileButtonsDeterministic(){
     allBlocks.push({ cx: pos.cx, cy: pos.cy, side: sideBtn });
   }
 
-  // Accès rapide
+  // Accès rapide aux paths par clé
   const pathByKey = {};
   for (let i = 0; i < REQUIRED_BUTTONS; i++){
     const key = MOBILE_CATEGORY_ORDER[i];
     pathByKey[key] = `btn/b${i}`;
   }
-  const readBtn = key => pathByKey[key] ? targetState.get(pathByKey[key]) : null;
+
+  // Helpers pour lire/écrire la position d’un bouton déjà créé
+  const readBtn = key => {
+    const p = pathByKey[key];
+    return p ? targetState.get(p) : null;
+  };
   const moveBtn = (key, nx, ny) => {
     const p = pathByKey[key];
     if (!p) return;
     const st = targetState.get(p);
     if (!st) return;
-    st.x = nx; st.y = ny;
+    st.x = nx;
+    st.y = ny;
     allBlocks.push({ cx: nx, cy: ny, side: sideBtn });
   };
 
-  // ---------- 4) Petites images ----------
+  // ---------- 4) Petites images + placements relatifs demandés ----------
+  imageCells.clear();
+
+  // Petite image #1 — AU-DESSUS de "UI Design"
   {
     const ui = readBtn('ui');
     if (ui){
+      const small1_cx = ui.x;
+      const small1_cy = ui.y + sideBtn;  // juste au-dessus (1 hauteur de bouton)
       const p = 'btn/imgS0';
-      targetState.set(p, { x: ui.x, y: ui.y + sideBtn, size: Math.max(0, sideBtn - config.borderWidth), depth:1, path:p, originalSize: sideBtn });
+      targetState.set(p, {
+        x: small1_cx,
+        y: small1_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
       imageCells.add(p);
-      allBlocks.push({ cx: ui.x, cy: ui.y + sideBtn, side: sideBtn });
+      allBlocks.push({ cx: small1_cx, cy: small1_cy, side: sideBtn });
     }
   }
+
+  // Petite image #2 — à -w/2 en X et -w/2 en Y par rapport à UI (comme avant)
   {
     const ui = readBtn('ui');
     if (ui){
+      const small2_cx = ui.x - dx_w2;
+      const small2_cy = ui.y - dy_w2;
       const p = 'btn/imgS1';
-      targetState.set(p, { x: ui.x - dx_w2, y: ui.y - dy_w2, size: Math.max(0, sideBtn - config.borderWidth), depth:1, path:p, originalSize: sideBtn });
+      targetState.set(p, {
+        x: small2_cx,
+        y: small2_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
       imageCells.add(p);
-      allBlocks.push({ cx: ui.x - dx_w2, cy: ui.y - dy_w2, side: sideBtn });
+      allBlocks.push({ cx: small2_cx, cy: small2_cy, side: sideBtn });
     }
   }
+
+  // Petite image #3 — SOUS "Creative Coding"
   {
     const code = readBtn('code');
     if (code){
+      const small3_cx = code.x;
+      const small3_cy = code.y - sideBtn;
       const p = 'btn/imgS2';
-      targetState.set(p, { x: code.x, y: code.y - sideBtn, size: Math.max(0, sideBtn - config.borderWidth), depth:1, path:p, originalSize: sideBtn });
+      targetState.set(p, {
+        x: small3_cx,
+        y: small3_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
       imageCells.add(p);
-      allBlocks.push({ cx: code.x, cy: code.y - sideBtn, side: sideBtn });
+      allBlocks.push({ cx: small3_cx, cy: small3_cy, side: sideBtn });
     }
   }
 
-  // Random Stuff aligné sur la colonne de Fractal
+  // Random Stuff : même colonne que Fractal (on ajuste l'X maintenant, le Y sera fixé après G2)
   {
     const fractal = readBtn('fractal');
     const random  = readBtn('random');
-    if (fractal && random) moveBtn('random', fractal.x, random.y);
+    if (fractal && random){
+      moveBtn('random', fractal.x, random.y);
+    }
   }
 
   // ---------- 5) Grandes images ----------
+  // G1 : en haut à gauche (inchangé)
   {
     const p = 'btn/imgL0';
     const imgL0_cx = xLeft;
     const imgL0_cy = contentTop - sideOriginal / 2;
-    targetState.set(p, { x: imgL0_cx, y: imgL0_cy, size: Math.max(0, sideOriginal - config.borderWidth), depth:1, path:p, originalSize: sideOriginal });
+    targetState.set(p, {
+      x: imgL0_cx,
+      y: imgL0_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
     imageCells.add(p);
     allBlocks.push({ cx: imgL0_cx, cy: imgL0_cy, side: sideOriginal });
   }
+
+  // G2 : remontée d'un w → cy = contentTop - (3*w + sideOriginal/2)
   {
     const p = 'btn/imgL1';
     const imgL1_cx = xRight;
     const imgL1_cy = contentTop - (3 * w + sideOriginal / 2);
-    targetState.set(p, { x: imgL1_cx, y: imgL1_cy, size: Math.max(0, sideOriginal - config.borderWidth), depth:1, path:p, originalSize: sideOriginal });
+    targetState.set(p, {
+      x: imgL1_cx,
+      y: imgL1_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
     imageCells.add(p);
     allBlocks.push({ cx: imgL1_cx, cy: imgL1_cy, side: sideOriginal });
   }
 
-  // ---------- 6) Aligne Random Stuff sur le bas de la 2e grande image ----------
+  // ---------- 6) ALIGNE Random Stuff sur le BAS de la 2ᵉ grande image ----------
   {
-    const random = readBtn('random');
-    const imgL1  = targetState.get('btn/imgL1');
-    if (random && imgL1){
-      const bottomImgL1 = imgL1.y - imgL1.originalSize / 2;
-      const topImgL1    = imgL1.y + imgL1.originalSize / 2;
-      const t = 0.5;
-      const targetBottomY = bottomImgL1 + (topImgL1 - bottomImgL1) * t;
-      const newRandomCy = targetBottomY + sideBtn / 2;
-      moveBtn('random', random.x, newRandomCy);
-    }
-  }
+  const random = readBtn('random');
+  const imgL1  = targetState.get('btn/imgL1');
+  if (random && imgL1){
+    const bottomImgL1 = imgL1.y - imgL1.originalSize / 2;
+    const topImgL1    = imgL1.y + imgL1.originalSize / 2;
 
-  // ---------- 7) Attribution d’images ----------
+    const t = 0.5; // 0 = ancienne position ; 1 = position actuelle trop haute ; 0.5 = entre-deux
+    const targetBottomY = bottomImgL1 + (topImgL1 - bottomImgL1) * t;
+
+    const newRandomCy = targetBottomY + sideBtn / 2;
+    moveBtn('random', random.x, newRandomCy);
+  }
+}
+
+  // ---------- 7) Attribution d’images (évite les doublons) ----------
   const urlsPool = (imageTextures && imageTextures.length) ? imageTextures.slice() : ['img/logo-sooxy-art.png'];
   const startAt = Math.abs(sessionSalt) % urlsPool.length;
   const takeUrl = (k) => urlsPool[(startAt + k) % urlsPool.length];
 
+  // Collecte des images à attribuer (ordre stable)
   const imagePaths = ['btn/imgL0','btn/imgL1','btn/imgS0','btn/imgS1','btn/imgS2'].filter(p => targetState.has(p));
-  imagePaths.forEach((p, k) => { imageAssignment.set(p, takeUrl(k)); });
+  imagePaths.forEach((p, k) => {
+    imageAssignment.set(p, takeUrl(k));
+  });
 
-  // ---------- 8) Hauteur totale (scroll mobile) ----------
+  // ---------- 8) Hauteur totale du contenu pour le scroll mobile ----------
   let minBottomEdge = Infinity;
   for (const b of allBlocks){
     const bottom = b.cy - b.side / 2;
@@ -1815,61 +1961,49 @@ function buildMobileButtonsDeterministic(){
   mobileBuildScrollAt = scrollOffsetWorld;
   updateScrollDocHeight();
 
-  // ---------- 9) BONUS : activer fillers latéraux si tout tient sans scroll ----------
-  {
-    const { viewHeight, menuHeight } = getLayoutMetrics();
-    const available = viewHeight - menuHeight;
-
-    // On force les fillers (0.5 col de chaque côté) si :
-    // - on est en vertical (mobile/tablette portrait),
-    // - on construit sur 2 colonnes (donc pas encore de fillers),
-    // - le contenu tient dans l’écran,
-    // - et on n’a pas déjà appliqué ce forçage.
-    if (isMobileBucket() && baseCols === 2 && mobileWorldContentHeight <= available + 1e-6 && !portraitSideFillersApplied){
-      portraitSideFillersWanted = true;
-      portraitSideFillersApplied = true;   // évite les rebuilds en boucle
-      applyBucket();                        // passe à baseCols=3 en portrait
-      needsBaseUpdate = true;               // rebuild propre au prochain frame
-    }
-  }
-
   return persistentButtonPaths.length >= REQUIRED_BUTTONS;
 }
 
-  
-  
+
+
 function sprinkleRefinements(maxOps = 24){
   const { w, contentTop } = getLayoutMetrics();
-  const isMobileLike = isMobileBucket(); // mobile-v, tablet-3:4, tablet-9:16
+  const isMobileLike = isMobileBucket();
 
-  // subdiviser 1 feuille en 4
+  // nonce variable à chaque "reformGridKeepImages"
+  const nonce = (scene.userData && (scene.userData._regenNonce | 0)) || 0;
+
+  // salts différents à chaque régénération (constantes arbitraires)
+  const saltFront = ((sessionSalt ^ 0x5151) + ((nonce * 0x9e3779b9) | 0)) | 0;
+  const saltAll   = ((sessionSalt ^ 0xABCDEF) + ((nonce * 0x9e3779b9) | 0)) | 0;
+
+  // subdivise 1 feuille en 4 enfants
   const refineOnce = (it) => {
     targetState.delete(it.path);
     const { x, y, originalSize: os, depth: d, path: p } = it.s;
-    const ns = os/2, nd = d+1, o = os/4;
-    createQuadTree(x-o, y+o, ns, nd, p+'/0', -1);
-    createQuadTree(x+o, y+o, ns, nd, p+'/1', -1);
-    createQuadTree(x-o, y-o, ns, nd, p+'/2', -1);
-    createQuadTree(x+o, y-o, ns, nd, p+'/3', -1);
+    const ns = os / 2, nd = d + 1, o = os / 4;
+    createQuadTree(x - o, y + o, ns, nd, p + '/0', -1);
+    createQuadTree(x + o, y + o, ns, nd, p + '/1', -1);
+    createQuadTree(x - o, y - o, ns, nd, p + '/2', -1);
+    createQuadTree(x + o, y - o, ns, nd, p + '/3', -1);
   };
 
   let ops = 0;
 
-  // -------- PASS 1 : D2 “content” libres, au hasard --------
-  // 👉 En mobile-like on SKIP ce pass pour préserver les D2 (taille boutons)
+  // -------- PASS 1 : favoriser quelques D2 "content" (sauf mobile-like)
   if (!isMobileLike){
     const front = [];
     for (const [path, s] of targetState.entries()){
       if (!path.startsWith('content/')) continue;
       if (imageCells.has(path) || buttonCells.has(path)) continue;
-      if (Math.abs(s.originalSize - w/2) < 1e-6 &&            // cibles = D2 (w/2)
+      if (Math.abs(s.originalSize - w/2) < 1e-6 &&
           isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05) &&
           s.depth < TARGET_DEPTH){
         front.push({ path, s });
       }
     }
-    const saltFront = sessionSalt ^ 0x5151;
-    front.sort((a,b)=> saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
+    // tri avec salt variable → motifs différents à chaque refresh
+    front.sort((a, b) => saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
 
     for (const it of front){
       if (ops >= maxOps) break;
@@ -1887,27 +2021,28 @@ function sprinkleRefinements(maxOps = 24){
     }
   }
 
-  // -------- PASS 2 : ambiance générale (budget restant) --------
+  // -------- PASS 2 : ambiance générale (inclut bien les rangées "filler")
   const candidates = [];
   for (const [path, s] of targetState.entries()){
     if (!isMobileLike && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
     if (imageCells.has(path) || buttonCells.has(path)) continue;
     if (s.depth >= TARGET_DEPTH) continue;
 
-    // 👉 En mobile-like, on NE TOUCHE PAS aux D2 (w/2)
+    // en mobile-like on évite de retoucher les D2 (boutons)
     if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) continue;
 
     candidates.push({ path, s });
   }
 
-  const salt = sessionSalt ^ 0xABCDEF;
-  candidates.sort((a,b)=> saltedKey(a.path, salt) - saltedKey(b.path, salt));
+  // tri avec le salt "all" (change à chaque refresh)
+  candidates.sort((a, b) => saltedKey(a.path, saltAll) - saltedKey(b.path, saltAll));
 
   for (const it of candidates){
     if (ops >= maxOps) break;
     refineOnce(it); ops++;
   }
 }
+
 
 
 // Materials
