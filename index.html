@@ -774,7 +774,7 @@ function applyBucket(){
   const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   const isPhonePortrait  = (currentBucket === 'mobile-v');
 
-  // Paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
+  // Tous les paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
   const forceSubDesktopLandscape = isSubDesktopLandscape();
 
   // seuil ultrawide demandé
@@ -787,15 +787,20 @@ function applyBucket(){
     baseRowsPrimary = 2;
 
   } else if (isTabletPortrait) {
-    // 2 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
-    baseCols = 3;
+    // 👉 Si portrait "court" (<1000px de haut) : PAS de fillers latéraux → 2 colonnes plein cadre
+    if (isShortPortrait()){
+      baseCols = 2;                      // = nb de colonnes "contenu" → offset 0, aucun filler
+    } else {
+      // Portrait tablette "grand" : 2 colonnes de contenu centrées avec ½ colonne de chaque côté
+      baseCols = 3;
+    }
     baseRowsPrimary = b?.grid.rows || 3;
 
   } else if (!isPhonePortrait) {
     // Desktop / autres cas
     if (aspect >= ULTRAWIDE_AR) {
-      // ➜ ≥ 22:9 : 4 colonnes de contenu + 2 colonnes de marge de chaque côté
-      baseCols = 8;                         // offset = (8 - 4)/2 = 2 colonnes de marge par côté
+      // ≥ 22:9 : 4 colonnes de contenu + 2 colonnes de marge de chaque côté
+      baseCols = 8;
       baseRowsPrimary = b?.grid.rows || 2;
     } else if (config.baseColsOverride != null) {
       baseCols = Math.max(1, config.baseColsOverride);
@@ -826,14 +831,15 @@ function applyBucket(){
 
   // Profondeur: on traite téléphone ET tablettes portrait comme "mobile-like"
   const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
-                                  : (prefersReducedMotion ? 5 : 7);
+  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
+                                    : (prefersReducedMotion ? 5 : 7);
 
   // Désactive le raffinage “D2 → plus petit” en mobile-like
   config.refineChanceD2 = portraitMobileLike ? 0.0 : 0.55;
 
   updateScrollDocHeight();
 }
+
 
 
   
@@ -1012,11 +1018,13 @@ const D1_EXCEPTIONS = new Set();
 
   
 function contentOffsetColsForBucket(){
-  // Centre le "contenu" (2 ou 4 colonnes selon le bucket) dans la grille totale.
-  // Ex. tablette portrait: baseCols = 3, contentCols = 2 => offset = 0.5 (½ colonne à gauche/droite)
+  // En portrait < 1000px de haut : pas d'offset → pas de fillers latéraux
+  if (isShortPortrait()) return 0;
+
   const contentCols = contentColsForBucket();
   return Math.max(0, (baseCols - contentCols) / 2);
 }
+
 
 
 // >>> NEW <<< : nb de colonnes "contenu" selon le bucket
@@ -1031,8 +1039,9 @@ function contentColsForBucket(){
   
   
 function addPrimaryRowSideFillers(row, offsetCols){
-  // Pas de fillers en "mobile-like" ? On les garde pour les tablettes portrait
-  // (on ne les désactive que si tu le souhaites)
+  // Pas de colonnes fillers en portrait "court"
+  if (isShortPortrait()) return;
+
   const { w, contentTop } = getLayoutMetrics();
   const y = contentTop - row * w - w/2;  // centre de la rangée
 
@@ -1064,6 +1073,7 @@ function addPrimaryRowSideFillers(row, offsetCols){
     }
   }
 }
+
 
 
 function updateFractalBase(forceFull = false){
@@ -2223,51 +2233,52 @@ function destroyDomLabel(st){
 }
 
 function rebuildDomLabel(st, label){
-  // stoppe/retire l’ancienne version
+  // Nettoyage ancienne version
   if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
   if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
 
   const layer = document.getElementById('labels-layer');
   if (layer) layer.style.zIndex = '3';
 
-  // crée le DOM du label (3 lignes max, déjà séparées par \n)
+  // DOM du label
   const el = makeDomLabelEl(label);
-  // ancre top-right, pas de layout animé (on animera uniquement transform)
+  // ancre top-right, on n’animera QUE la translation (plus de scale)
   el.style.transformOrigin = '100% 0%';
-  el.style.willChange = 'transform';
   el.style.position = 'absolute';
   el.style.left = '0px';
   el.style.top  = '0px';
+  // petit plus pour la netteté
+  el.style.textRendering = 'optimizeLegibility';
+  el.style.webkitFontSmoothing = 'antialiased';
 
-  // évite tout wrap dynamique pendant l’anim
+  // pas de wrap dynamique pendant l’anim
   el.querySelectorAll('.line').forEach(line => { line.style.whiteSpace = 'nowrap'; });
 
   layer?.appendChild(el);
   st.domLabelEl = el;
   st.labelText = label;
 
-  // Mesure des largeurs "base" (sans scale) : largeur max (bloc) + largeur 1ère ligne
+  // Mesures "base" (à font-size courant, sans transform)
+  const prev = el.style.transform;
+  el.style.transform = 'translate(-10000px,-10000px)'; // 2D ⇒ pas de 3D
   try {
-    // on s’assure de mesurer à scale(1), hors écran (pas de flash)
-    const prev = el.style.transform;
-    el.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
+    const cs = window.getComputedStyle(el);
+    st.baseFontPx = parseFloat(cs.fontSize) || 18;
 
     st.labelBaseWidthPx = Math.ceil(el.getBoundingClientRect().width) || 0;
 
     const firstLineEl = el.querySelector('.line');
-    if (firstLineEl) {
-      st.firstLineBaseWidthPx = Math.ceil(firstLineEl.getBoundingClientRect().width) || 0;
-    } else {
-      st.firstLineBaseWidthPx = st.labelBaseWidthPx || 0;
-    }
-
-    el.style.transform = prev || '';
+    st.firstLineBaseWidthPx = firstLineEl
+      ? Math.ceil(firstLineEl.getBoundingClientRect().width) || 0
+      : (st.labelBaseWidthPx || 0);
   } catch {
+    st.baseFontPx = 18;
     st.labelBaseWidthPx = 0;
     st.firstLineBaseWidthPx = 0;
   }
+  el.style.transform = prev || '';
 
-  // pas de baffle en mobile ; desktop ok (n’affecte pas notre mesure)
+  // Baffle seulement hors mobile
   if (!isMobileBucket() && window.baffle){
     const lines = Array.from(el.querySelectorAll('.line'));
     st.baffles = lines.map(line =>
@@ -2285,34 +2296,35 @@ function updateDomLabelLayout(st, lm){
 
   const { w } = lm;
 
-  // Taille et position "affichées" du carré (après lerp)
+  // Taille/position "affichées" du carré (après lerp)
   const dispS = Math.max(0, st.mesh.scale.x);
   const half  = dispS / 2;
   const dispX = st.mesh.position.x;
   const dispY = st.mesh.position.y;
 
-  // --- marges internes (pourcentage fixe du côté du carré) ---
-  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2)); // = 1/16 si 6
-  const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2)); // = 1/16 si 6
-
+  // Marges internes (en % de la tuile)
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+  const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
   const mRightWorld = dispS * marginPctRight;
   const mTopWorld   = dispS * marginPctTop;
 
-  // Coin haut-droit intérieur du carré (où on ancre le texte)
+  // Coin haut-droit intérieur (ancre du texte)
   const tx = dispX + half - mRightWorld;
   const ty = dispY + half - mTopWorld;
 
-  // Monde → pixels pour calculer l’espace dispo horizontal
+  // Monde → pixels pour la place horizontale disponible
   const pxPerWorldX   = window.innerWidth / (camera.right - camera.left);
   const squareWidthPx = dispS * pxPerWorldX;
   const marginPx      = mRightWorld * pxPerWorldX;
-  const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx); // marge exclue
+  const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx);
 
-  // (re)mesure si la fonte a fini de charger après coup
+  // (Re)mesures si besoin
   if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
     const prev = st.domLabelEl.style.transform;
-    st.domLabelEl.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
+    st.domLabelEl.style.transform = 'translate(-10000px,-10000px)';
     try {
+      const cs = window.getComputedStyle(st.domLabelEl);
+      st.baseFontPx = parseFloat(cs.fontSize) || 18;
       st.labelBaseWidthPx = Math.ceil(st.domLabelEl.getBoundingClientRect().width) || 0;
       const firstLineEl = st.domLabelEl.querySelector('.line');
       st.firstLineBaseWidthPx = firstLineEl
@@ -2322,17 +2334,26 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.transform = prev || '';
   }
 
-  // --- ÉCHELLE GLOBALE UNIFORME basée sur "Creative" = 66% ---
-  // si la réf n’est pas dispo, on garde un fallback propre.
-  const uniformScale = ensureGlobalLabelScale(lm) ?? 1;
+  // --- Calcul du font-size ---
+  // 1) Essaye d'utiliser le font-size GLOBAL (uniforme) basé sur "Creative"
+  let uniformFontPx = ensureGlobalLabelFontPx(lm);
 
-  // clamp de sécurité (ne JAMAIS dépasser l’espace utile)
-  const maxScaleToFit = st.labelBaseWidthPx > 0 ? (availablePx / st.labelBaseWidthPx) : uniformScale;
-  let safeScale = Math.min(uniformScale, maxScaleToFit);
-  // garde-fou lisibilité
-  safeScale = Math.max(0.35, Math.min(8, safeScale));
+  // 2) Sécurité : clamp au max pour rentrer dans la largeur dispo
+  //    La largeur ~ (labelBaseWidthPx / baseFontPx) * fontPx
+  const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
+    ? (st.labelBaseWidthPx / st.baseFontPx)
+    : 0;
 
-  // Couleur / effet hover (inchangé)
+  const fitFontPx = perPx > 0 ? (availablePx / perPx) : (uniformFontPx || st.baseFontPx);
+  let finalFontPx = uniformFontPx ? Math.min(uniformFontPx, fitFontPx) : fitFontPx;
+
+  // Quantification douce + garde-fous lisibilité
+  finalFontPx = Math.round(finalFontPx * 2) / 2; // pas de 0.5px
+  finalFontPx = Math.max(10, Math.min(96, finalFontPx));
+
+  st.domLabelEl.style.fontSize = finalFontPx + 'px';
+
+  // Couleur / effet hover
   if (!isMobileBucket()){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     const inside =
@@ -2348,11 +2369,12 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.color = '#f3f1ee';
   }
 
-  // Positionnement pixel-perfect (ancre haut-droit) + scale uniforme clampé
+  // Positionnement pixel-perfect (ancre haut-droit) — SANS scale ni 3D
   const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
   st.domLabelEl.style.transform =
-    `translate3d(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px, 0) translateX(-100%) scale(${safeScale})`;
+    `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
 }
+
 
 // === Helpers label : "Creative" = 66% de la largeur intérieure du carré ===
 function computeSquareInnerWidthPx(squareSizeWorld){
@@ -2366,56 +2388,66 @@ function computeSquareInnerWidthPx(squareSizeWorld){
   return innerWidthPx;
 }
 
-// Calcule (et mémoïse) une échelle GLOBALE UNIFORME telle que
-// la 1ʳᵉ ligne "Creative" fasse 66% de la largeur intérieure de SON carré.
-function ensureGlobalLabelScale(lm){
-  const cache = scene.userData._labelScaleCache || (scene.userData._labelScaleCache = { scale:null, refSize:0 });
-  const TARGET_RATIO = 0.66;
+function isShortPortrait(){
+  return window.innerHeight < 1000 && window.innerHeight >= window.innerWidth;
+}
+  
+  
+function ensureGlobalLabelFontPx(lm){
+  // Cache simple
+  const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px:null, refSize:0 });
+  const TARGET_RATIO = 0.66; // "Creative" = 66% de la largeur intérieure
 
-  // Trouve le bouton "Creative ..." (clé 'code' dans tes catégories)
+  // Trouve le bouton "Creative ..." (clé 'code')
   let refSt = null;
   for (const st of fractalState.values()){
     if (!st || !st.isButton || !st.domLabelEl || !st.labelText) continue;
     const first = String(st.labelText).split('\n')[0].trim().toLowerCase();
     if (first === 'creative'){ refSt = st; break; }
   }
-  if (!refSt) return cache.scale; // garde l’ancienne si on ne l’a pas encore
+  if (!refSt) return cache.px;
 
-  // Taille visée = taille CIBLE du carré (évite les oscillations pendant le lerp)
+  // Taille visée = taille CIBLE du carré (évite oscillations pendant lerp)
   const refSizeWorld = Math.max(0, (refSt.targetScale?.x || refSt.mesh?.scale?.x || 0));
-  if (!refSizeWorld) return cache.scale;
+  if (!refSizeWorld) return cache.px;
 
-  // (re)mesure au besoin la largeur "base" de la 1ʳᵉ ligne
-  if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0){
+  // Re-mesure au besoin
+  if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0 || !refSt.baseFontPx){
     const el = refSt.domLabelEl;
-    if (el){
-      const prev = el.style.transform;
-      el.style.transform = 'translate3d(-10000px,-10000px,0) scale(1)';
-      try{
-        const firstEl = el.querySelector('.line');
-        refSt.firstLineBaseWidthPx = firstEl
-          ? Math.ceil(firstEl.getBoundingClientRect().width) || 0
-          : Math.ceil(el.getBoundingClientRect().width) || 0;
-      }catch{}
-      el.style.transform = prev || '';
-    }
+    const prev = el.style.transform;
+    el.style.transform = 'translate(-10000px,-10000px)';
+    try{
+      const cs = window.getComputedStyle(el);
+      refSt.baseFontPx = parseFloat(cs.fontSize) || 18;
+      const firstEl = el.querySelector('.line');
+      refSt.firstLineBaseWidthPx = firstEl
+        ? Math.ceil(firstEl.getBoundingClientRect().width) || 0
+        : Math.ceil(el.getBoundingClientRect().width) || 0;
+    }catch{}
+    el.style.transform = prev || '';
   }
-  if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0) return cache.scale;
+  if (!refSt.firstLineBaseWidthPx || !refSt.baseFontPx) return cache.px;
 
-  // Invalide le cache si la taille de référence a changé
-  const needRecalc = (!cache.scale) || Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-4;
+  // Invalidation si la taille de référence change
+  const needRecalc = (!cache.px) || Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-4;
 
   if (needRecalc){
     const innerPx = computeSquareInnerWidthPx(refSizeWorld);
     if (innerPx > 0){
-      let s = (TARGET_RATIO * innerPx) / refSt.firstLineBaseWidthPx;
-      s = Math.max(0.35, Math.min(8, s)); // garde-fous
-      cache.scale = s;
+      // fontPx * (firstLineWidthBase / baseFontPx) ≈ width
+      // On veut TARGET_RATIO * innerPx pour la 1ère ligne
+      const perPx = refSt.firstLineBaseWidthPx / refSt.baseFontPx;
+      let fontPx = (TARGET_RATIO * innerPx) / perPx;
+
+      // quantification douce pour l’hinting
+      fontPx = Math.round(fontPx * 2) / 2; // pas de 0.5px
+      fontPx = Math.max(10, Math.min(96, fontPx));
+
+      cache.px = fontPx;
       cache.refSize = refSizeWorld;
     }
   }
-
-  return cache.scale;
+  return cache.px;
 }
 
 
