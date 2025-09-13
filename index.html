@@ -604,14 +604,12 @@ function getLayoutMetrics(){
     config.borderWidth = onePxWorld;
   }
 
-  // NOTE mobile : le contenu défile SOUS le header
-  // ➜ on plaque le bord haut du contenu sur la grille monde (quantifié au 1px monde)
+  // 📌 Biais : on “floor” au pixel monde → ça pousse très légèrement le contenu vers le bas
   const rawTop = camera.top - headerWorld + scrollOffsetWorld;
-  const contentTop = Math.round(rawTop / onePxWorld) * onePxWorld;
+  const contentTop = Math.floor(rawTop / onePxWorld) * onePxWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
 }
-
 
 
 
@@ -914,6 +912,32 @@ function createMenuPlane(){
   updateMenuGeometry();
 }
 
+createBottomPlinth();
+  
+// --- Plinthe noire en bas de l'écran (masque anti-filet bleu) ---
+function createBottomPlinth(){
+  if (!scene) return;
+  // on réutilise la géométrie/les matériaux existants
+  const m = new THREE.Mesh(geometry, darkMaterial);
+  m.renderOrder = -1;      // sous la grille, au-dessus du fond
+  m.position.z = -0.05;
+  scene.add(m);
+  scene.userData = scene.userData || {};
+  scene.userData._bottomPlinth = m;
+  updateBottomPlinth();
+}
+
+function updateBottomPlinth(){
+  const m = scene?.userData?._bottomPlinth;
+  if (!m) return;
+
+  const { viewWidth, onePxWorld } = getLayoutMetrics();
+  const h = Math.max(2 * onePxWorld, onePxWorld * 1.5); // ≈2px CSS
+
+  m.scale.set(viewWidth, h, 1);
+  m.position.set((camera.left + camera.right) / 2, camera.bottom + h / 2, -0.05);
+}
+  
 
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
@@ -932,6 +956,7 @@ function updateMenuGeometry(){
     layer.style.zIndex = '3';
     document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
   }
+  updateBottomPlinth();
 }
 
 
@@ -1042,12 +1067,11 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
 
 function updateScrollDocHeight(){
-  // Mobile = portrait + tablettes très verticales
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
-  const { viewHeight, w, menuHeight } = getLayoutMetrics();
+  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
 
   // Rangées supplémentaires sous l’écran pour amortir la fin de scroll
   const EXTRA_BOTTOM_ROWS = 3;
@@ -1063,7 +1087,10 @@ function updateScrollDocHeight(){
     contentWorld = totalRows * w;
   }
 
-  const worldTotal = menuHeight + contentWorld;
+  // ➕ 2 px CSS de “sécurité” convertis en monde (évite le filet au tout dernier pixel)
+  const padWorld = 2 * onePxWorld;
+
+  const worldTotal = menuHeight + contentWorld + padWorld;
 
   // Hauteur DOM finale basée sur la hauteur "stable"
   const stableH = STABLE_VP_H || window.innerHeight;
@@ -1074,7 +1101,6 @@ function updateScrollDocHeight(){
 
 
 function onScroll(){
-  // Mobile = portrait + tablettes très verticales
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
   if (!isMobile){
@@ -1088,7 +1114,6 @@ function onScroll(){
     ? mobileWorldContentHeight
     : Math.max(baseRowsPrimary, 5) * w;
 
-  // Utilise la hauteur du spacer (stable) plutôt que scrollHeight (qui bouge sur iOS)
   const spacer = document.getElementById('scroll-spacer');
   const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
   const stableInnerH = STABLE_VP_H || window.innerHeight;
@@ -1096,9 +1121,12 @@ function onScroll(){
 
   const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
 
-  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
+  // ➕ même marge de sécu que dans updateScrollDocHeight
+  const padWorld = 2 * onePxWorld;
 
-  // 🔒 Quantifie au pixel CSS en unités "monde" (évite 1-frame gaps/flash)
+  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight)) + padWorld;
+
+  // 🔒 Quantifie au pixel CSS en unités "monde"
   let raw = t * worldScrollable;
   let quantized = Math.round(raw / onePxWorld) * onePxWorld;
 
@@ -1118,6 +1146,7 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
+
 
 
 
