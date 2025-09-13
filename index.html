@@ -495,6 +495,9 @@ const MOBILE_BTN_OCCLUDER_PAD_PX = 1; // marge d’occlusion (px CSS) autour du 
 
 let mobileWorldContentHeight = 0; // hauteur totale du contenu en "monde" pour mobile
 let instantKill = new Set();      // paths supprimés immédiatement (sans lerp)
+// Verrou des dimensions viewport "acceptées" (évite le re-scale sur micro-resize)
+let STABLE_VP_W = window.innerWidth;
+let STABLE_VP_H = window.innerHeight;
 
 
 
@@ -561,19 +564,23 @@ function getLayoutMetrics(){
 
   const w = viewWidth / baseCols;
 
-  // Mesure exacte du header réel (px -> monde)
+  // Mesure exacte du header réel (px)
   const headerEl = document.getElementById('ui-header');
   const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-  const headerWorld = (headerPx / window.innerHeight) * viewHeight;
 
-  const onePxWorld = viewHeight / window.innerHeight;
+  // IMPORTANT : on projette les px → monde avec la hauteur "stable" acceptée,
+  // pas avec window.innerHeight qui bouge quand la barre d’adresse apparaît/disparaît
+  const pxH = STABLE_VP_H || window.innerHeight;
 
-  // Verrouille la gouttière à 1px CSS
+  const headerWorld = (headerPx / pxH) * viewHeight;
+  const onePxWorld  = viewHeight / pxH;
+
+  // Verrouille la gouttière à 1px CSS en unités monde, de façon STABLE
   if (Math.abs(config.borderWidth - onePxWorld) > 1e-6) {
     config.borderWidth = onePxWorld;
   }
 
-  // NOTE mobile: on AJOUTE le scroll pour faire monter le contenu
+  // NOTE mobile : on AJOUTE le scroll (contenu monte sous le header)
   const contentTop = camera.top - headerWorld + scrollOffsetWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
@@ -903,15 +910,15 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (sans reload + ignore les faux "resize" dus aux barres d’adresse)
+// Resize (sans reload + ignore les faux "resize" dus aux barres d’adresse / scrollbars)
 {
   let lastW = window.innerWidth;
   let lastH = window.innerHeight;
   let raf = 0;
 
-  // La plupart des barres d’adresse mobiles font varier la hauteur d’~50–100 px.
-  // On ignore ces micro-variations si la largeur ne change pas.
-  const MIN_H_DELTA_TO_IGNORE = 120; // px
+  // Seuils :
+  const MIN_H_DELTA_TO_IGNORE = 120; // ignorer les petites variations de hauteur (barre d’adresse)
+  const MIN_W_DELTA_TO_IGNORE = 20;  // ignorer les petites variations de largeur (scrollbar qui apparaît)
 
   function handleResizeNow() {
     raf = 0;
@@ -919,36 +926,53 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    // Toujours adapter la caméra/le renderer à la nouvelle taille
+    const widthChanged  = w !== lastW;
+    const heightChanged = h !== lastH;
+
+    const smallHeightOnly =
+      !widthChanged && heightChanged && Math.abs(h - lastH) < MIN_H_DELTA_TO_IGNORE;
+
+    const smallWidthOnly =
+      widthChanged && !heightChanged && Math.abs(w - lastW) <= MIN_W_DELTA_TO_IGNORE;
+
+    // ⚠️ Cas 1 : micro-changement (barre d'adresse qui bouge, ou scrollbar qui apparaît)
+    // → NE PAS toucher à la caméra ni au renderer (sinon “zoom”).
+    if (smallHeightOnly || smallWidthOnly) {
+      // On garde l’échelle monde ⇄ pixels stable, mais on synchronise l’UI DOM
+      syncCssHeaderHeight();
+      updateMenuGeometry();
+      updateScrollDocHeight();
+      updateFreeOverlays();
+      needsRefineCheck = true;
+
+      lastW = w; lastH = h;
+      return;
+    }
+
+    // ✅ Cas 2 : vrai resize (orientation, breakpoint, fenêtre réellement redimensionnée)
+    // → on accepte la nouvelle taille et on met à jour la caméra/renderer
     const aspect = w / h;
     const height = 10;
     const width  = height * aspect;
+
     camera.left   = -width / 2;
     camera.right  =  width / 2;
     camera.top    =  height / 2;
     camera.bottom = -height / 2;
     camera.updateProjectionMatrix();
+
     renderer.setSize(w, h);
 
+    // Met à jour le "verrou" de dimensions stables (base de conversion px → monde)
+    STABLE_VP_W = w;
+    STABLE_VP_H = h;
+
     updateGrainPlaneSize();
-    syncCssHeaderHeight();   // garde --menu-h en phase
+    syncCssHeaderHeight();
     updateMenuGeometry();
 
     const newBucket = pickBucket(w, h);
 
-    const widthChanged  = w !== lastW;
-    const heightChanged = h !== lastH;
-    const onlySmallHeightChange =
-      !widthChanged && heightChanged && Math.abs(h - lastH) < MIN_H_DELTA_TO_IGNORE;
-
-    // Cas 1 : petit "resize" de hauteur uniquement (barre d’adresse) → pas de rebuild
-    if (onlySmallHeightChange) {
-      updateScrollDocHeight();
-      lastW = w; lastH = h;
-      return;
-    }
-
-    // Cas 2 : vrai changement (orientation, breakpoint, etc.)
     if (newBucket !== currentBucket) {
       currentBucket = newBucket;
       applyBucket();              // recalcule colonnes/rows/params
@@ -957,7 +981,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       lastGridCursorSizeWorld = computeDefaultGridCursorSize();
       needsRefineCheck = true;
     } else {
-      // Même bucket : on remet juste en forme ce qui dépend de la taille
+      // Même bucket : juste réaligner ce qui dépend de la taille réelle
       updateScrollDocHeight();
       updateFreeOverlays();
       needsRefineCheck = true;
@@ -972,12 +996,11 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
   }
 
   window.addEventListener('resize', onResize, { passive: true });
-
-  // Certains navigateurs déclenchent aussi via visualViewport
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', onResize, { passive: true });
   }
 }
+
 
 
 function updateScrollDocHeight(){
