@@ -365,6 +365,7 @@ function worldToClientXY(v3){
   };
 }
 
+
 function makeDomLabelEl(text){
   const el = document.createElement('div');
   el.className = 'hover-label';
@@ -610,6 +611,7 @@ function getLayoutMetrics(){
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
 }
+
 
 
 
@@ -1090,7 +1092,7 @@ function onScroll(){
   let raw = t * worldScrollable;
   let quantized = Math.round(raw / onePxWorld) * onePxWorld;
 
-  // Clamps forts en haut/bas (résout le petit gap bleu en revenant en haut)
+  // Clamps forts en haut/bas
   if (window.scrollY <= 0.5) quantized = 0;
   if (window.scrollY >= maxScrollPx - 0.5) quantized = worldScrollable;
 
@@ -1106,6 +1108,7 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
+
 
 
 
