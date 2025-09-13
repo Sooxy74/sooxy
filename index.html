@@ -571,12 +571,11 @@ function getLayoutMetrics(){
 
   const w = viewWidth / baseCols;
 
-  // Mesure exacte du header réel (px)
+  // Mesure exacte du header (px CSS arrondi au px)
   const headerEl = document.getElementById('ui-header');
   const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
 
-  // IMPORTANT : on projette les px → monde avec la hauteur "stable" acceptée,
-  // pas avec window.innerHeight qui bouge quand la barre d’adresse apparaît/disparaît
+  // Base de conversion px→monde : hauteur "stable" (évite les sauts iOS)
   const pxH = STABLE_VP_H || window.innerHeight;
 
   const headerWorld = (headerPx / pxH) * viewHeight;
@@ -587,11 +586,14 @@ function getLayoutMetrics(){
     config.borderWidth = onePxWorld;
   }
 
-  // NOTE mobile : on AJOUTE le scroll (contenu monte sous le header)
-  const contentTop = camera.top - headerWorld + scrollOffsetWorld;
+  // NOTE mobile : le contenu défile SOUS le header
+  // ➜ on plaque le bord haut du contenu sur la grille monde (quantifié au 1px monde)
+  const rawTop = camera.top - headerWorld + scrollOffsetWorld;
+  const contentTop = Math.round(rawTop / onePxWorld) * onePxWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
 }
+
 
 
 
@@ -1018,8 +1020,8 @@ function updateScrollDocHeight(){
 
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
-  // Rangées supplémentaires sous l’écran pour la marge de fin de scroll
-  const EXTRA_BOTTOM_ROWS = 2;
+  // Rangées supplémentaires sous l’écran pour amortir la fin de scroll
+  const EXTRA_BOTTOM_ROWS = 3;
 
   let contentWorld;
   if (isMobile){
@@ -1028,14 +1030,15 @@ function updateScrollDocHeight(){
       : Math.max(baseRowsPrimary, 5) * w;
     contentWorld += EXTRA_BOTTOM_ROWS * w;
   } else {
-    const totalRows = baseRowsPrimary;
-    contentWorld = totalRows * w + EXTRA_BOTTOM_ROWS * w;
+    const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS;
+    contentWorld = totalRows * w;
   }
 
   const worldTotal = menuHeight + contentWorld;
 
-  // On reste dans l’espace DOM courant pour éviter les rebonds
-  const docPx = Math.max(window.innerHeight, Math.ceil((worldTotal / viewHeight) * window.innerHeight));
+  // Hauteur DOM finale basée sur la hauteur "stable"
+  const stableH = STABLE_VP_H || window.innerHeight;
+  const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
   spacer.style.height = docPx + 'px';
 }
 
@@ -1056,14 +1059,24 @@ function onScroll(){
     ? mobileWorldContentHeight
     : Math.max(baseRowsPrimary, 5) * w;
 
-  const maxScrollPx = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  const t = maxScrollPx > 0 ? window.scrollY / maxScrollPx : 0;
+  // Utilise la hauteur du spacer (stable) plutôt que scrollHeight (qui bouge sur iOS)
+  const spacer = document.getElementById('scroll-spacer');
+  const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
+  const stableInnerH = STABLE_VP_H || window.innerHeight;
+  const maxScrollPx = Math.max(0, spacerPx - stableInnerH);
+
+  const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
 
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
 
-  // 🔒 Quantifie au pixel CSS (en unités "monde") pour éviter les micro-gaps
-  const raw = t * worldScrollable;
-  const quantized = Math.round(raw / onePxWorld) * onePxWorld;
+  // 🔒 Quantifie au pixel CSS en unités "monde" (évite 1-frame gaps/flash)
+  let raw = t * worldScrollable;
+  let quantized = Math.round(raw / onePxWorld) * onePxWorld;
+
+  // Clamps forts en haut/bas (résout le petit gap bleu en revenant en haut)
+  if (window.scrollY <= 0.5) quantized = 0;
+  if (window.scrollY >= maxScrollPx - 0.5) quantized = worldScrollable;
+
   scrollOffsetWorld = Math.max(0, Math.min(worldScrollable, quantized));
 
   // Maintien du curseur ancré pendant le scroll
@@ -1193,7 +1206,7 @@ function updateFractalBase(forceFull = false){
   }
 
   // ➕ rangées supplémentaires sous l’écran pour avoir de la marge en bas
-  const EXTRA_BOTTOM_ROWS = 2;
+  const EXTRA_BOTTOM_ROWS = 3;
 
   // 1) Construction de la grille de base (content + fillers)
   const FORCE_D1 = new Set();
@@ -1273,6 +1286,7 @@ function updateFractalBase(forceFull = false){
 
   return okButtons;
 }
+
 
 
 // --- REMPLACEMENT COMPLET ---
