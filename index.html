@@ -604,12 +604,14 @@ function getLayoutMetrics(){
     config.borderWidth = onePxWorld;
   }
 
-  // 📌 Biais : on “floor” au pixel monde → ça pousse très légèrement le contenu vers le bas
+  // NOTE mobile : le contenu défile SOUS le header
+  // ➜ on plaque le bord haut du contenu sur la grille monde (quantifié au 1px monde)
   const rawTop = camera.top - headerWorld + scrollOffsetWorld;
-  const contentTop = Math.floor(rawTop / onePxWorld) * onePxWorld;
+  const contentTop = Math.round(rawTop / onePxWorld) * onePxWorld;
 
   return { viewHeight, viewWidth, w, menuHeight: headerWorld, contentTop, onePxWorld };
 }
+
 
 
 
@@ -912,32 +914,6 @@ function createMenuPlane(){
   updateMenuGeometry();
 }
 
-createBottomPlinth();
-  
-// --- Plinthe noire en bas de l'écran (masque anti-filet bleu) ---
-function createBottomPlinth(){
-  if (!scene) return;
-  // on réutilise la géométrie/les matériaux existants
-  const m = new THREE.Mesh(geometry, darkMaterial);
-  m.renderOrder = -1;      // sous la grille, au-dessus du fond
-  m.position.z = -0.05;
-  scene.add(m);
-  scene.userData = scene.userData || {};
-  scene.userData._bottomPlinth = m;
-  updateBottomPlinth();
-}
-
-function updateBottomPlinth(){
-  const m = scene?.userData?._bottomPlinth;
-  if (!m) return;
-
-  const { viewWidth, onePxWorld } = getLayoutMetrics();
-  const h = Math.max(2 * onePxWorld, onePxWorld * 1.5); // ≈2px CSS
-
-  m.scale.set(viewWidth, h, 1);
-  m.position.set((camera.left + camera.right) / 2, camera.bottom + h / 2, -0.05);
-}
-  
 
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
@@ -956,7 +932,6 @@ function updateMenuGeometry(){
     layer.style.zIndex = '3';
     document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
   }
-  updateBottomPlinth();
 }
 
 
@@ -1066,31 +1041,33 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 })();
 
 
+// 🔁 Remplacement complet
 function updateScrollDocHeight(){
+  // Mobile = portrait + tablettes très verticales
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
-  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
+  const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
-  // Rangées supplémentaires sous l’écran pour amortir la fin de scroll
-  const EXTRA_BOTTOM_ROWS = 3;
+  // + de marge en bas sur mobile (débord hors écran)
+  const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
+  const EXTRA_BOTTOM_ROWS_MOBILE  = 6;
 
   let contentWorld;
   if (isMobile){
     contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
-    contentWorld += EXTRA_BOTTOM_ROWS * w;
+
+    // surplus qui « sort » de l’écran pour créer une marge
+    contentWorld += EXTRA_BOTTOM_ROWS_MOBILE * w;
   } else {
-    const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS;
+    const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS_DESKTOP;
     contentWorld = totalRows * w;
   }
 
-  // ➕ 2 px CSS de “sécurité” convertis en monde (évite le filet au tout dernier pixel)
-  const padWorld = 2 * onePxWorld;
-
-  const worldTotal = menuHeight + contentWorld + padWorld;
+  const worldTotal = menuHeight + contentWorld;
 
   // Hauteur DOM finale basée sur la hauteur "stable"
   const stableH = STABLE_VP_H || window.innerHeight;
@@ -1100,7 +1077,9 @@ function updateScrollDocHeight(){
 
 
 
+
 function onScroll(){
+  // Mobile = portrait + tablettes très verticales
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
   if (!isMobile){
@@ -1114,6 +1093,7 @@ function onScroll(){
     ? mobileWorldContentHeight
     : Math.max(baseRowsPrimary, 5) * w;
 
+  // Utilise la hauteur du spacer (stable) plutôt que scrollHeight (qui bouge sur iOS)
   const spacer = document.getElementById('scroll-spacer');
   const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
   const stableInnerH = STABLE_VP_H || window.innerHeight;
@@ -1121,12 +1101,9 @@ function onScroll(){
 
   const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
 
-  // ➕ même marge de sécu que dans updateScrollDocHeight
-  const padWorld = 2 * onePxWorld;
+  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
 
-  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight)) + padWorld;
-
-  // 🔒 Quantifie au pixel CSS en unités "monde"
+  // 🔒 Quantifie au pixel CSS en unités "monde" (évite 1-frame gaps/flash)
   let raw = t * worldScrollable;
   let quantized = Math.round(raw / onePxWorld) * onePxWorld;
 
@@ -1146,7 +1123,6 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
-
 
 
 
@@ -1253,6 +1229,7 @@ function addPrimaryRowSideFillers(row, offsetCols){
 }
 
 
+// 🔁 Remplacement complet
 function updateFractalBase(forceFull = false){
   targetState.clear();
 
@@ -1264,8 +1241,9 @@ function updateFractalBase(forceFull = false){
     return true;
   }
 
-  // ➕ rangées supplémentaires sous l’écran pour avoir de la marge en bas
-  const EXTRA_BOTTOM_ROWS = 3;
+  // + de rangées en bas pour le « débord » mobile
+  const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
+  const EXTRA_BOTTOM_ROWS_MOBILE  = 6;
 
   // 1) Construction de la grille de base (content + fillers)
   const FORCE_D1 = new Set();
@@ -1273,7 +1251,7 @@ function updateFractalBase(forceFull = false){
   (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
   (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-  // Nombre de rangées à générer
+  // Nombre de rangées à générer (écran + « rab »)
   let totalRows;
   if (isMobileBucket()){
     if (mobileWorldContentHeight && mobileWorldContentHeight > 0){
@@ -1287,8 +1265,8 @@ function updateFractalBase(forceFull = false){
     totalRows = Math.max(baseRowsPrimary, visibleRows);
   }
 
-  // 🔽 Ajout de filler off-screen en bas
-  totalRows += EXTRA_BOTTOM_ROWS;
+  // 🔽 Ajout de filler off-screen en bas (dynamique selon le format)
+  totalRows += isMobileBucket() ? EXTRA_BOTTOM_ROWS_MOBILE : EXTRA_BOTTOM_ROWS_DESKTOP;
 
   const offsetCols = contentOffsetColsForBucket();
   const contentCols = contentColsForBucket();
@@ -1323,7 +1301,7 @@ function updateFractalBase(forceFull = false){
     ensureMinDepth2Cells(requiredD2, WANT_D1, protectedD1Paths);
   }
 
-  // 3) Pattern mobile-like : casser les D1 en D2
+  // 3) Pattern mobile-like : casser les D1 en D2 (content + fillers)
   if (isMobileBucket()){
     forceMobilePattern();
   }
@@ -1331,12 +1309,12 @@ function updateFractalBase(forceFull = false){
   // 4) Boutons/Images
   const okButtons = chooseButtonsThenImages(forceFull);
 
-  // 4bis) Mobile-like : occlusion et cutout sous les boutons/images
+  // 4bis) Mobile-like : occlusion et cutout sous boutons/images
   if (okButtons && isMobileBucket()){
     cutOutUnderButtons();
   }
 
-  // 5) Raffinements d’ambiance
+  // 5) Raffinements d’ambiance (plus d’ops en mobile)
   sprinkleRefinements(isMobileBucket() ? 128 : 24);
 
   if (!isMobileBucket()){
@@ -1345,7 +1323,6 @@ function updateFractalBase(forceFull = false){
 
   return okButtons;
 }
-
 
 
 // --- REMPLACEMENT COMPLET ---
@@ -2082,6 +2059,7 @@ function buildMobileButtonsDeterministic(){
 
 
 
+// 🔁 Remplacement complet
 function sprinkleRefinements(maxOps = 24){
   const { w, contentTop } = getLayoutMetrics();
   const isMobileLike = isMobileBucket();
@@ -2118,7 +2096,6 @@ function sprinkleRefinements(maxOps = 24){
         front.push({ path, s });
       }
     }
-    // tri avec salt variable → motifs différents à chaque refresh
     front.sort((a, b) => saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
 
     for (const it of front){
@@ -2137,20 +2114,23 @@ function sprinkleRefinements(maxOps = 24){
     }
   }
 
-  // -------- PASS 2 : ambiance générale (inclut bien les rangées "filler")
+  // -------- PASS 2 : ambiance générale
+  // ⚠️ en mobile-like on AUTORISE la subdivision des D2 uniquement pour les rangées "filler/*"
   const candidates = [];
   for (const [path, s] of targetState.entries()){
     if (!isMobileLike && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
     if (imageCells.has(path) || buttonCells.has(path)) continue;
     if (s.depth >= TARGET_DEPTH) continue;
 
-    // en mobile-like on évite de retoucher les D2 (boutons)
-    if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) continue;
+    if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6){
+      // D2 : garder intouchés les carrés des lignes "content" (proches des boutons),
+      // mais autoriser le bas de page ("filler") à se subdiviser pour donner de la matière.
+      if (!path.startsWith('filler/')) continue;
+    }
 
     candidates.push({ path, s });
   }
 
-  // tri avec le salt "all" (change à chaque refresh)
   candidates.sort((a, b) => saltedKey(a.path, saltAll) - saltedKey(b.path, saltAll));
 
   for (const it of candidates){
