@@ -204,34 +204,33 @@
   white-space: nowrap;       /* idem, pas de wrap */
 }
 
-/* === Faux pied de page — version GPU (transform) === */
 #mobile-footer{
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  height: 320px;                 /* hauteur max attendue de l'URL bar */
-  background: #0e1011;           /* gris/noir */
-  border-top: 1px solid #0055ff; /* liseré bleu */
-  pointer-events: none;
-  z-index: 3;
-  transform: translateY(320px);  /* totalement masqué au démarrage */
-  transition: transform .12s ease-out; /* seulement pour la fermeture */
-  will-change: transform;
-  padding-bottom: env(safe-area-inset-bottom, 0);
-  backface-visibility: hidden;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 320px;
+    background: #11190c; /* La même couleur que le carré de la grille */
+    border-top: 1px solid #0055ff; /* Liseré bleu pour la cohérence */
+    pointer-events: none;
+    z-index: 3;
+    transform: translateY(320px);
+    transition: transform .12s ease-out;
+    will-change: transform;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    backface-visibility: hidden;
 }
 
 #mobile-footer::before{
-  content: "";
-  position: absolute; inset: 0;
-  opacity: .18; /* grain */
-  background-image:
-    repeating-linear-gradient(45deg,
-      rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 2px,
-      transparent 2px, transparent 4px),
-    repeating-linear-gradient(-45deg,
-      rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 1px,
-      transparent 1px, transparent 3px);
-  mix-blend-mode: normal;
+    content: "";
+    position: absolute; inset: 0;
+    opacity: 1; /* Le grain est déjà inclus dans la couleur de fond des carrés */
+    background-image:
+        repeating-linear-gradient(45deg,
+            rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 2px,
+            transparent 2px, transparent 4px),
+        repeating-linear-gradient(-45deg,
+            rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 1px,
+            transparent 1px, transparent 3px);
+    mix-blend-mode: normal;
 }
 
   
@@ -1028,8 +1027,37 @@ function createMenuPlane(){
   }
 })();
 
+// Helper: calcule l'offset monde attendu à partir du scrollY courant (quantifié au px monde)
+function computeScrollOffsetWorldFromScrollY(){
+  // Mobile-like = mobile portrait + tablettes portrait
+  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  if (!isMobile) return 0;
 
-  
+  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
+
+  const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
+    ? mobileWorldContentHeight
+    : Math.max(baseRowsPrimary, 5) * w;
+
+  // Utilise le spacer "stable"
+  const spacer = document.getElementById('scroll-spacer');
+  const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
+  const stableInnerH = STABLE_VP_H || window.innerHeight;
+  const maxScrollPx = Math.max(0, spacerPx - stableInnerH);
+
+  const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
+  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
+
+  let raw = t * worldScrollable;
+  let quantized = Math.round(raw / onePxWorld) * onePxWorld;
+
+  if (window.scrollY <= 0.5) quantized = 0;
+  if (window.scrollY >= maxScrollPx - 0.5) quantized = worldScrollable;
+
+  return Math.max(0, Math.min(worldScrollable, quantized));
+}
+
+ 
 
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
@@ -1085,13 +1113,12 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
   function handleResizeNow() {
     raf = 0;
-    
-    // synchro du faux footer AVANT tout le reste
+
+    // synchro éventuelle du faux footer AVANT tout le reste
     if (typeof window.__updateMobileFooter === 'function'){
       window.__updateMobileFooter();
-}
+    }
 
-    
     const { w, h } = snapshotViewport();
     const dw = Math.abs(w - lastW);
     const dh = Math.abs(h - lastH);
@@ -1103,12 +1130,24 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
     if (!orientationFlip && (smallBoth || smallHeightOnly)) {
       // ➜ Jiggle : on garde taille stable, on recalcule juste la géométrie
+      //    et on COMPENSE le nouvel offset monde pour figer le curseur.
+      const prevWorld = scrollOffsetWorld;                 // mémorise l'offset monde actuel
+
       syncCssHeaderHeight();
       updateMenuGeometry();
       updateScrollDocHeight();
       updateFreeOverlays();
-      callFooterUpdate();     // <<<<<<<<<<<<<< NOUVEAU : sync du faux footer
+      callFooterUpdate();
       needsRefineCheck = true;
+
+      // Recalcule l’offset monde issu du scrollY courant
+      const nextWorld = computeScrollOffsetWorldFromScrollY();
+      scrollOffsetWorld = nextWorld;
+
+      // Si un curseur ancré est affiché, on ajuste l’ancre pour que mobDelta ne change pas
+      if (mouseSquare?.userData?.anchor){
+        mobileBuildScrollAt += (nextWorld - prevWorld);
+      }
 
       lastW = w; lastH = h;
       return;
@@ -1133,7 +1172,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     updateGrainPlaneSize();
     syncCssHeaderHeight();
     updateMenuGeometry();
-    callFooterUpdate();       // <<<<<<<<<<<<<< NOUVEAU : sync du faux footer
+    callFooterUpdate();
 
     const newBucket = pickBucket(w, h);
     if (newBucket !== currentBucket) {
@@ -1164,6 +1203,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     visualViewport.addEventListener('scroll', onResize, { passive: true });
   }
 })();
+
 
 
 
@@ -1200,7 +1240,7 @@ function updateScrollDocHeight(){
 
 
 function onScroll(){
-  // Mobile = portrait + tablettes très verticales
+  // Mobile-like = portrait mobile + tablettes portrait
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
   if (!isMobile){
@@ -1208,33 +1248,14 @@ function onScroll(){
     return;
   }
 
-  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
+  // Sauve l’offset monde actuel pour pouvoir compenser le jiggle si besoin
+  const prevWorld = scrollOffsetWorld;
 
-  const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
-    ? mobileWorldContentHeight
-    : Math.max(baseRowsPrimary, 5) * w;
+  // Nouveau mapping depuis le scrollY courant (quantifié au px monde)
+  const nextWorld = computeScrollOffsetWorldFromScrollY();
+  scrollOffsetWorld = nextWorld;
 
-  // Utilise la hauteur du spacer (stable) plutôt que scrollHeight (qui bouge sur iOS)
-  const spacer = document.getElementById('scroll-spacer');
-  const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
-  const stableInnerH = STABLE_VP_H || window.innerHeight;
-  const maxScrollPx = Math.max(0, spacerPx - stableInnerH);
-
-  const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
-
-  const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
-
-  // 🔒 Quantifie au pixel CSS en unités "monde" (évite 1-frame gaps/flash)
-  let raw = t * worldScrollable;
-  let quantized = Math.round(raw / onePxWorld) * onePxWorld;
-
-  // Clamps forts en haut/bas
-  if (window.scrollY <= 0.5) quantized = 0;
-  if (window.scrollY >= maxScrollPx - 0.5) quantized = worldScrollable;
-
-  scrollOffsetWorld = Math.max(0, Math.min(worldScrollable, quantized));
-
-  // Maintien du curseur ancré pendant le scroll
+  // Maintien du curseur ancré pendant le scroll (y compris quand l’URL bar bouge)
   const a = mouseSquare?.userData?.anchor;
   if (a){
     const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
@@ -1244,8 +1265,6 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
-
-
 
 
 
