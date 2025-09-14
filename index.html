@@ -896,9 +896,9 @@ function applyBucket(){
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
-  // Profondeur: on traite téléphone ET tablettes portrait comme "mobile-like"
+  // Profondeur — CAP portrait -1 niveau (et on respecte prefers-reduced-motion)
   const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 4 : 6)
+  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
                                     : (prefersReducedMotion ? 5 : 7);
 
   // Désactive le raffinage “D2 → plus petit” en mobile-like
@@ -906,6 +906,7 @@ function applyBucket(){
 
   updateScrollDocHeight();
 }
+
 
 
 
@@ -1268,20 +1269,40 @@ function resetFractalRandom(){
 }
 function createQuadTree(x, y, size, depth, path, maxDepthOverride=-1){
   const noiseVal = (noise2D(x*config.noiseScale, y*config.noiseScale)+1)/2;
-  const regionalMaxDepth = maxDepthOverride !== -1 ? maxDepthOverride : config.minDepth + Math.floor(noiseVal * config.maxDepthVariation);
+
+  // Profondeur régionale (bruit)…
+  const baseRegional = (maxDepthOverride !== -1)
+    ? maxDepthOverride
+    : (config.minDepth + Math.floor(noiseVal * config.maxDepthVariation));
+
+  // …CAP global : ne jamais dépasser TARGET_DEPTH (abaissé de 1 en formats verticaux)
+  const hardCap = (typeof TARGET_DEPTH === 'number' && TARGET_DEPTH > 0)
+    ? TARGET_DEPTH
+    : baseRegional;
+
+  const regionalMaxDepth = Math.min(baseRegional, hardCap);
+
   const currentProbability = config.initialProbabilityToSubdivide - depth * config.depthDecayFactor;
-  const stop = depth >= regionalMaxDepth || (depth>0 && Math.random()>currentProbability) || size/2 <= config.borderWidth;
+  const stop =
+    depth >= regionalMaxDepth ||
+    (depth > 0 && Math.random() > currentProbability) ||
+    size / 2 <= config.borderWidth;
+
   if (stop){
     const scale = size - config.borderWidth;
-    if (scale > 0) targetState.set(path, { x, y, size:scale, depth, path, originalSize:size });
+    if (scale > 0){
+      targetState.set(path, { x, y, size: scale, depth, path, originalSize: size });
+    }
     return;
   }
-  const ns = size/2, o = size/4, d = depth+1;
-  createQuadTree(x-o, y+o, ns, d, path+'/0', maxDepthOverride);
-  createQuadTree(x+o, y+o, ns, d, path+'/1', maxDepthOverride);
-  createQuadTree(x-o, y-o, ns, d, path+'/2', maxDepthOverride);
-  createQuadTree(x+o, y-o, ns, d, path+'/3', maxDepthOverride);
+
+  const ns = size / 2, o = size / 4, d = depth + 1;
+  createQuadTree(x - o, y + o, ns, d, path + '/0', maxDepthOverride);
+  createQuadTree(x + o, y + o, ns, d, path + '/1', maxDepthOverride);
+  createQuadTree(x - o, y - o, ns, d, path + '/2', maxDepthOverride);
+  createQuadTree(x + o, y - o, ns, d, path + '/3', maxDepthOverride);
 }
+
 
 // On conçoit le contenu sur 4 colonnes "virtuelles" (preset desktop-16:9)
 // Colonnes "centrales" où w est interdit (Motion = col 1, Creative Coding = col 2)
