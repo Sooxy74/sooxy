@@ -203,6 +203,35 @@
   line-height: 1.6667;
   white-space: nowrap;       /* idem, pas de wrap */
 }
+
+/* === Faux pied de page mobile pour masquer la bande bleue === */
+#mobile-footer{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 0;                 /* ajusté en JS */
+  background: #0e1011;       /* gris/noir foncé */
+  border-top: 1px solid #0055ff; /* stroke bleu (même que le fond) */
+  pointer-events: none;      /* pure déco, pas cliquable */
+  z-index: 3;                /* > canvas (1) / < labels (5) / < header (4) */
+  transition: height .18s ease;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+#mobile-footer::before{
+  content: "";
+  position: absolute; inset: 0;
+  opacity: .18;              /* grain léger */
+  /* pseudo-grain "maison" (double cross-hatch) */
+  background-image:
+    repeating-linear-gradient(45deg,
+      rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 2px,
+      transparent 2px, transparent 4px),
+    repeating-linear-gradient(-45deg,
+      rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 1px,
+      transparent 1px, transparent 3px);
+  mix-blend-mode: normal;
+}
+  
   
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
 </style>
@@ -914,6 +943,59 @@ function createMenuPlane(){
   updateMenuGeometry();
 }
 
+/* === MOBILE FOOTER — création + mise à jour pilotée par visualViewport === */
+(function installMobileFooter(){
+  const ID = 'mobile-footer';
+  let el = document.getElementById(ID);
+  if (!el){
+    el = document.createElement('div');
+    el.id = ID;
+    el.setAttribute('aria-hidden','true');
+    document.body.appendChild(el);
+  }
+
+  function updateMobileFooter(){
+    // On ne l’affiche que sur les écrans sous-desktop (<=1024) — portrait ou paysage
+    const isUnderDesktop = Math.min(window.innerWidth, window.innerHeight) <= 1024;
+
+    const vv = window.visualViewport;
+    const layoutH = (typeof STABLE_VP_H === 'number' && STABLE_VP_H > 0)
+      ? STABLE_VP_H
+      : window.innerHeight;
+
+    let extra = 0;
+    if (vv){
+      // Partie "visuelle" réellement montrée = vv.height + vv.offsetTop
+      // Si ça dépasse la hauteur "stable", il reste un trou à combler en bas
+      const vvBottom = Math.round(vv.height + (vv.offsetTop || 0));
+      extra = Math.max(0, vvBottom - layoutH);
+    }
+
+    // Quantification au pixel (évite le shimmer)
+    const h = Math.round(extra);
+
+    if (!isUnderDesktop || h <= 0){
+      el.style.height = '0px';
+      el.style.display = 'none';
+    } else {
+      el.style.display = 'block';
+      el.style.height = h + 'px';
+    }
+  }
+
+  // On exporte doucement pour pouvoir rappeler depuis ailleurs si besoin
+  window.__updateMobileFooter = updateMobileFooter;
+
+  // Premier calcul + listeners (inclut les événements propres au visualViewport)
+  updateMobileFooter();
+  window.addEventListener('resize', updateMobileFooter, { passive: true });
+  window.addEventListener('orientationchange', updateMobileFooter, { passive: true });
+  if (window.visualViewport){
+    visualViewport.addEventListener('resize', updateMobileFooter, { passive: true });
+    visualViewport.addEventListener('scroll', updateMobileFooter, { passive: true });
+  }
+})();
+  
 
 function updateMenuGeometry(){
   const { viewWidth, menuHeight } = getLayoutMetrics();
@@ -938,15 +1020,15 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (stabilisé iOS URL bar) — remplace tout l'ancien bloc
+// Resize (stabilisé iOS URL bar) — REMPLACEMENT COMPLET
 (function installStableResizeHandlers(){
   let lastW = Math.round(window.visualViewport?.width  || window.innerWidth);
   let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
   let raf = 0;
 
   // Seuils "micro-bouge" (iOS URL bar)
-  const WIDTH_JIGGLE  = 32;   // petites variations de largeur (safe areas, scrollbar)
-  const HEIGHT_JIGGLE = 200;  // grandes variations de hauteur acceptées comme "jiggle"
+  const WIDTH_JIGGLE  = 32;
+  const HEIGHT_JIGGLE = 200;
 
   function snapshotViewport(){
     return {
@@ -961,6 +1043,12 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     return prevPortrait !== nowPortrait;
   }
 
+  function callFooterUpdate(){
+    if (typeof window.__updateMobileFooter === 'function'){
+      window.__updateMobileFooter();
+    }
+  }
+
   function handleResizeNow() {
     raf = 0;
 
@@ -970,25 +1058,23 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
     const orientationFlip = isOrientationFlip(lastW, lastH, w, h);
 
-    // Cas "jiggle" de viewport (barre d’URL iOS qui s’anime) :
-    // - petits changements de largeur ET de hauteur
-    // - ou hauteur qui bouge mais largeur quasi stable
     const smallBoth       = dw <= WIDTH_JIGGLE  && dh <= HEIGHT_JIGGLE;
     const smallHeightOnly = dw <= WIDTH_JIGGLE  && dh > 0 && dh <= HEIGHT_JIGGLE;
 
     if (!orientationFlip && (smallBoth || smallHeightOnly)) {
-      // ➜ on ne touche pas à la caméra/renderer/STABLE_VP_*
+      // ➜ Jiggle : on garde taille stable, on recalcule juste la géométrie
       syncCssHeaderHeight();
       updateMenuGeometry();
       updateScrollDocHeight();
       updateFreeOverlays();
+      callFooterUpdate();     // <<<<<<<<<<<<<< NOUVEAU : sync du faux footer
       needsRefineCheck = true;
 
       lastW = w; lastH = h;
       return;
     }
 
-    // VRAI resize (rotation, changement de largeur réel, split view, etc.)
+    // VRAI resize (rotation, split view, etc.)
     const aspect = w / h;
     const height = 10;
     const width  = height * aspect;
@@ -1001,13 +1087,13 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
     renderer.setSize(w, h);
 
-    // Verrou stable pour toutes les conversions px↔monde
     STABLE_VP_W = w;
     STABLE_VP_H = h;
 
     updateGrainPlaneSize();
     syncCssHeaderHeight();
     updateMenuGeometry();
+    callFooterUpdate();       // <<<<<<<<<<<<<< NOUVEAU : sync du faux footer
 
     const newBucket = pickBucket(w, h);
     if (newBucket !== currentBucket) {
@@ -1035,10 +1121,10 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
   window.addEventListener('orientationchange', onResize, { passive: true });
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', onResize, { passive: true });
-    // iOS déclenche aussi 'scroll' sur visualViewport durant l’anim de la barre d’URL
     visualViewport.addEventListener('scroll', onResize, { passive: true });
   }
 })();
+
 
 
 function updateScrollDocHeight(){
@@ -3179,5 +3265,8 @@ function logD2At(wp){
   console.log(`{ size:'D2', row:${row}, col:${col}, quad:${quad} }`);
 }
 </script>
+  
+<div id="mobile-footer" aria-hidden="true"></div>
+  
 </body>
 </html>
