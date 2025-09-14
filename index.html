@@ -902,7 +902,7 @@ function applyBucket(){
                                     : (prefersReducedMotion ? 5 : 7);
 
   // Désactive le raffinage “D2 → plus petit” en mobile-like
-  config.refineChanceD2 = portraitMobileLike ? 0.0 : 0.55;
+  config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
 
   updateScrollDocHeight();
 }
@@ -2202,7 +2202,9 @@ function buildMobileButtonsDeterministic(){
 function sprinkleRefinements(maxOps = 24){
   const { w, contentTop } = getLayoutMetrics();
   const isMobileLike = isMobileBucket();
-
+  
+  if (isMobileLike) refineHaloAroundFixed(56);
+  
   // nonce variable à chaque "reformGridKeepImages"
   const nonce = (scene.userData && (scene.userData._regenNonce | 0)) || 0;
 
@@ -2262,7 +2264,9 @@ function sprinkleRefinements(maxOps = 24){
     if (s.depth >= TARGET_DEPTH) continue;
 
     // en mobile-like on évite de retoucher les D2 (boutons)
-    if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) continue;
+    if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) {
+      if (Math.random() > (config.refineChanceD2 ?? 0.3)) continue;
+    }
 
     candidates.push({ path, s });
   }
@@ -2276,6 +2280,67 @@ function sprinkleRefinements(maxOps = 24){
   }
 }
 
+function refineHaloAroundFixed(maxOps = 56){
+  const { w, contentTop } = getLayoutMetrics();
+  const d2Size = w / 2;
+
+  // Rectangles des blocs fixes (boutons + images)
+  const rects = [];
+  for (const [p] of buttonCells){
+    const s = targetState.get(p); if (!s) continue;
+    const h = s.originalSize / 2;
+    rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
+  }
+  for (const p of imageCells){
+    const s = targetState.get(p); if (!s) continue;
+    const h = s.originalSize / 2;
+    rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
+  }
+  if (!rects.length) return 0;
+
+  // Paramètres du halo (en multiples de D2)
+  const inner = d2Size * (config.mobileHaloInner ?? 0.0); // bord immédiat
+  const outer = d2Size * (config.mobileHaloOuter ?? 1.0); // ~1 anneau
+  const chance = config.mobileHaloChance ?? 0.6;
+
+  // Candidats : D2 “content” visibles, non-boutons, non-images
+  const cand = [];
+  for (const [path, s] of targetState.entries()){
+    if (!path.startsWith('content/')) continue;
+    if (buttonCells.has(path) || imageCells.has(path)) continue;
+    if (s.depth >= TARGET_DEPTH) continue;
+    if (Math.abs(s.originalSize - d2Size) > 1e-6) continue;
+    if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+
+    // distance du centre du carré au plus proche bord d’un bloc fixe
+    let d = Infinity, cx = s.x, cy = s.y;
+    for (const r of rects){
+      const dx = Math.max(r.left - cx, 0, cx - r.right);
+      const dy = Math.max(r.bottom - cy, 0, cy - r.top);
+      d = Math.min(d, Math.hypot(dx, dy));
+    }
+    if (d >= inner && d <= outer) cand.push({ path, s, d });
+  }
+
+  // On raffine d’abord les plus proches des blocs fixes
+  cand.sort((a,b)=>a.d - b.d);
+
+  let ops = 0;
+  for (const it of cand){
+    if (ops >= maxOps) break;
+    if (Math.random() > chance) continue;
+
+    targetState.delete(it.path);
+    const { x, y, originalSize: os, depth: d, path: p } = it.s;
+    const ns = os / 2, nd = d + 1, o = os / 4;
+    createQuadTree(x-o, y+o, ns, nd, p+'/0', -1);
+    createQuadTree(x+o, y+o, ns, nd, p+'/1', -1);
+    createQuadTree(x-o, y-o, ns, nd, p+'/2', -1);
+    createQuadTree(x+o, y-o, ns, nd, p+'/3', -1);
+    ops++;
+  }
+  return ops;
+}
 
 
 // Materials
@@ -2605,18 +2670,19 @@ function rebuildDomLabel(st, label){
 }
 
 
+// --- REMPLACE TOUTE LA FONCTION ---
 function updateDomLabelLayout(st, lm){
   if (!st.domLabelEl) return;
 
   const { w } = lm;
 
-  // Taille/position affichées du carré (après lerp)
+  // Taille/position AFFICHÉES du carré (après lerp)
   const dispS = Math.max(0, st.mesh.scale.x);
   const half  = dispS / 2;
   const dispX = st.mesh.position.x;
   const dispY = st.mesh.position.y;
 
-  // Marges internes (en % de la tuile)
+  // Marges internes proportionnelles
   const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
   const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
   const mRightWorld = dispS * marginPctRight;
@@ -2626,13 +2692,13 @@ function updateDomLabelLayout(st, lm){
   const tx = dispX + half - mRightWorld;
   const ty = dispY + half - mTopWorld;
 
-  // Monde → pixels : utilise la largeur STABLE pour rester calé sur le canvas
+  // Monde → pixels (largeur STABLE)
   const pxPerWorldX   = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
   const squareWidthPx = dispS * pxPerWorldX;
   const marginPx      = mRightWorld * pxPerWorldX;
   const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx);
 
-  // (Re)mesures si besoin
+  // (Re)mesures si manquantes
   if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
     const prev = st.domLabelEl.style.transform;
     st.domLabelEl.style.transform = 'translate(-10000px,-10000px)';
@@ -2648,10 +2714,11 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.transform = prev || '';
   }
 
-  // 1) font-size global basé sur "Creative"
+  // 1) Taille globale de police basée sur la taille AFFICHÉE du bouton "Creative"
+  //    (ensureGlobalLabelFontPx recalcule en continu tant que ça bouge)
   let uniformFontPx = ensureGlobalLabelFontPx(lm);
 
-  // 2) clamp si nécessaire pour tenir dans la largeur dispo
+  // 2) Clamp si nécessaire pour tenir dans la largeur dispo du carré courant
   const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
     ? (st.labelBaseWidthPx / st.baseFontPx)
     : 0;
@@ -2680,7 +2747,7 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.color = '#f3f1ee';
   }
 
-  // Sécurité : s’assure que l’alignement reste bien à droite
+  // Sécurité : alignement droite
   st.domLabelEl.style.textAlign = 'right';
   st.domLabelEl.querySelectorAll('.line').forEach(line => {
     line.style.textAlign = 'right';
@@ -2691,6 +2758,7 @@ function updateDomLabelLayout(st, lm){
   st.domLabelEl.style.transform =
     `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
 }
+
 
 
 // Remplacement complet
@@ -2711,12 +2779,13 @@ function isShortPortrait(){
 }
   
   
+// --- REMPLACE TOUTE LA FONCTION ---
 function ensureGlobalLabelFontPx(lm){
-  // Cache simple
+  // On mémorise seulement quand c'est stable ; pendant le lerp, on recalcule à chaque frame.
   const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px:null, refSize:0 });
-  const TARGET_RATIO = 0.66; // "Creative" = 66% de la largeur intérieure
+  const TARGET_RATIO = 0.66; // "Creative" ≈ 66% de la largeur intérieure
 
-  // Trouve le bouton "Creative ..." (clé 'code')
+  // Trouver le bouton "Creative ..." (clé 'code')
   let refSt = null;
   for (const st of fractalState.values()){
     if (!st || !st.isButton || !st.domLabelEl || !st.labelText) continue;
@@ -2725,11 +2794,11 @@ function ensureGlobalLabelFontPx(lm){
   }
   if (!refSt) return cache.px;
 
-  // Taille visée = taille CIBLE du carré (évite oscillations pendant lerp)
-  const refSizeWorld = Math.max(0, (refSt.targetScale?.x || refSt.mesh?.scale?.x || 0));
-  if (!refSizeWorld) return cache.px;
+  // ➜ utiliser la TAILLE AFFICHÉE (mesh.scale.x), pas la cible
+  const displaySizeWorld = Math.max(0, refSt.mesh?.scale?.x || 0);
+  if (!displaySizeWorld) return cache.px;
 
-  // Re-mesure au besoin
+  // (Re)mesures si besoin
   if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0 || !refSt.baseFontPx){
     const el = refSt.domLabelEl;
     const prev = el.style.transform;
@@ -2746,27 +2815,35 @@ function ensureGlobalLabelFontPx(lm){
   }
   if (!refSt.firstLineBaseWidthPx || !refSt.baseFontPx) return cache.px;
 
-  // Invalidation si la taille de référence change
-  const needRecalc = (!cache.px) || Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-4;
+  // Si ça bouge encore, on recalcule à CHAQUE frame, sinon on peut cacher.
+  const targetSizeWorld = Math.max(0, refSt.targetScale?.x || displaySizeWorld);
+  const animating = Math.abs(targetSizeWorld - displaySizeWorld) > 1e-3;
+
+  // Recalcule si animé ou si la taille affichée a changé de façon notable
+  const needRecalc =
+    animating ||
+    !cache.px ||
+    Math.abs((cache.refSize || 0) - displaySizeWorld) > 1e-3;
 
   if (needRecalc){
-    const innerPx = computeSquareInnerWidthPx(refSizeWorld);
+    const innerPx = computeSquareInnerWidthPx(displaySizeWorld);
     if (innerPx > 0){
-      // fontPx * (firstLineWidthBase / baseFontPx) ≈ width
-      // On veut TARGET_RATIO * innerPx pour la 1ère ligne
-      const perPx = refSt.firstLineBaseWidthPx / refSt.baseFontPx;
+      const perPx = refSt.firstLineBaseWidthPx / refSt.baseFontPx; // px de largeur par px de font
       let fontPx = (TARGET_RATIO * innerPx) / perPx;
 
-      // quantification douce pour l’hinting
-      fontPx = Math.round(fontPx * 2) / 2; // pas de 0.5px
+      // quantification douce (meilleur hinting) + garde-fous
+      fontPx = Math.round(fontPx * 2) / 2;
       fontPx = Math.max(10, Math.min(96, fontPx));
 
+      // On met à jour le cache même pendant l’anim (il reflète la taille affichée)
       cache.px = fontPx;
-      cache.refSize = refSizeWorld;
+      cache.refSize = displaySizeWorld;
     }
   }
+
   return cache.px;
 }
+
 
 
 
