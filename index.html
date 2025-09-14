@@ -204,25 +204,26 @@
   white-space: nowrap;       /* idem, pas de wrap */
 }
 
-/* === Faux pied de page mobile pour masquer la bande bleue === */
+/* === Faux pied de page — version GPU (transform) === */
 #mobile-footer{
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  height: 0;                 /* ajusté en JS */
-  background: #0e1011;       /* gris/noir foncé */
-  border-top: 1px solid #0055ff; /* stroke bleu (même que le fond) */
-  pointer-events: none;      /* pure déco, pas cliquable */
-  z-index: 3;                /* > canvas (1) / < labels (5) / < header (4) */
-  transition: height .12s ease-out; /* on l’éteindra en JS pendant l’ouverture */
-  will-change: height;
+  height: 320px;                 /* hauteur max attendue de l'URL bar */
+  background: #0e1011;           /* gris/noir */
+  border-top: 1px solid #0055ff; /* liseré bleu */
+  pointer-events: none;
+  z-index: 3;
+  transform: translateY(320px);  /* totalement masqué au démarrage */
+  transition: transform .12s ease-out; /* seulement pour la fermeture */
+  will-change: transform;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  backface-visibility: hidden;
 }
 
 #mobile-footer::before{
   content: "";
   position: absolute; inset: 0;
-  opacity: .18;              /* grain léger */
-  /* pseudo-grain "maison" (double cross-hatch) */
+  opacity: .18; /* grain */
   background-image:
     repeating-linear-gradient(45deg,
       rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 2px,
@@ -232,6 +233,7 @@
       transparent 1px, transparent 3px);
   mix-blend-mode: normal;
 }
+
   
   
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
@@ -944,8 +946,8 @@ function createMenuPlane(){
   updateMenuGeometry();
 }
 
-/* === MOBILE FOOTER v2 — suivi sans lag + overscan === */
-(function installMobileFooter(){
+/* === MOBILE FOOTER v3 (GPU) — suivi per-frame via transform === */
+(function installMobileFooterGPU(){
   const ID = 'mobile-footer';
   let el = document.getElementById(ID);
   if (!el){
@@ -955,88 +957,76 @@ function createMenuPlane(){
     document.body.appendChild(el);
   }
 
-  const PAD = 2;              // coussin anti-flash (px)
-  const UNDER_DESKTOP = () => Math.min(window.innerWidth, window.innerHeight) <= 1024;
+  const MAX = 320; // px, hauteur max du pied de page (doit matcher le CSS)
+  const PAD = 2;   // coussin anti-flash
+  const UNDER_DESKTOP = () => Math.min(innerWidth, innerHeight) <= 1024;
 
-  let lastH = 0;
-  let chaseRAF = 0;
-  let chaseUntil = 0;
+  let lastPX = MAX;  // translateY courant (MAX = caché)
+  let lastH  = 0;
 
   function layoutHeight(){
-    return (typeof STABLE_VP_H === 'number' && STABLE_VP_H > 0) ? STABLE_VP_H : window.innerHeight;
+    return (typeof STABLE_VP_H === 'number' && STABLE_VP_H > 0) ? STABLE_VP_H : innerHeight;
   }
 
-  function measure(){
-    const vv = window.visualViewport;
+  function measureH(){
+    const vv = visualViewport;
     let extra = 0;
     if (vv){
-      // combien le visual viewport "dépasse" notre hauteur stable
       const vvBottom = vv.height + (vv.offsetTop || 0);
       extra = Math.max(0, vvBottom - layoutHeight());
     }
-    // on CEIL + PAD pour jamais laisser passer le bleu
     return Math.max(0, Math.ceil(extra) + PAD);
   }
 
-  function setHeightInstant(h){
-    // coupe la transition pour suivre au pixel pendant l’ouverture
-    el.style.transition = 'height 0s';
-    void el.offsetHeight; // flush
-    el.style.height = h + 'px';
+  function setTransformInstant(h){
+    el.style.transition = 'transform 0s';      // ouverture = instant
+    const ty = Math.max(0, MAX - h);
+    if (ty !== lastPX){
+      el.style.transform = `translateY(${ty}px)`;
+      lastPX = ty; lastH = h;
+    }
   }
 
-  function setHeightAnimated(h){
-    // réactive une petite anim pour la fermeture
-    el.style.transition = 'height .12s ease-out';
-    void el.offsetHeight; // flush
-    el.style.height = h + 'px';
+  function setTransformAnimated(h){
+    el.style.transition = 'transform .12s ease-out'; // fermeture douce
+    const ty = Math.max(0, MAX - h);
+    if (ty !== lastPX){
+      el.style.transform = `translateY(${ty}px)`;
+      lastPX = ty; lastH = h;
+    }
   }
 
+  // tick "léger" que l'on peut appeler à CHAQUE frame (depuis animate)
   function tick(){
-    const h = UNDER_DESKTOP() ? measure() : 0;
-
-    if (h > 0){
-      el.style.display = 'block';
-    } else {
-      el.style.display = 'none';
+    if (!UNDER_DESKTOP()){
+      // tout cacher proprement
+      if (lastPX !== MAX){
+        el.style.transition = 'transform .12s ease-out';
+        el.style.transform  = `translateY(${MAX}px)`;
+        lastPX = MAX; lastH = 0;
+      }
+      return;
     }
+    el.style.display = 'block';
 
-    if (h > lastH){
-      setHeightInstant(h);
-      lastH = h;
-    } else if (h < lastH){
-      setHeightAnimated(h);
-      lastH = h;
-    }
-
-    // poursuit la chasse tant que l’URL bar bouge (≈ 350 ms)
-    if (performance.now() < chaseUntil){
-      chaseRAF = requestAnimationFrame(tick);
-    } else {
-      chaseRAF = 0;
-    }
+    const h = measureH();
+    if (h > lastH) setTransformInstant(h);  // ouverture = suivre la barre au pixel
+    else if (h < lastH) setTransformAnimated(h); // fermeture = petite anim
   }
 
-  function updateMobileFooter(){
-    // un tick immédiat…
-    tick();
-    // …et si on est en PHASE D’OUVERTURE on “chase” quelques frames
-    chaseUntil = performance.now() + 350;
-    if (!chaseRAF) chaseRAF = requestAnimationFrame(tick);
-  }
+  // Expose un hook que la boucle render appellera
+  window.__mobileFooterTick = tick;
 
-  // expose pour le resize handler
-  window.__updateMobileFooter = updateMobileFooter;
-
-  // boot + listeners haute fréquence
-  updateMobileFooter();
-  window.addEventListener('resize', updateMobileFooter, { passive: true });
-  window.addEventListener('orientationchange', updateMobileFooter, { passive: true });
+  // Fallback: mettre à jour lors des “vrais” événements quand même
+  tick();
+  addEventListener('resize', tick, { passive: true });
+  addEventListener('orientationchange', tick, { passive: true });
   if (window.visualViewport){
-    visualViewport.addEventListener('resize', updateMobileFooter, { passive: true });
-    visualViewport.addEventListener('scroll', updateMobileFooter, { passive: true });
+    visualViewport.addEventListener('resize', tick, { passive: true });
+    visualViewport.addEventListener('scroll', tick,  { passive: true });
   }
 })();
+
 
   
 
@@ -2953,7 +2943,9 @@ function getDotScale(state){
 
 function animate(){
   requestAnimationFrame(animate);
-
+  
+  if (window.__mobileFooterTick) window.__mobileFooterTick();
+  
   if (needsBaseUpdate){
     const ok = updateFractalBase(false);
     if (ok) { syncStateToMeshes(); }
