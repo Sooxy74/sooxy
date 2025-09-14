@@ -872,13 +872,9 @@ function applyBucket(){
   // Désactive le raffinage “D2 → plus petit” en mobile-like
   config.refineChanceD2 = portraitMobileLike ? 0.0 : 0.55;
 
-  // ⚫︎ Thème de chrome (fond + gouttières) selon mobile-like
-  setChromeColorsForMobileLike();
-
-  // Hauteur doc (inclut notre bande de sécurité). Appelle ensuite la (re)géométrie UI.
   updateScrollDocHeight();
-  updateMenuGeometry();
 }
+
 
 
   
@@ -896,23 +892,22 @@ function createGrainPlane(){
   updateGrainPlaneSize();
 }
 function createMenuPlane(){
-  // Plan du header (désactivé visuellement, on garde pour la géométrie)
+  // On garde les objets mais on délègue l’occlusion au header DOM
   menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), darkMaterial);
   menuPlane.position.z = 0.1;
   menuPlane.renderOrder = 0;
   scene.add(menuPlane);
 
-  // ⚠️ On réutilise menuBorderBottom comme **apron bas** (bande noire fixe)
-  // au lieu de la "fausse bordure" (la vraie bordure 1px reste en CSS).
   menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial);
-  menuBorderBottom.position.z = 0.12;   // au-dessus de la grille/dots
+  menuBorderBottom.position.z = 0.11;
   menuBorderBottom.renderOrder = 1;
   scene.add(menuBorderBottom);
 
-  // On ne veut plus de barre noire WebGL sous le header (DOM s’en charge)
+  // Désactive le plan WebGL (barre noire) et la "fausse" bordure :
   menuPlane.visible = false;
+  menuBorderBottom.visible = false; // la vraie ligne bleue est en CSS dans #ui-header::after
 
-  // VRAIE barre noire (DOM) pour masquer les labels qui passent dessous
+  // VRAIE barre noire (DOM) pour masquer les labels qui "passent dessous"
   const header = document.getElementById('ui-header');
   if (header) header.style.background = '#11190c';
 
@@ -920,15 +915,14 @@ function createMenuPlane(){
 }
 
 
-
 function updateMenuGeometry(){
-  const { viewWidth, menuHeight, onePxWorld } = getLayoutMetrics();
+  const { viewWidth, menuHeight } = getLayoutMetrics();
 
-  // Plan "virtuel" du header (on garde les tailles cohérentes)
+  // Plan (désactivé visuellement, mais on garde la géométrie cohérente)
   menuPlane.scale.set(viewWidth, menuHeight, 1);
   menuPlane.position.set((camera.left + camera.right) / 2, camera.top - menuHeight / 2, 0.1);
 
-  // Masque DOM des labels + sync --menu-h
+  // Masque DOM pour les labels + synchronisation de --menu-h
   const headerEl = document.getElementById('ui-header');
   const layer = document.getElementById('labels-layer');
   if (headerEl && layer){
@@ -937,44 +931,6 @@ function updateMenuGeometry(){
     layer.style.webkitClipPath = `inset(${headerPx}px 0 0 0)`;
     layer.style.zIndex = '3';
     document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
-  }
-
-  // ------- APRON BAS (bande noire anti-jiggle) -------
-  // Taille en pixels CSS → monde. Ajuste si tu veux (160–200px recommandé).
-  const SAFETY_BAND_PX_BOTTOM = 180;
-  const apronWorldH = SAFETY_BAND_PX_BOTTOM * onePxWorld;
-
-  // Visible uniquement en "mobile-like" (mobile portrait + tablettes portrait)
-  const showApron = isMobileBucket();
-
-  menuBorderBottom.visible = showApron;
-  if (showApron){
-    // Largeur = plein viewport monde, hauteur = bande
-    const cx = (camera.left + camera.right) / 2;
-    const cy = camera.bottom + apronWorldH / 2;
-
-    menuBorderBottom.position.set(cx, cy, 0.12);
-    menuBorderBottom.scale.set(viewWidth + onePxWorld * 4, Math.max(apronWorldH, onePxWorld), 1);
-  }
-}
-
-function setChromeColorsForMobileLike(){
-  const mobileLike = isMobileBucket();
-
-  if (mobileLike){
-    // Tout ce qui "fuit" devient noir → plus de “barre bleue”
-    scene.background = new THREE.Color(config.darkColor);
-    menuBorderMaterial.color.set(config.darkColor);
-
-    // Rendu opaque (évite de voir le body bleu si transparence)
-    if (renderer) renderer.setClearAlpha(1);
-  } else {
-    // Thème bleu normal en desktop/paysage
-    scene.background = new THREE.Color(config.backgroundColor);
-    menuBorderMaterial.color.set(config.backgroundColor);
-
-    // L’alpha peut rester 1, c’est sans risque.
-    if (renderer) renderer.setClearAlpha(1);
   }
 }
 
@@ -1091,33 +1047,29 @@ function updateScrollDocHeight(){
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
-  const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
+  const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
-  // Bande de sécurité en pixels CSS → monde
-  const SAFETY_BAND_PX_BOTTOM = 180; // ajuste 160–200 si besoin
-  const safetyWorld = SAFETY_BAND_PX_BOTTOM * onePxWorld;
+  // Rangées supplémentaires sous l’écran pour amortir la fin de scroll
+  const EXTRA_BOTTOM_ROWS = 3;
 
   let contentWorld;
   if (isMobile){
     contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
-    // Ajoute la bande fixe
-    contentWorld += safetyWorld;
+    contentWorld += EXTRA_BOTTOM_ROWS * w;
   } else {
-    // En desktop/paysage on garde baseRowsPrimary, + marge fixe (safetyWorld)
-    const rowsWorld = Math.max(baseRowsPrimary, 2) * w;
-    contentWorld = rowsWorld + safetyWorld;
+    const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS;
+    contentWorld = totalRows * w;
   }
 
   const worldTotal = menuHeight + contentWorld;
 
-  // Hauteur DOM finale basée sur la hauteur "stable" (grand viewport simulé)
+  // Hauteur DOM finale basée sur la hauteur "stable"
   const stableH = STABLE_VP_H || window.innerHeight;
   const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
   spacer.style.height = docPx + 'px';
 }
-
 
 
 
