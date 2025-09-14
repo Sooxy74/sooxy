@@ -204,33 +204,40 @@
   white-space: nowrap;       /* idem, pas de wrap */
 }
 
+/* === Faux pied de page — version GPU (transform) === */
 #mobile-footer{
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    height: 320px;
-    background: #11190c; /* La même couleur que le carré de la grille */
-    border-top: 1px solid #0055ff; /* Liseré bleu pour la cohérence */
-    pointer-events: none;
-    z-index: 3;
-    transform: translateY(320px);
-    transition: transform .12s ease-out;
-    will-change: transform;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    backface-visibility: hidden;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 320px;                 /* hauteur max attendue de l'URL bar */
+  background: #0e1011;           /* gris/noir */
+  border-top: 1px solid #0055ff; /* liseré bleu */
+  pointer-events: none;
+  z-index: 3;
+  transform: translateY(320px);  /* totalement masqué au démarrage */
+  transition: transform .12s ease-out; /* seulement pour la fermeture */
+  will-change: transform;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  backface-visibility: hidden;
 }
 
 #mobile-footer::before{
-    content: "";
-    position: absolute; inset: 0;
-    opacity: 1; /* Le grain est déjà inclus dans la couleur de fond des carrés */
-    background-image:
-        repeating-linear-gradient(45deg,
-            rgba(255,255,255,.035) 0, rgba(255,255,255,.035) 2px,
-            transparent 2px, transparent 4px),
-        repeating-linear-gradient(-45deg,
-            rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 1px,
-            transparent 1px, transparent 3px);
-    mix-blend-mode: normal;
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Opacité du grain ~ celle du plane WebGL (config.grainOpacity) */
+  opacity: .10;
+  /* bruit procédural via SVG data-URI, répété */
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'>\
+  <filter id='n'>\
+    <feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='1' stitchTiles='stitch'/>\
+  </filter>\
+  <rect width='64' height='64' filter='url(%23n)'/>\
+</svg>");
+  background-repeat: repeat;
+  background-size: 256px 256px; /* grain fin, non "quadrillé" */
+  mix-blend-mode: normal; /* même rendu que les carrés (pas de trame) */
 }
 
   
@@ -1027,7 +1034,8 @@ function createMenuPlane(){
   }
 })();
 
-// Helper: calcule l'offset monde attendu à partir du scrollY courant (quantifié au px monde)
+// Helper: calcule l'offset monde attendu à partir du scroll courant,
+// en se basant sur le *layout viewport* stable (pas le visualViewport).
 function computeScrollOffsetWorldFromScrollY(){
   // Mobile-like = mobile portrait + tablettes portrait
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
@@ -1035,24 +1043,35 @@ function computeScrollOffsetWorldFromScrollY(){
 
   const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
 
+  // Hauteur de contenu "monde"
   const contentWorld = (mobileWorldContentHeight && mobileWorldContentHeight > 0)
     ? mobileWorldContentHeight
     : Math.max(baseRowsPrimary, 5) * w;
 
-  // Utilise le spacer "stable"
+  // Hauteur doc basée sur le spacer (layout), pas le visual viewport
   const spacer = document.getElementById('scroll-spacer');
-  const spacerPx = spacer ? spacer.offsetHeight : document.documentElement.scrollHeight;
-  const stableInnerH = STABLE_VP_H || window.innerHeight;
-  const maxScrollPx = Math.max(0, spacerPx - stableInnerH);
+  const docPx  = spacer ? spacer.offsetHeight : Math.max(
+    document.documentElement.scrollHeight,
+    document.documentElement.clientHeight
+  );
 
-  const t = maxScrollPx > 0 ? (window.scrollY / maxScrollPx) : 0;
+  // Hauteur *stable* (gelée dans STABLE_VP_H)
+  const stableInnerH = STABLE_VP_H || window.innerHeight;
+  const maxScrollPx  = Math.max(0, docPx - stableInnerH);
+
+  // Scroll réel du *layout viewport* (indépendant de la barre d’URL)
+  const scrollTop = (document.scrollingElement ? document.scrollingElement.scrollTop : document.documentElement.scrollTop) || 0;
+
+  const t = maxScrollPx > 0 ? (scrollTop / maxScrollPx) : 0;
   const worldScrollable = Math.max(0, contentWorld - (viewHeight - menuHeight));
 
-  let raw = t * worldScrollable;
+  // Quantification au "1px CSS" en unités monde (évite les petits sauts visuels)
+  const raw = t * worldScrollable;
   let quantized = Math.round(raw / onePxWorld) * onePxWorld;
 
-  if (window.scrollY <= 0.5) quantized = 0;
-  if (window.scrollY >= maxScrollPx - 0.5) quantized = worldScrollable;
+  // Bornes robustes
+  if (scrollTop <= 0.5) quantized = 0;
+  if (scrollTop >= maxScrollPx - 0.5) quantized = worldScrollable;
 
   return Math.max(0, Math.min(worldScrollable, quantized));
 }
@@ -1084,98 +1103,104 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
 // Resize (stabilisé iOS URL bar) — REMPLACEMENT COMPLET
 (function installStableResizeHandlers(){
+  // On mémorise la *photo* du visual viewport pour détecter les jiggles
   let lastW = Math.round(window.visualViewport?.width  || window.innerWidth);
   let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
+  let lastOT = Math.round(window.visualViewport?.offsetTop || 0);
   let raf = 0;
 
-  // Seuils "micro-bouge" (iOS URL bar)
-  const WIDTH_JIGGLE  = 32;
-  const HEIGHT_JIGGLE = 200;
+  // Seuils "micro-bouge" (bandeau d’URL qui apparaît/disparaît)
+  const WIDTH_JIGGLE  = 32;   // bouge presque pas en largeur
+  const HEIGHT_JIGGLE = 260;  // bouge en hauteur à cause du bandeau
+  const OFFSET_JIGGLE = 260;  // décalage vertical du visual viewport
 
-  function snapshotViewport(){
+  function snapshotVV(){
     return {
       w: Math.round(window.visualViewport?.width  || window.innerWidth),
       h: Math.round(window.visualViewport?.height || window.innerHeight),
+      ot: Math.round(window.visualViewport?.offsetTop || 0),
     };
   }
 
-  function isOrientationFlip(pw, ph, w, h){
+  function orientationFlip(pw, ph, w, h){
     const prevPortrait = ph >= pw;
     const nowPortrait  = h  >= w;
     return prevPortrait !== nowPortrait;
   }
 
-  function callFooterUpdate(){
-    if (typeof window.__updateMobileFooter === 'function'){
-      window.__updateMobileFooter();
+  function applyFooterTick(){
+    if (typeof window.__mobileFooterTick === 'function') {
+      window.__mobileFooterTick();
     }
   }
 
-  function handleResizeNow() {
+  function handleResizeNow(){
     raf = 0;
 
-    // synchro éventuelle du faux footer AVANT tout le reste
-    if (typeof window.__updateMobileFooter === 'function'){
-      window.__updateMobileFooter();
-    }
-
-    const { w, h } = snapshotViewport();
+    // Mesure actuelle
+    const { w, h, ot } = snapshotVV();
     const dw = Math.abs(w - lastW);
     const dh = Math.abs(h - lastH);
+    const dot = Math.abs(ot - lastOT);
 
-    const orientationFlip = isOrientationFlip(lastW, lastH, w, h);
+    const flip = orientationFlip(lastW, lastH, w, h);
 
-    const smallBoth       = dw <= WIDTH_JIGGLE  && dh <= HEIGHT_JIGGLE;
-    const smallHeightOnly = dw <= WIDTH_JIGGLE  && dh > 0 && dh <= HEIGHT_JIGGLE;
+    // Cas 1 : "jiggle" (URL bar) -> on NE TOUCHE PAS à la caméra orthographique.
+    // On recalcule juste la géométrie dépendante des pixels et on compense le curseur.
+    const jiggle =
+      !flip &&
+      dw <= WIDTH_JIGGLE &&
+      (dh <= HEIGHT_JIGGLE || dot <= OFFSET_JIGGLE);
 
-    if (!orientationFlip && (smallBoth || smallHeightOnly)) {
-      // ➜ Jiggle : on garde taille stable, on recalcule juste la géométrie
-      //    et on COMPENSE le nouvel offset monde pour figer le curseur.
-      const prevWorld = scrollOffsetWorld;                 // mémorise l'offset monde actuel
-
+    if (jiggle){
+      // 1) Re-génère la géométrie dépendante du header/1px monde
       syncCssHeaderHeight();
       updateMenuGeometry();
       updateScrollDocHeight();
       updateFreeOverlays();
-      callFooterUpdate();
-      needsRefineCheck = true;
 
-      // Recalcule l’offset monde issu du scrollY courant
+      // 2) Re-mappe l’offset "monde" depuis le *layout* scrollTop stable
+      const prevWorld = scrollOffsetWorld;
       const nextWorld = computeScrollOffsetWorldFromScrollY();
       scrollOffsetWorld = nextWorld;
 
-      // Si un curseur ancré est affiché, on ajuste l’ancre pour que mobDelta ne change pas
+      // 3) Si un curseur est ancré, on translate l’ancre pour conserver le même "mobDelta"
       if (mouseSquare?.userData?.anchor){
         mobileBuildScrollAt += (nextWorld - prevWorld);
       }
 
-      lastW = w; lastH = h;
+      applyFooterTick();
+      needsRefineCheck = true;
+
+      // On garde les *valeurs stables* inchangées
+      lastW = w; lastH = h; lastOT = ot;
       return;
     }
 
-    // VRAI resize (rotation, split view, etc.)
-    const aspect = w / h;
+    // Cas 2 : vrai resize (rotation, split view, etc.) -> on recalcule la caméra + renderer
+    const aspect = (w || 1) / (h || 1);
     const height = 10;
     const width  = height * aspect;
 
-    camera.left   = -width / 2;
-    camera.right  =  width / 2;
-    camera.top    =  height / 2;
+    camera.left = -width / 2;
+    camera.right =  width / 2;
+    camera.top =    height / 2;
     camera.bottom = -height / 2;
     camera.updateProjectionMatrix();
 
     renderer.setSize(w, h);
 
+    // Verrouille les dimensions "stables"
     STABLE_VP_W = w;
     STABLE_VP_H = h;
 
     updateGrainPlaneSize();
     syncCssHeaderHeight();
     updateMenuGeometry();
-    callFooterUpdate();
+    applyFooterTick();
 
     const newBucket = pickBucket(w, h);
-    if (newBucket !== currentBucket) {
+    if (newBucket !== currentBucket){
       currentBucket = newBucket;
       applyBucket();
       reformGridKeepImages();
@@ -1188,23 +1213,21 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       needsRefineCheck = true;
     }
 
-    lastW = w; lastH = h;
+    lastW = w; lastH = h; lastOT = ot;
   }
 
-  function onResize() {
+  function onResize(){
     if (raf) return;
     raf = requestAnimationFrame(handleResizeNow);
   }
 
   window.addEventListener('resize', onResize, { passive: true });
   window.addEventListener('orientationchange', onResize, { passive: true });
-  if (window.visualViewport) {
+  if (window.visualViewport){
     visualViewport.addEventListener('resize', onResize, { passive: true });
-    visualViewport.addEventListener('scroll', onResize, { passive: true });
+    visualViewport.addEventListener('scroll', onResize,  { passive: true });
   }
 })();
-
-
 
 
 function updateScrollDocHeight(){
@@ -1248,14 +1271,12 @@ function onScroll(){
     return;
   }
 
-  // Sauve l’offset monde actuel pour pouvoir compenser le jiggle si besoin
+  // Recalcule *toujours* l'offset monde depuis le layout viewport
   const prevWorld = scrollOffsetWorld;
-
-  // Nouveau mapping depuis le scrollY courant (quantifié au px monde)
   const nextWorld = computeScrollOffsetWorldFromScrollY();
   scrollOffsetWorld = nextWorld;
 
-  // Maintien du curseur ancré pendant le scroll (y compris quand l’URL bar bouge)
+  // Maintien du curseur ancré pendant le scroll (y compris si la barre d’URL bouge)
   const a = mouseSquare?.userData?.anchor;
   if (a){
     const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
@@ -1265,6 +1286,7 @@ function onScroll(){
     cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
   }
 }
+
 
 
 
