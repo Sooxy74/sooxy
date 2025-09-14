@@ -938,15 +938,18 @@ function updateMenuGeometry(){
 
 function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
-// Resize (stabilisé iOS URL bar) — remplace tout l'ancien bloc
+// ✅ Resize stable iOS — accepte les HAUSSES de hauteur (barre d’URL qui disparaît)
+//    et continue d’ignorer les micro-jiggles. Corrige la bande bleue en bas.
 (function installStableResizeHandlers(){
   let lastW = Math.round(window.visualViewport?.width  || window.innerWidth);
   let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
   let raf = 0;
 
-  // Seuils "micro-bouge" (iOS URL bar)
-  const WIDTH_JIGGLE  = 32;   // petites variations de largeur (safe areas, scrollbar)
-  const HEIGHT_JIGGLE = 200;  // grandes variations de hauteur acceptées comme "jiggle"
+  // Tolérances
+  const WIDTH_JIGGLE   = 24;  // petites variations de largeur à ignorer
+  const HEIGHT_JIGGLE  = 60;  // petites variations de hauteur à ignorer si ça rétrécit
+  const GROW_THRESHOLD = 24;  // si la hauteur AUGMENTE d'au moins 24px → vrai resize (URL bar qui se cache)
+  const SHRINK_BIG     = 180; // si la hauteur DIMINUE beaucoup → vrai resize (split view, clavier, etc.)
 
   function snapshotViewport(){
     return {
@@ -966,18 +969,19 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
     const { w, h } = snapshotViewport();
     const dw = Math.abs(w - lastW);
-    const dh = Math.abs(h - lastH);
-
+    const dhSigned = h - lastH;           // ❗️signe important : >0 = plus haut (URL bar cachée)
     const orientationFlip = isOrientationFlip(lastW, lastH, w, h);
 
-    // Cas "jiggle" de viewport (barre d’URL iOS qui s’anime) :
-    // - petits changements de largeur ET de hauteur
-    // - ou hauteur qui bouge mais largeur quasi stable
-    const smallBoth       = dw <= WIDTH_JIGGLE  && dh <= HEIGHT_JIGGLE;
-    const smallHeightOnly = dw <= WIDTH_JIGGLE  && dh > 0 && dh <= HEIGHT_JIGGLE;
+    let shouldResize = false;
 
-    if (!orientationFlip && (smallBoth || smallHeightOnly)) {
-      // ➜ on ne touche pas à la caméra/renderer/STABLE_VP_*
+    if (orientationFlip)                         shouldResize = true;
+    else if (dw > WIDTH_JIGGLE)                  shouldResize = true;
+    else if (dhSigned >= GROW_THRESHOLD)         shouldResize = true;   // 👉 on accepte l’AUGMENTATION
+    else if (dhSigned <= -SHRINK_BIG)            shouldResize = true;   // grosse baisse → resize
+    // sinon : micro-jiggle (surtout iOS) → on ignore
+
+    if (!shouldResize){
+      // Pas de resize : on recale l’UI mais on ne touche pas la taille du canvas
       syncCssHeaderHeight();
       updateMenuGeometry();
       updateScrollDocHeight();
@@ -988,7 +992,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       return;
     }
 
-    // VRAI resize (rotation, changement de largeur réel, split view, etc.)
+    // VRAI resize du renderer/camera (couvre exactement la nouvelle hauteur)
     const aspect = w / h;
     const height = 10;
     const width  = height * aspect;
@@ -999,9 +1003,10 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     camera.bottom = -height / 2;
     camera.updateProjectionMatrix();
 
-    renderer.setSize(w, h);
+    // false = n’altère pas le style CSS, juste le buffer
+    renderer.setSize(w, h, false);
 
-    // Verrou stable pour toutes les conversions px↔monde
+    // 🔒 Mets à jour la base de conversion px↔monde (stable = vraie taille courante)
     STABLE_VP_W = w;
     STABLE_VP_H = h;
 
@@ -1026,7 +1031,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
     lastW = w; lastH = h;
   }
 
-  function onResize() {
+  function onResize(){
     if (raf) return;
     raf = requestAnimationFrame(handleResizeNow);
   }
@@ -1035,22 +1040,21 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
   window.addEventListener('orientationchange', onResize, { passive: true });
   if (window.visualViewport) {
     visualViewport.addEventListener('resize', onResize, { passive: true });
-    // iOS déclenche aussi 'scroll' sur visualViewport durant l’anim de la barre d’URL
+    // iOS émet aussi 'scroll' pendant l’anim de la barre d’URL
     visualViewport.addEventListener('scroll', onResize, { passive: true });
   }
 })();
 
 
-// 🔁 Remplacement complet
+
+// ✅ +1px d’overscan pour éviter toute ligne due aux arrondis au bas de l’écran
 function updateScrollDocHeight(){
-  // Mobile = portrait + tablettes très verticales
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
 
-  // + de marge en bas sur mobile (débord hors écran)
   const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
   const EXTRA_BOTTOM_ROWS_MOBILE  = 6;
 
@@ -1060,7 +1064,6 @@ function updateScrollDocHeight(){
       ? mobileWorldContentHeight
       : Math.max(baseRowsPrimary, 5) * w;
 
-    // surplus qui « sort » de l’écran pour créer une marge
     contentWorld += EXTRA_BOTTOM_ROWS_MOBILE * w;
   } else {
     const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS_DESKTOP;
@@ -1069,12 +1072,11 @@ function updateScrollDocHeight(){
 
   const worldTotal = menuHeight + contentWorld;
 
-  // Hauteur DOM finale basée sur la hauteur "stable"
   const stableH = STABLE_VP_H || window.innerHeight;
-  const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
+  // +1px pour tuer toute bande résiduelle liée aux arrondis/quantifs
+  const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH) + 1);
   spacer.style.height = docPx + 'px';
 }
-
 
 
 
