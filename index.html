@@ -225,20 +225,28 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* Opacité du grain ~ celle du plane WebGL (config.grainOpacity) */
+
+  /* même opacité qu'avant (à ajuster si besoin) */
   opacity: .10;
-  /* bruit procédural via SVG data-URI, répété */
+
+  /* bruit SVG à plus haute fréquence + plus d’octaves (donc plus complexe) */
   background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'>\
+<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'>\
   <filter id='n'>\
-    <feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='1' stitchTiles='stitch'/>\
+    <feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' seed='7' stitchTiles='stitch'/>\
   </filter>\
-  <rect width='64' height='64' filter='url(%23n)'/>\
+  <rect width='96' height='96' filter='url(%23n)'/>\
 </svg>");
   background-repeat: repeat;
-  background-size: 256px 256px; /* grain fin, non "quadrillé" */
-  mix-blend-mode: normal; /* même rendu que les carrés (pas de trame) */
+
+  /* 1:1 => pas de mise à l’échelle, donc pas de flou */
+  background-size: 96px 96px;
+
+  /* bonus : demande au navigateur d’éviter le lissage */
+  image-rendering: crisp-edges;
+  mix-blend-mode: normal;
 }
+
 
   
   
@@ -3082,36 +3090,40 @@ function getDotScale(state){
 
 function animate(){
   requestAnimationFrame(animate);
-  
+
   if (window.__mobileFooterTick) window.__mobileFooterTick();
-  
+
   if (needsBaseUpdate){
     const ok = updateFractalBase(false);
     if (ok) { syncStateToMeshes(); }
-    needsBaseUpdate=false;
+    needsBaseUpdate = false;
   }
 
   if (needsRefineCheck){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     if (refineTargetStateAt(wp)) syncStateToMeshes();
     updateMouseSquareTarget(wp);
-    needsRefineCheck=false;
+    needsRefineCheck = false;
   }
 
   const isMobile = isMobileBucket();
   const mobDelta = isMobile ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
-  // Curseur (carré jaune)
+  // --- Curseur jaune : totalement masqué en version verticale ---
+  mouseSquare.visible = !isMobile;
+  cursorBorder.visible = !isMobile;
+  if (domCursorEl && isMobile) domCursorEl.style.opacity = '0';
+
+  // Mise à jour du curseur 3D (masqué en vertical)
   if (isMobile){
-    mouseSquare.position.copy(mouseSquare.userData.targetPosition);
-    mouseSquare.scale.copy(mouseSquare.userData.targetScale);
-    cursorBorder.position.copy(cursorBorder.userData.targetPosition);
-    cursorBorder.scale.copy(cursorBorder.userData.targetScale);
+    // ne montre rien
+    mouseSquare.scale.set(0, 0, 1);
+    cursorBorder.scale.set(0, 0, 1);
   } else {
     mouseSquare.position.lerp(mouseSquare.userData.targetPosition, config.mouseSquareAnimationSpeed);
-    mouseSquare.scale.lerp(mouseSquare.userData.targetScale, config.mouseSquareAnimationSpeed);
+    mouseSquare.scale.lerp(mouseSquare.userData.targetScale,       config.mouseSquareAnimationSpeed);
     cursorBorder.position.lerp(cursorBorder.userData.targetPosition, config.mouseSquareAnimationSpeed);
-    cursorBorder.scale.lerp(cursorBorder.userData.targetScale, config.mouseSquareAnimationSpeed);
+    cursorBorder.scale.lerp(cursorBorder.userData.targetScale,       config.mouseSquareAnimationSpeed);
   }
 
   // Métriques
@@ -3119,7 +3131,7 @@ function animate(){
   const contentTop = lm.contentTop;
   const eps = config.borderWidth * 2;
 
-  // Boîtes des boutons (⚠️ basées sur l'AFFICHAGE courant, pas les cibles)
+  // Boîtes des boutons (basées sur l’affichage courant)
   const buttonBoxes = [];
   for (const st of fractalState.values()){
     if (!st.isButton) continue;
@@ -3142,17 +3154,17 @@ function animate(){
       st.targetPosition.y = st.anchorPosition.y + mobDelta;
     }
 
-    // Position: en mobile tout suit en "copy"; sinon les boutons copient, le reste lerp
+    // Position
     const copyPos = isMobile ? true : st.isButton;
     if (copyPos) {
       st.mesh.position.copy(st.targetPosition);
     } else {
       st.mesh.position.lerp(st.targetPosition, config.gridAnimationSpeed);
     }
-    // Scale: toujours en lerp (création de la grille)
+    // Scale
     st.mesh.scale.lerp(st.targetScale, config.gridAnimationSpeed);
 
-    // Occluder mobile sous les boutons — calé sur l'AFFICHÉ
+    // Occluder mobile sous boutons
     if (st.occluderMesh){
       const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
       const inset   = insetPx * lm.onePxWorld;
@@ -3173,13 +3185,12 @@ function animate(){
       st.labelSprite.scale.set(st.mesh.scale.x, st.mesh.scale.x*0.75, 1);
     }
 
-    // ---- Labels DOM (version sans reflow : trajectoire rectiligne du texte) ----
+    // Labels DOM
     if (st.isButton && st.domLabelEl){
       updateDomLabelLayout(st, lm);
     }
 
-
-    // Points jaunes (centroïdes) — calés sur l'affiché
+    // Points jaunes (centroïdes)
     if (st.dotMesh){
       const nonButtonOrder = isMobile ? 2.9 : 3.2; // < 3.0 (bouton), < 2.95 (occluder)
       st.dotMesh.renderOrder = st.isButton ? 3.4 : nonButtonOrder;
@@ -3196,16 +3207,12 @@ function animate(){
 
       const sc = getDotScale(st);
       const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(cx, cy));
-
-      if (showDot) {
-        st.dotMesh.scale.set(sc, sc, 1);
-      } else {
-        st.dotMesh.scale.set(0, 0, 0);
-      }
+      if (showDot) st.dotMesh.scale.set(sc, sc, 1);
+      else         st.dotMesh.scale.set(0, 0, 0);
     }
 
     // Cleanup
-    if (st.mesh.scale.x < 0.001 && st.targetScale.x===0){
+    if (st.mesh.scale.x < 0.001 && st.targetScale.x === 0){
       scene.remove(st.mesh); meshPool.push(st.mesh);
       if (st.dotMesh){ scene.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
       if (st.labelSprite){ scene.remove(st.labelSprite); }
@@ -3216,13 +3223,13 @@ function animate(){
     }
   }
 
-  // Overlays : anim “grille” classique
+  // Overlays : anim “grille”
   updateFreeOverlays();
   for (const o of freeOverlays){
     o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
     o.mesh.scale.lerp(o.targetScale,       config.gridAnimationSpeed);
     if (o.vLeft){   o.vLeft.position.lerp(o.vLeft._tPos,   config.gridAnimationSpeed); o.vLeft.scale.lerp(o.vLeft._tScale, config.gridAnimationSpeed); }
-    if (o.vRight){  o.vRight.position.lerp(o.vRight._tPos,  config.gridAnimationSpeed); o.vRight.scale.lerp(o.vRight._tScale, config.gridAnimationSpeed); }
+    if (o.vRight){  o.vRight.position.lerp(o.vRight._tPos, config.gridAnimationSpeed); o.vRight.scale.lerp(o.vRight._tScale, config.gridAnimationSpeed); }
     if (o.hTop){    o.hTop.position.lerp(o.hTop._tPos,     config.gridAnimationSpeed); o.hTop.scale.lerp(o.hTop._tScale, config.gridAnimationSpeed); }
     if (o.hBottom){ o.hBottom.position.lerp(o.hBottom._tPos,config.gridAnimationSpeed); o.hBottom.scale.lerp(o.hBottom._tScale, config.gridAnimationSpeed); }
   }
@@ -3231,6 +3238,7 @@ function animate(){
   const canvas = document.getElementById('webgl-canvas');
   if (canvas && canvas.style.opacity!=='1') canvas.style.opacity='1';
 }
+
 
 
 function isMobileBucket(){
@@ -3301,15 +3309,23 @@ function computeDefaultGridCursorSize(){
   
   
 function updateMouseSquareTarget(worldPos){
+  // Version verticale : on masque tout de suite la cible du curseur 3D
+  if (isMobileBucket()){
+    mouseSquare.userData.anchor = null;
+    mouseSquare.userData.targetPosition.set(0, 0, 4);
+    mouseSquare.userData.targetScale.set(0, 0, 1);
+    cursorBorder.userData.targetPosition.set(0, 0, 3);
+    cursorBorder.userData.targetScale.set(0, 0, 1);
+    return;
+  }
+
   const { w, contentTop } = getLayoutMetrics();
   const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
   // Souris dans le header (menu)
   if (worldPos.y >= contentTop) {
-    mouseSquare.userData.anchor = null; // pas d'ancre
+    mouseSquare.userData.anchor = null;
 
-    // ✅ Si on n’a pas encore une taille "grille" en mémoire,
-    // on la calcule comme si on survolait déjà la grille.
     const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
       ? lastGridCursorSizeWorld
       : computeDefaultGridCursorSize();
@@ -3317,18 +3333,16 @@ function updateMouseSquareTarget(worldPos){
     const fs = Math.max(0, fsWorld);
     const half = fs / 2;
 
-    // clamp dans le header
     let nx = worldPos.x;
     let ny = worldPos.y;
     nx = Math.max(camera.left + half,  Math.min(camera.right - half, nx));
-    ny = Math.max(contentTop + half,   Math.min(camera.top   - half, ny));
+    ny = Math.max(contentTop + half,   Math.min(camera.top   - half,   ny));
 
     mouseSquare.userData.targetPosition.set(nx, ny, 4);
     mouseSquare.userData.targetScale.set(fs, fs, 1);
     cursorBorder.userData.targetPosition.set(nx, ny, 3);
     cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
 
-    // mémorise la bonne taille pour onMouseMove (overlay DOM)
     lastGridCursorSizeWorld = fs;
     return;
   }
@@ -3351,10 +3365,8 @@ function updateMouseSquareTarget(worldPos){
 
   const fs = Math.max(0, cell - config.borderWidth);
 
-  // ➜ on MÉMORISE l’ancre en coordonnées monde (sans scroll)
   mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
 
-  // Affichage = ancre + décalage de scroll
   mouseSquare.userData.targetPosition.set(nx, ny + mobDelta, 4);
   mouseSquare.userData.targetScale.set(fs, fs, 1);
   cursorBorder.userData.targetPosition.set(nx, ny + mobDelta, 3);
@@ -3364,13 +3376,22 @@ function updateMouseSquareTarget(worldPos){
 }
 
 
-// Remplacement complet
+
 function onMouseMove(e){
-  // MàJ position normalisée + demande de raffinement
-  lastMouseScreenPos.set((e.clientX/(STABLE_VP_W || window.innerWidth))*2-1, -(e.clientY/(STABLE_VP_H || window.innerHeight))*2+1);
+  // maj position normalisée + demande de raffinement
+  lastMouseScreenPos.set(
+    (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
+    -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1
+  );
   needsRefineCheck = true;
 
-  // Overlay DOM jaune dans le header
+  // En version verticale (mobile/tablette portrait) -> on ne montre JAMAIS le curseur DOM
+  if (isMobileBucket()){
+    if (domCursorEl) domCursorEl.style.opacity = '0';
+    return;
+  }
+
+  // Overlay DOM jaune dans le header (paysage uniquement)
   if (!domCursorEl) return;
 
   const headerEl = document.getElementById('ui-header');
@@ -3378,7 +3399,6 @@ function onMouseMove(e){
   const inHeader = e.clientY <= headerPx;
 
   if (inHeader){
-    // Taille = taille "grille" en monde → convertie avec la largeur STABLE
     const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0)
       ? lastGridCursorSizeWorld
       : computeDefaultGridCursorSize();
@@ -3395,6 +3415,7 @@ function onMouseMove(e){
     domCursorEl.style.opacity = '0';
   }
 }
+
 
 
 
