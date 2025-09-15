@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fractale — Desktop preset (référence)</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="preconnect" href="https://cdn.skypack.dev" crossorigin>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,7 +24,54 @@
     #labels-layer {
      cursor: none !important;
     }
+    
+    /* Grain visible mais neutre (ne change pas la luminosité moyenne) */
+#ui-header{ position: fixed; inset:0 auto auto 0; z-index:4; background:#090B0B; }
 
+#ui-header::before{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+
+  /* => plus de voile clair : 50% gris devient neutre */
+  mix-blend-mode: overlay;
+  opacity: 1;                           /* force globale du grain */
+  filter: contrast(500%) brightness(100%);/* boost sans éclaircir la moyenne */
+
+  background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'>\
+  <filter id='n'>\
+    <feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' seed='7' stitchTiles='stitch' result='t'/>\
+    <feColorMatrix type='saturate' values='0' in='t' result='g'/>\
+    <!-- Centré sur 50% gris (neutre pour overlay) -->\
+    <feComponentTransfer in='g'>\
+      <feFuncR type='linear' slope='1' intercept='0'/>\
+      <feFuncG type='linear' slope='1' intercept='0'/>\
+      <feFuncB type='linear' slope='1' intercept='0'/>\
+    </feComponentTransfer>\
+  </filter>\
+  <rect width='96' height='96' filter='url(%23n)'/>\
+</svg>");
+  background-repeat: repeat;
+  background-size: 64px 64px;            /* plus petit = grain plus présent */
+  image-rendering: crisp-edges;
+  z-index: 0;
+}
+  
+  
+#ui-header::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: #0055ff;
+  transform: translateZ(0);
+  z-index: 1;              /* <- important */
+}
+
+
+
+    
     /* Masquer la flèche aussi sur le header */
     #ui-header, #ui-header * {
         cursor: none !important;
@@ -247,6 +293,28 @@
   mix-blend-mode: normal;
 }
 
+/* === MENU TRANSPARENT + MÊME GRAIN WEBGL DERRIÈRE === */
+/* Le header ne peint plus de bruit ni de fond : on laisse voir le canvas */
+#ui-header{
+  background: transparent !important;
+}
+
+/* On coupe le faux bruit CSS du header */
+#ui-header::before{
+  content: none !important;
+  display: none !important;
+}
+
+/* On garde la vraie ligne bleue 1px (on la re-déclare pour être sûr) */
+#ui-header::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;                 /* vrai 1px net */
+  background: #0055ff;
+  transform: translateZ(0);
+  z-index: 1;
+}
 
   
   
@@ -288,19 +356,12 @@
   
 <div id="labels-layer" aria-hidden="true"></div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
-    "simplex-noise": "https://cdn.skypack.dev/simplex-noise@4.0.1"
-  }
-}
-</script>
 
 <script type="module">
 // Imports
-import * as THREE from 'three';
-import { createNoise2D } from 'simplex-noise';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js';
+import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/esm/simplex-noise.js';
+
 // --- Loader
 let loaderOverlay;
 
@@ -939,27 +1000,29 @@ function createGrainPlane(){
   updateGrainPlaneSize();
 }
 function createMenuPlane(){
-  // On garde les objets mais on délègue l’occlusion au header DOM
+  // Barre noire dessinée en WebGL (même couche que la grille → même grain au-dessus)
   menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), darkMaterial);
-  menuPlane.position.z = 0.1;
-  menuPlane.renderOrder = 0;
+  menuPlane.position.z   = 0.10;
+  menuPlane.renderOrder  = 0;
   scene.add(menuPlane);
 
+  // La "fausse" bordure 1px WebGL reste coupée : on garde la vraie en CSS (#ui-header::after)
   menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial);
-  menuBorderBottom.position.z = 0.11;
+  menuBorderBottom.position.z  = 0.11;
   menuBorderBottom.renderOrder = 1;
   scene.add(menuBorderBottom);
 
-  // Désactive le plan WebGL (barre noire) et la "fausse" bordure :
-  menuPlane.visible = false;
-  menuBorderBottom.visible = false; // la vraie ligne bleue est en CSS dans #ui-header::after
+  // ✅ On ACTIVE la barre WebGL, et on laisse la bordure CSS faire le 1px
+  menuPlane.visible        = true;   // <- c'était false
+  menuBorderBottom.visible = false;  // <- on le laisse à false
 
-  // VRAIE barre noire (DOM) pour masquer les labels qui "passent dessous"
+  // Header DOM transparent : on laisse passer le canvas + grain
   const header = document.getElementById('ui-header');
-  if (header) header.style.background = '#090B0B';
+  if (header) header.style.background = 'transparent';
 
   updateMenuGeometry();
 }
+
 
 /* === MOBILE FOOTER v3 (GPU) — suivi per-frame via transform === */
 (function installMobileFooterGPU(){
