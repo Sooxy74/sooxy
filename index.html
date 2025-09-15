@@ -909,47 +909,52 @@ async function bootstrap(){
 }
 
 
-
 function applyBucket(){
   const b = BUCKETS.find(x=>x.id===currentBucket);
 
   const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
   const isPhonePortrait  = (currentBucket === 'mobile-v');
 
-  // Tous les paysages sous le palier desktop -> pattern 16:9 avec ½ colonne de chaque côté
-  const forceSubDesktopLandscape = isSubDesktopLandscape();
+  // 👉 On ne force PAS les ½ colonnes si c’est une tablette en paysage
+  const isTabletLand = isTabletLandscapeStrict();
+  const forceSubDesktopLandscape = isSubDesktopLandscape() && !isTabletLand;
 
-  // seuil ultrawide demandé
-  const ULTRAWIDE_AR = 22/9; // ≈ 2.444...
+  const ULTRAWIDE_AR = 22/9;
   const aspect = window.innerWidth / window.innerHeight;
 
   if (forceSubDesktopLandscape) {
-    // 4 colonnes de contenu centrées avec ½ colonne visible à gauche/droite
+    // Tous les paysages sous-desktop SAUF tablettes : ½ colonnes
     baseCols = 5;
     baseRowsPrimary = 2;
 
   } else if (isTabletPortrait) {
-    // 👉 Si portrait "court" (<1000px de haut) : PAS de fillers latéraux → 2 colonnes plein cadre
+    // Tablettes en portrait (inchangé)
     if (isShortPortrait()){
-      baseCols = 2;                      // = nb de colonnes "contenu" → offset 0, aucun filler
+      baseCols = 2;
     } else {
-      // Portrait tablette "grand" : 2 colonnes de contenu centrées avec ½ colonne de chaque côté
       baseCols = 3;
     }
     baseRowsPrimary = b?.grid.rows || 3;
 
   } else if (!isPhonePortrait) {
-    // Desktop / autres cas
-    if (aspect >= ULTRAWIDE_AR) {
-      // ≥ 22:9 : 4 colonnes de contenu + 2 colonnes de marge de chaque côté
+    // Desktop & paysages non-mobiles
+    if (isTabletLand) {
+      // 🆕 Tablette paysage : PAS de ½ colonnes → on colle au grid du bucket
+      baseCols = b?.grid?.cols ?? 4;
+      baseRowsPrimary = b?.grid?.rows ?? 2;
+
+    } else if (aspect >= ULTRAWIDE_AR) {
       baseCols = 8;
       baseRowsPrimary = b?.grid.rows || 2;
+
     } else if (config.baseColsOverride != null) {
       baseCols = Math.max(1, config.baseColsOverride);
       baseRowsPrimary = b?.grid.rows || 2;
+
     } else if (config.targetCellPx) {
       baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
       baseRowsPrimary = b?.grid.rows || 2;
+
     } else {
       baseCols = b?.grid.cols || 4;
       baseRowsPrimary = b?.grid.rows || 2;
@@ -971,19 +976,14 @@ function applyBucket(){
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
-  // Profondeur — CAP portrait -1 niveau (et on respecte prefers-reduced-motion)
+  // Profondeur (inchangé)
   const portraitMobileLike = isPhonePortrait || isTabletPortrait;
   TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
                                     : (prefersReducedMotion ? 5 : 7);
-
-  // Désactive le raffinage “D2 → plus petit” en mobile-like
   config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
 
   updateScrollDocHeight();
 }
-
-
-
 
   
 
@@ -1438,8 +1438,11 @@ const D1_EXCEPTIONS = new Set();
 
   
 function contentOffsetColsForBucket(){
-  // En portrait < 1000px de haut : pas d'offset → pas de fillers latéraux
+  // Portrait < 1000px : jamais de fillers
   if (isShortPortrait()) return 0;
+
+  // 🆕 Tablette paysage : offset 0 (donc pas de ½ colonnes)
+  if (isTabletLandscapeStrict()) return 0;
 
   const contentCols = contentColsForBucket();
   return Math.max(0, (baseCols - contentCols) / 2);
@@ -1459,15 +1462,18 @@ function contentColsForBucket(){
   
   
 function addPrimaryRowSideFillers(row, offsetCols){
-  // Pas de colonnes fillers en portrait "court"
+  // Déjà le cas portrait court : pas de fillers
   if (isShortPortrait()) return;
+
+  // 🆕 Tablette paysage : on NE met PAS les ½ colonnes latérales
+  if (isTabletLandscapeStrict()) return;
 
   const { w, contentTop } = getLayoutMetrics();
   const y = contentTop - row * w - w/2;  // centre de la rangée
 
   const contentCols = contentColsForBucket();
 
-  // Bords INTÉRIEURS du contenu (en monde)
+  // Bords intérieurs du contenu (en monde)
   const innerLeftEdge  = camera.left + offsetCols * w;
   const innerRightEdge = camera.left + (offsetCols + contentCols) * w;
 
@@ -1493,6 +1499,7 @@ function addPrimaryRowSideFillers(row, offsetCols){
     }
   }
 }
+
 
 
 function updateFractalBase(forceFull = false){
@@ -3321,6 +3328,14 @@ function isShortPortrait(){
   return (H > W) && (H < 1000);
 }
 
+// Tablette paysage stricte : largeur entre 641 et 1024px, en mode landscape
+function isTabletLandscapeStrict(){
+  const W = STABLE_VP_W || window.innerWidth;
+  const H = STABLE_VP_H || window.innerHeight;
+  return (W > H) && (W >= 641) && (W < 1025);
+}
+  
+  
 // Largeur intérieure dispo pour le label, en pixels, à l’intérieur d’un carré
 // de côté `sideWorld` (unités monde). On borne au >=0 et on convertit monde→px.
 function computeSquareInnerWidthPx(sideWorld){
