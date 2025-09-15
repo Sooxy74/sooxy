@@ -316,7 +316,10 @@
   z-index: 1;
 }
 
-  
+  @media (min-width: 1025px){
+  :root { --doc-h: 0vh; }
+  html, body { overflow: hidden; } /* optionnel mais pratique */
+}
   
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
 </style>
@@ -1315,34 +1318,41 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
 
 function updateScrollDocHeight(){
-  // Mobile = portrait + tablettes très verticales
-  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  // Mobile-like = portrait mobile + tablettes portrait
+  const isMobile =
+    isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
 
-  const { viewHeight, w, menuHeight } = getLayoutMetrics();
-
-  // Rangées supplémentaires sous l’écran pour amortir la fin de scroll
-  const EXTRA_BOTTOM_ROWS = 3;
-
-  let contentWorld;
-  if (isMobile){
-    contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
-      ? mobileWorldContentHeight
-      : Math.max(baseRowsPrimary, 5) * w;
-    contentWorld += EXTRA_BOTTOM_ROWS * w;
-  } else {
-    const totalRows = baseRowsPrimary + EXTRA_BOTTOM_ROWS;
-    contentWorld = totalRows * w;
+  if (!isMobile){
+    // 👉 Desktop & tablette paysage : pas de scroll, pas de spacer.
+    spacer.style.height = '0px';
+    // (optionnel) supprime aussi la scrollbar “cosmétique”
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return;
   }
 
-  const worldTotal = menuHeight + contentWorld;
+  // --- comportement actuel pour mobile/tablettes portrait ---
+  const { viewHeight, w, menuHeight } = getLayoutMetrics();
+  const EXTRA_BOTTOM_ROWS = 3;
 
-  // Hauteur DOM finale basée sur la hauteur "stable"
+  let contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
+    ? mobileWorldContentHeight
+    : Math.max(baseRowsPrimary, 5) * w;
+  contentWorld += EXTRA_BOTTOM_ROWS * w;
+
+  const worldTotal = menuHeight + contentWorld;
   const stableH = STABLE_VP_H || window.innerHeight;
   const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
   spacer.style.height = docPx + 'px';
+
+  // (re)autorise le scroll en mobile si on vient de repasser du desktop
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
 }
+
 
 
 
