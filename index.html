@@ -1000,28 +1000,41 @@ function createGrainPlane(){
   updateGrainPlaneSize();
 }
 function createMenuPlane(){
-  // Barre noire dessinée en WebGL (même couche que la grille → même grain au-dessus)
-  menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), darkMaterial);
-  menuPlane.position.z   = 0.10;
-  menuPlane.renderOrder  = 0;
+  // Matériau d'occlusion dédié au menu : pas de depth test/écriture,
+  // et rendu tout à la fin pour recouvrir les points/carrés.
+  const menuOccluderMaterial = new THREE.MeshBasicMaterial({
+    color: config.darkColor,
+    depthTest: false,
+    depthWrite: false,
+    transparent: false
+  });
+
+  // Barre du menu (occludeur WebGL)
+  menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuOccluderMaterial);
+  // Z arbitraire > grille ; l'ordre de rendu fera foi de toute façon
+  menuPlane.position.z  = 10;
+  // Très grand renderOrder => dessiné après les points (qui sont à ~2.9/3.4)
+  menuPlane.renderOrder = 100;
   scene.add(menuPlane);
 
-  // La "fausse" bordure 1px WebGL reste coupée : on garde la vraie en CSS (#ui-header::after)
+  // Trait 1px du bas : on le laisse géré par le CSS (#ui-header::after),
+  // donc on garde le mesh mais on ne l'affiche pas.
   menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial);
-  menuBorderBottom.position.z  = 0.11;
-  menuBorderBottom.renderOrder = 1;
+  menuBorderBottom.position.z  = 11;
+  menuBorderBottom.renderOrder = 101;
   scene.add(menuBorderBottom);
 
-  // ✅ On ACTIVE la barre WebGL, et on laisse la bordure CSS faire le 1px
-  menuPlane.visible        = true;   // <- c'était false
-  menuBorderBottom.visible = false;  // <- on le laisse à false
+  // On ACTIVE la barre WebGL et on garde la bordure CSS pour le vrai 1px net
+  menuPlane.visible        = true;
+  menuBorderBottom.visible = false;
 
-  // Header DOM transparent : on laisse passer le canvas + grain
+  // Header DOM transparent : on laisse voir le canvas (le menuPlane masque dessous)
   const header = document.getElementById('ui-header');
   if (header) header.style.background = 'transparent';
 
   updateMenuGeometry();
 }
+
 
 
 /* === MOBILE FOOTER v3 (GPU) — suivi per-frame via transform === */
