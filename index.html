@@ -46,7 +46,7 @@
       height: 100%;
       background: #f3ff00;
       opacity: .85;
-      box-shadow: 0 0 0 1px #11190c inset;
+      box-shadow: 0 0 0 1px #090B0B inset;
     }
     
     /* Loader overlay */
@@ -209,7 +209,7 @@
   position: fixed;
   left: 0; right: 0; bottom: 0;
   height: 320px;                 /* hauteur max attendue de l'URL bar */
-  background: #151a12;           /* gris/noir */
+  background: #090B0B;           /* gris/noir */
   border-top: 1px solid #0055ff; /* liseré bleu */
   pointer-events: none;
   z-index: 3;
@@ -346,7 +346,7 @@ function pickBucket(w, h){
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const COLORS = {
   background: 0x0055ff,           // bleu
-  square:     0x11190c,           // noir
+  square:     0x090B0B,           // noir
   accent:     0xf3ff00,           // jaune
   textCSS:    '#f3f1ee',          // blanc (pour DOM/canvas)
   placeholder:'#CAC4B7'           // gris fallback images
@@ -364,7 +364,7 @@ const config = {
   maxDepthVariation: 7,
   mouseSquareAnimationSpeed: prefersReducedMotion ? 0.15 : 0.4,
   gridAnimationSpeed: prefersReducedMotion ? 0.05 : 0.08,
-  grainOpacity: prefersReducedMotion ? 0.0 : 0.08,
+  grainOpacity: prefersReducedMotion ? 0.0 : 0.12,
   showDots: true,
   dotSize: 0.12,
   dotColor: COLORS.accent,
@@ -956,7 +956,7 @@ function createMenuPlane(){
 
   // VRAIE barre noire (DOM) pour masquer les labels qui "passent dessous"
   const header = document.getElementById('ui-header');
-  if (header) header.style.background = '#11190c';
+  if (header) header.style.background = '#090B0B';
 
   updateMenuGeometry();
 }
@@ -2725,29 +2725,23 @@ function updateDomLabelLayout(st, lm){
 
   const { w } = lm;
 
-  // Taille/position AFFICHÉES du carré (après lerp)
+  // 1) GÉOMÉTRIE AFFICHÉE = pour ANIMER LA POSITION (on garde le mouvement)
   const dispS = Math.max(0, st.mesh.scale.x);
   const half  = dispS / 2;
   const dispX = st.mesh.position.x;
   const dispY = st.mesh.position.y;
 
-  // Marges internes proportionnelles
+  // Marges internes (pour la position seulement)
   const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
   const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
   const mRightWorld = dispS * marginPctRight;
   const mTopWorld   = dispS * marginPctTop;
 
-  // Coin haut-droit intérieur (ancre du texte)
+  // Coin haut-droit **affiché** (donc animé)
   const tx = dispX + half - mRightWorld;
   const ty = dispY + half - mTopWorld;
 
-  // Monde → pixels (largeur STABLE)
-  const pxPerWorldX   = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-  const squareWidthPx = dispS * pxPerWorldX;
-  const marginPx      = mRightWorld * pxPerWorldX;
-  const availablePx   = Math.max(0, squareWidthPx - 2 * marginPx);
-
-  // (Re)mesures si manquantes
+  // 2) MESURES “BASE” (si manquantes)
   if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
     const prev = st.domLabelEl.style.transform;
     st.domLabelEl.style.transform = 'translate(-10000px,-10000px)';
@@ -2763,24 +2757,28 @@ function updateDomLabelLayout(st, lm){
     st.domLabelEl.style.transform = prev || '';
   }
 
-  // 1) Taille globale de police basée sur la taille AFFICHÉE du bouton "Creative"
-  //    (ensureGlobalLabelFontPx recalcule en continu tant que ça bouge)
-  let uniformFontPx = ensureGlobalLabelFontPx(lm);
+  // 3) TAILLE DE POLICE = figée sur la **taille finale** (target), pas l’affichée
+  const targetS = Math.max(0, st.targetScale?.x || dispS); // fallback au cas où
+  const availablePxFinal = computeSquareInnerWidthPx(targetS); // largeur utile finale
 
-  // 2) Clamp si nécessaire pour tenir dans la largeur dispo du carré courant
+  // Taille “uniforme” basée sur le bouton de ref (calculée aussi sur target)
+  const uniformFontPx = ensureGlobalLabelFontPx(lm);
+
+  // Clamp (pour garantir que ça rentre *à la fin*, pas pendant l’anim)
   const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
     ? (st.labelBaseWidthPx / st.baseFontPx)
     : 0;
 
-  const fitFontPx = perPx > 0 ? (availablePx / perPx) : (uniformFontPx || st.baseFontPx);
-  let finalFontPx = uniformFontPx ? Math.min(uniformFontPx, fitFontPx) : fitFontPx;
+  let finalFontPx = perPx > 0
+    ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
+    : (uniformFontPx || st.baseFontPx);
 
   // Quantification douce + garde-fous
   finalFontPx = Math.round(finalFontPx * 2) / 2;
   finalFontPx = Math.max(10, Math.min(96, finalFontPx));
   st.domLabelEl.style.fontSize = finalFontPx + 'px';
 
-  // Couleur / baffle
+  // 4) Couleur + baffle (inchangé)
   if (!isMobileBucket()){
     const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
     const inside =
@@ -2802,39 +2800,29 @@ function updateDomLabelLayout(st, lm){
     line.style.textAlign = 'right';
   });
 
-  // Positionnement pixel-perfect (ancre haut-droit), coordonnées STABLE
+  // 5) POSITIONNEMENT PIXEL-PERFECT (toujours basé sur la position affichée → animé)
   const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
   st.domLabelEl.style.transform =
     `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
 }
 
 
-
-// Remplacement complet
-function computeSquareInnerWidthPx(squareSizeWorld){
-  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-
-  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-  const marginWorld    = squareSizeWorld * marginPctRight;
-
-  const squareWidthPx  = Math.max(0, squareSizeWorld) * pxPerWorldX;
-  const innerWidthPx   = Math.max(0, squareWidthPx - 2 * (marginWorld * pxPerWorldX));
-  return innerWidthPx;
-}
-
-
-function isShortPortrait(){
-  return window.innerHeight < 1000 && window.innerHeight >= window.innerWidth;
-}
-  
-  
 // --- REMPLACE TOUTE LA FONCTION ---
 function ensureGlobalLabelFontPx(lm){
-  // On mémorise seulement quand c'est stable ; pendant le lerp, on recalcule à chaque frame.
+  // Cache partagé
   const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px:null, refSize:0 });
-  const TARGET_RATIO = 0.66; // "Creative" ≈ 66% de la largeur intérieure
 
-  // Trouver le bouton "Creative ..." (clé 'code')
+  // Desktop = ratio un peu plus serré pour la 1re ligne
+  const isDesktopBucket =
+    currentBucket === 'desktop-16:9' ||
+    currentBucket === 'desktop-21:9' ||
+    currentBucket === 'desktop-32:9';
+
+  const DESKTOP_RATIO = 0.52;
+  const OTHER_RATIO   = 0.60;
+  const TARGET_RATIO  = isDesktopBucket ? DESKTOP_RATIO : OTHER_RATIO;
+
+  // Bouton de référence = “Creative …”
   let refSt = null;
   for (const st of fractalState.values()){
     if (!st || !st.isButton || !st.domLabelEl || !st.labelText) continue;
@@ -2843,9 +2831,9 @@ function ensureGlobalLabelFontPx(lm){
   }
   if (!refSt) return cache.px;
 
-  // ➜ utiliser la TAILLE AFFICHÉE (mesh.scale.x), pas la cible
-  const displaySizeWorld = Math.max(0, refSt.mesh?.scale?.x || 0);
-  if (!displaySizeWorld) return cache.px;
+  // TAILLE **FINALE** du carré de ref (fige la police pendant l’anim)
+  const refSizeWorld = Math.max(0, refSt.targetScale?.x || refSt.mesh?.scale?.x || 0);
+  if (!refSizeWorld) return cache.px;
 
   // (Re)mesures si besoin
   if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0 || !refSt.baseFontPx){
@@ -2864,36 +2852,27 @@ function ensureGlobalLabelFontPx(lm){
   }
   if (!refSt.firstLineBaseWidthPx || !refSt.baseFontPx) return cache.px;
 
-  // Si ça bouge encore, on recalcule à CHAQUE frame, sinon on peut cacher.
-  const targetSizeWorld = Math.max(0, refSt.targetScale?.x || displaySizeWorld);
-  const animating = Math.abs(targetSizeWorld - displaySizeWorld) > 1e-3;
-
-  // Recalcule si animé ou si la taille affichée a changé de façon notable
+  // Recalcule UNIQUEMENT si la taille finale a changé
   const needRecalc =
-    animating ||
     !cache.px ||
-    Math.abs((cache.refSize || 0) - displaySizeWorld) > 1e-3;
+    Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-3;
 
   if (needRecalc){
-    const innerPx = computeSquareInnerWidthPx(displaySizeWorld);
+    const innerPx = computeSquareInnerWidthPx(refSizeWorld);
     if (innerPx > 0){
       const perPx = refSt.firstLineBaseWidthPx / refSt.baseFontPx; // px de largeur par px de font
       let fontPx = (TARGET_RATIO * innerPx) / perPx;
 
-      // quantification douce (meilleur hinting) + garde-fous
       fontPx = Math.round(fontPx * 2) / 2;
       fontPx = Math.max(10, Math.min(96, fontPx));
 
-      // On met à jour le cache même pendant l’anim (il reflète la taille affichée)
       cache.px = fontPx;
-      cache.refSize = displaySizeWorld;
+      cache.refSize = refSizeWorld;
     }
   }
 
   return cache.px;
 }
-
-
 
 
 function syncStateToMeshes(){
@@ -3255,6 +3234,30 @@ function isSubDesktopLandscape(){
   // Tous les formats paysage sous le palier "desktop" (w < 1025)
   // → iPhone 14 Max 932×430, iPads en paysage 1024×..., etc.
   return window.innerWidth < 1025 && window.innerWidth > window.innerHeight;
+}
+  
+
+// Portrait "court" : on voulait justement ça (< ~1000px de haut)
+// Utilise les dimensions "stables" pour ne pas réagir à la barre d’URL iOS.
+function isShortPortrait(){
+  const H = STABLE_VP_H || window.innerHeight;
+  const W = STABLE_VP_W || window.innerWidth;
+  return (H > W) && (H < 1000);
+}
+
+// Largeur intérieure dispo pour le label, en pixels, à l’intérieur d’un carré
+// de côté `sideWorld` (unités monde). On borne au >=0 et on convertit monde→px.
+function computeSquareInnerWidthPx(sideWorld){
+  // même logique de marge que dans updateDomLabelLayout()
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+  const marginWorld = Math.max(0, sideWorld * marginPctRight);
+
+  // on enlève une marge à droite et (par sûreté) une marge équivalente côté gauche
+  const innerWorld = Math.max(0, sideWorld - marginWorld * 2);
+
+  // conversion monde → pixels écran sur l'axe X
+  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
+  return innerWorld * pxPerWorldX;
 }
   
   
