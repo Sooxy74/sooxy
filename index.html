@@ -318,13 +318,9 @@
 
   @media (min-width: 1025px){
   :root { --doc-h: 0vh; }
-  /* Laisse le scroll horizontal, bloque le vertical */
-  html, body {
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-  }
+  html, body { overflow: hidden; } /* optionnel mais pratique */
 }
- 
+  
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
@@ -438,8 +434,6 @@ const config = {
   dotColor: COLORS.accent,
   dotSizeIsRelative: false,
   baseColsOverride: null,
-  overlayGapCols: 0.5, // ← espacement horizontal additionnel entre colonnes (en “multiples” de w)
-
 
   // --- Nouveaux réglages pour les labels ---
   // Plus PETIT = plus rapide (intervalle d'update baffle, en ms)
@@ -1214,36 +1208,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       ot: Math.round(window.visualViewport?.offsetTop || 0),
     };
   }
-  
-  // --- Défilement horizontal avec la molette / trackpad (desktop & tablette paysage)
-(function enableHorizontalWheelScroll(){
-  function onWheel(e){
-    // On ne force que sur les formats paysage non-mobiles
-    if (!isMobileBucket()){
-      // Si le geste est surtout vertical, on le convertit en scroll horizontal
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        const scroller = document.scrollingElement || document.documentElement;
-        scroller.scrollLeft += e.deltaY;
-        e.preventDefault();
-      }
-    }
-  }
-  window.addEventListener('wheel', onWheel, { passive: false });
-})();
 
-  
-  // --- Flèches clavier pour défiler
-(function enableArrowKeyScroll(){
-  window.addEventListener('keydown', (e) => {
-    if (isMobileBucket()) return;
-    const scroller = document.scrollingElement || document.documentElement;
-    const step = Math.round((STABLE_VP_W || window.innerWidth) * 0.25); // 25% de l'écran
-    if (e.key === 'ArrowRight') scroller.scrollLeft += step;
-    if (e.key === 'ArrowLeft')  scroller.scrollLeft -= step;
-  });
-})();
-
-  
   function orientationFlip(pw, ph, w, h){
     const prevPortrait = ph >= pw;
     const nowPortrait  = h  >= w;
@@ -1353,129 +1318,69 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
 
 function updateScrollDocHeight(){
-  const spacer = document.getElementById('scroll-spacer');
-  if (!spacer) return;
-
-  // Portrait mobile & tablettes : on garde le scroll vertical simulé (inchangé)
+  // Mobile-like = portrait mobile + tablettes portrait
   const isMobile =
     isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
-  if (isMobile){
-    const { viewHeight, w, menuHeight } = getLayoutMetrics();
-    const EXTRA_BOTTOM_ROWS = 3;
+  const spacer = document.getElementById('scroll-spacer');
+  if (!spacer) return;
 
-    let contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
-      ? mobileWorldContentHeight
-      : Math.max(baseRowsPrimary, 5) * w;
-    contentWorld += EXTRA_BOTTOM_ROWS * w;
-
-    const worldTotal = menuHeight + contentWorld;
-    const stableH = STABLE_VP_H || window.innerHeight;
-    const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
-    spacer.style.height = docPx + 'px';
-    spacer.style.width  = '0px';
-
-    // (re)autorise le scroll vertical uniquement
-    document.documentElement.style.overflowX = '';
-    document.body.style.overflowX = '';
-    document.documentElement.style.overflowY = '';
-    document.body.style.overflowY = '';
+  if (!isMobile){
+    // 👉 Desktop & tablette paysage : pas de scroll, pas de spacer.
+    spacer.style.height = '0px';
+    // (optionnel) supprime aussi la scrollbar “cosmétique”
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
     return;
   }
 
-  // === PAYSAGE (desktop & tablette paysage) : SCROLL HORIZONTAL ===
-  const { w } = getLayoutMetrics();
-  const contentCols = contentColsForBucket();
+  // --- comportement actuel pour mobile/tablettes portrait ---
+  const { viewHeight, w, menuHeight } = getLayoutMetrics();
+  const EXTRA_BOTTOM_ROWS = 3;
 
-  // Hydrate l'état de scroll horizontal et propage le "gap" (en colonnes)
-  const PATTERN_SLOTS = 5;                 // 5 positions par rangée
-  const PATTERN_COLS  = PATTERN_SLOTS * 2; // image + "case vide" à droite à chaque fois
+  let contentWorld = mobileWorldContentHeight && mobileWorldContentHeight > 0
+    ? mobileWorldContentHeight
+    : Math.max(baseRowsPrimary, 5) * w;
+  contentWorld += EXTRA_BOTTOM_ROWS * w;
 
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:PATTERN_COLS, gapCols:0 });
-  if (!H.patternCols) H.patternCols = PATTERN_COLS; // n'écrase pas si déjà fixé par buildFreeOverlays()
-  H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0);
+  const worldTotal = menuHeight + contentWorld;
+  const stableH = STABLE_VP_H || window.innerHeight;
+  const docPx = Math.max(stableH, Math.ceil((worldTotal / viewHeight) * stableH));
+  spacer.style.height = docPx + 'px';
 
-  const patternCols = H.patternCols || PATTERN_COLS;
-  const gapXWorld   = Math.max(0, H.gapCols) * w;
-
-  // Largeur totale du pattern = colonnes * w + (colonnes-1)*gap
-  const totalWorld   = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
-
-  // Largeur visible (fenêtre contenu) = contentCols * w + (contentCols-1)*gap
-  const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
-
-  // Ce qu'il reste à scroller en "monde" (intègre le gap)
-  const extraWorld = Math.max(0, totalWorld - visibleWorld);
-
-  // Aligne H.maxWorld avec ce calcul (utile pour le mapping scrollPx <-> monde)
-  H.maxWorld = extraWorld;
-
-  // Monde -> pixels : largeur totale du doc = viewport + surplus
-  const stableW = STABLE_VP_W || window.innerWidth;
-  const pxPerWorldX = stableW / (camera.right - camera.left);
-  const docWidthPx = Math.ceil(stableW + extraWorld * pxPerWorldX);
-
-  // On fabrique la "largeur de doc" via le spacer (hauteur 1px suffit)
-  spacer.style.height = '1px';
-  spacer.style.width  = docWidthPx + 'px';
-
-  // Active uniquement le scroll horizontal
-  document.documentElement.style.overflowX = 'auto';
-  document.body.style.overflowX            = 'auto';
-  document.documentElement.style.overflowY = 'hidden';
-  document.body.style.overflowY            = 'hidden';
+  // (re)autorise le scroll en mobile si on vient de repasser du desktop
+  document.documentElement.style.overflow = '';
+  document.body.style.overflow = '';
 }
 
 
 
 
 function onScroll(){
-  // Mobile-like (portrait) : on garde le scroll vertical existant
+  // Mobile-like = portrait mobile + tablettes portrait
   const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
-  if (isMobile){
-    const prevWorld = scrollOffsetWorld;
-    const nextWorld = computeScrollOffsetWorldFromScrollY();
-    scrollOffsetWorld = nextWorld;
-
-    // Maintien du curseur ancré pendant le scroll vertical
-    const a = mouseSquare?.userData?.anchor;
-    if (a){
-      const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
-      mouseSquare.userData.targetPosition.set(a.x, a.y + mobDelta, 4);
-      mouseSquare.userData.targetScale.set(a.size, a.size, 1);
-      cursorBorder.userData.targetPosition.set(a.x, a.y + mobDelta, 3);
-      cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
-    }
+  if (!isMobile){
+    scrollOffsetWorld = 0;
     return;
   }
 
-  // Paysage : scroll HORIZONTAL (met à jour H.xWorld)
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10 });
-  H.xWorld = computeScrollOffsetWorldFromScrollX();
+  // Recalcule *toujours* l'offset monde depuis le layout viewport
+  const prevWorld = scrollOffsetWorld;
+  const nextWorld = computeScrollOffsetWorldFromScrollY();
+  scrollOffsetWorld = nextWorld;
+
+  // Maintien du curseur ancré pendant le scroll (y compris si la barre d’URL bouge)
+  const a = mouseSquare?.userData?.anchor;
+  if (a){
+    const mobDelta = scrollOffsetWorld - mobileBuildScrollAt;
+    mouseSquare.userData.targetPosition.set(a.x, a.y + mobDelta, 4);
+    mouseSquare.userData.targetScale.set(a.size, a.size, 1);
+    cursorBorder.userData.targetPosition.set(a.x, a.y + mobDelta, 3);
+    cursorBorder.userData.targetScale.set(a.size + config.borderWidth, a.size + config.borderWidth, 1);
+  }
 }
 
-
-function computeScrollOffsetWorldFromScrollX(){
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10 });
-  const maxWorld = H.maxWorld || 0;
-  if (maxWorld <= 0) return 0;
-
-  const spacer = document.getElementById('scroll-spacer');
-  const docPxW = spacer ? spacer.offsetWidth : Math.max(
-    document.documentElement.scrollWidth,
-    document.documentElement.clientWidth
-  );
-
-  const stableInnerW = STABLE_VP_W || window.innerWidth;
-  const maxScrollPx = Math.max(0, docPxW - stableInnerW);
-  const scrollLeft = (document.scrollingElement ? document.scrollingElement.scrollLeft : window.pageXOffset) || 0;
-
-  if (maxScrollPx <= 0) return 0;
-
-  const t = Math.min(1, Math.max(0, scrollLeft / maxScrollPx));
-  return t * maxWorld;
-}
 
 
 
@@ -1949,17 +1854,78 @@ function specToPath(spec, contentTop, w) {
 }
 
 function chooseButtonsThenImages(forceFull){
-  // On neutralise entièrement la logique de boutons + petites images.
   imageCells.clear();
   buttonCells.clear();
   imageSlots.clear();
   buttonSlots.clear();
-  imageAssignment.clear();
-  persistentButtonPaths = [];
 
-  // Rien à poser -> OK pour la suite du pipeline.
+  // MOBILE (portrait) : 5 boutons déterministes, pas d’images dédiées
+  if (isMobileBucket() && USE_MOBILE_DETERMINISTIC){
+    return buildMobileButtonsDeterministic();
+  }
+
+  // Desktop / tablettes : preset + fallback si nécessaire
+  const { w, contentTop } = getLayoutMetrics();
+  const preset = presetForBucket(currentBucket);
+
+  persistentButtonPaths = [];
+  for (const b of (preset?.buttons || [])) {
+    const path = specToPath(b, contentTop, w);
+    if (!path) continue;
+    const cat = CATEGORIES.find(c => c.key === b.key);
+    if (!cat) continue;
+    buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+    persistentButtonPaths.push(path);
+  }
+
+  const requiredBtnCount = preset?.buttons?.length ?? REQUIRED_BUTTONS;
+
+  // Fallback désactivé pour TOUS les paysages sous-desktop (inclut mobile paysage)
+  const allowFallback = !isSubDesktopLandscape();
+  if (allowFallback && persistentButtonPaths.length < requiredBtnCount){
+    ensureFallbackButtons();
+  }
+
+  // Images D1
+  for (const img of (preset?.imagesD1 || [])){
+    const p = `content/${img.row}/${img.col}`;
+    const s = targetState.get(p);
+    if (s && isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.4) && !buttonCells.has(p)){
+      imageCells.add(p);
+    }
+  }
+
+  // Images D2
+  for (const spec of (preset?.imagesD2 || [])){
+    const path = specToPath(spec, contentTop, w);
+    if (path && !buttonCells.has(path)) imageCells.add(path);
+  }
+
+  // Attribution d’URLs (réutilise persistentImageUrls si dispo)
+  const cells = Array.from(imageCells);
+  let urlsToUse = [];
+
+  if (forceFull || !persistentImageUrls || persistentImageUrls.length === 0){
+    let uniqueUrls = Array.from(new Set(imageTextures));
+    for (let i = uniqueUrls.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniqueUrls[i], uniqueUrls[j]] = [uniqueUrls[j], uniqueUrls[i]];
+    }
+    if (uniqueUrls.length === 0) uniqueUrls = ['img/logo-sooxy-art.png'];
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(uniqueUrls[i % uniqueUrls.length]);
+    persistentImageUrls = urlsToUse.slice();
+  } else {
+    for (let i = 0; i < cells.length; i++) urlsToUse.push(persistentImageUrls[i % persistentImageUrls.length]);
+  }
+
+  for (let i = 0; i < cells.length; i++) imageAssignment.set(cells[i], urlsToUse[i]);
+  for (const k of Array.from(imageAssignment.keys())) if (!imageCells.has(k)) imageAssignment.delete(k);
+
+  // Toujours true : l’anim peut se lancer
   return true;
 }
+
+
 
 
 function reformGridKeepImages(){
@@ -2117,14 +2083,261 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
 }
 
 function buildMobileButtonsDeterministic(){
-  // Plus de boutons, plus de petites images en mobile.
-  // On laisse la grille seule (forcée en D2 par forceMobilePattern()).
-  imageCells.clear();
-  buttonCells.clear();
+  // Mobile = portrait + tablettes portrait
+  const { w, contentTop } = getLayoutMetrics();
+
+  // --- TAILLES ---
+  const sideOriginal = w;      // grandes images = 1×1
+  const sideBtn = w / 2;       // boutons & petites images = 1/2 (D2)
+  const gapBtn = sideBtn / 2;  // écart vertical entre boutons
+  const stepY = sideBtn + gapBtn;
+
+  // Centres des 2 colonnes "contenu" (jamais dans les colonnes filler)
+  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile-v, 0.5 en tablettes portrait
+  const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne contenu 0
+  const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne contenu 1
+
+  // Premier bouton : juste sous le header (moitié de sa hauteur)
+  const firstCy = contentTop - sideBtn / 2;
+
+  // Reset des placements précédents
+  if (persistentButtonPaths && persistentButtonPaths.length){
+    for (const p of persistentButtonPaths) targetState.delete(p);
+  }
   persistentButtonPaths = [];
-  return true;
+  buttonCells.clear();
+
+  const allBlocks = []; // pour calculer la hauteur totale (scroll)
+
+  // ---------- 1) Positions "de base" (alternance droite/gauche) ----------
+  const basePosByKey = {};
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i % MOBILE_CATEGORY_ORDER.length]; // ['motion','fractal','ui','code','random']
+    const onLeft = (i % 2 === 1); // 0: droite, 1: gauche, 2: droite, ...
+    const cx = onLeft ? xLeft : xRight;
+    const cy = firstCy - i * stepY;
+    basePosByKey[key] = { cx, cy };
+  }
+
+  // ---------- 2) Offsets demandés ----------
+  // NB: +Y = vers le haut ; -Y = vers le bas ; -X = vers la gauche ; +X = vers la droite
+  const dx_w4 =  w/4,  dy_w4 =  w/4;   // aide mémoire
+  const dx_w2 =  w/2,  dy_w2 =  w/2;
+
+  // Bouton Motion Design : w/4 vers la gauche
+  if (basePosByKey['motion']){
+    basePosByKey['motion'].cx -= dx_w4;
+  }
+
+  // Bouton Creative Coding : w/4 vers le haut ET w/4 vers la gauche
+  if (basePosByKey['code']){
+    basePosByKey['code'].cx -= dx_w4;
+    basePosByKey['code'].cy += dy_w4;
+  }
+
+  // Bouton Fractal Art : léger offset (comme dans ta version précédente)
+  if (basePosByKey['fractal']){
+    basePosByKey['fractal'].cx += dx_w4;
+    basePosByKey['fractal'].cy -= dy_w4;
+  }
+
+  // Bouton UI Design : +w/4 vers la droite
+  if (basePosByKey['ui']) {
+    basePosByKey['ui'].cx += dx_w4;
+  }
+
+  // ---------- 3) Création effective des 5 boutons ----------
+  // On écrit dans targetState sous des clés stables 'btn/b0'..'btn/b4' (ordre = MOBILE_CATEGORY_ORDER)
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i];
+    const cat = CATEGORIES.find(c => c.key === key);
+    if (!cat) continue;
+
+    const pos = basePosByKey[key] || { cx: (i%2?xLeft:xRight), cy: firstCy - i*stepY };
+    const path = `btn/b${i}`;
+
+    targetState.set(path, {
+      x: pos.cx,
+      y: pos.cy,
+      size: Math.max(0, sideBtn - config.borderWidth),
+      depth: 1,
+      path,
+      originalSize: sideBtn
+    });
+
+    buttonCells.set(path, { label: cat.label, url: cat.url, key: cat.key });
+    persistentButtonPaths.push(path);
+    allBlocks.push({ cx: pos.cx, cy: pos.cy, side: sideBtn });
+  }
+
+  // Accès rapide aux paths par clé
+  const pathByKey = {};
+  for (let i = 0; i < REQUIRED_BUTTONS; i++){
+    const key = MOBILE_CATEGORY_ORDER[i];
+    pathByKey[key] = `btn/b${i}`;
+  }
+
+  // Helpers pour lire/écrire la position d’un bouton déjà créé
+  const readBtn = key => {
+    const p = pathByKey[key];
+    return p ? targetState.get(p) : null;
+  };
+  const moveBtn = (key, nx, ny) => {
+    const p = pathByKey[key];
+    if (!p) return;
+    const st = targetState.get(p);
+    if (!st) return;
+    st.x = nx;
+    st.y = ny;
+    allBlocks.push({ cx: nx, cy: ny, side: sideBtn });
+  };
+
+  // ---------- 4) Petites images + placements relatifs demandés ----------
+  imageCells.clear();
+
+  // Petite image #1 — AU-DESSUS de "UI Design"
+  {
+    const ui = readBtn('ui');
+    if (ui){
+      const small1_cx = ui.x;
+      const small1_cy = ui.y + sideBtn;  // juste au-dessus (1 hauteur de bouton)
+      const p = 'btn/imgS0';
+      targetState.set(p, {
+        x: small1_cx,
+        y: small1_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small1_cx, cy: small1_cy, side: sideBtn });
+    }
+  }
+
+  // Petite image #2 — à -w/2 en X et -w/2 en Y par rapport à UI (comme avant)
+  {
+    const ui = readBtn('ui');
+    if (ui){
+      const small2_cx = ui.x - dx_w2;
+      const small2_cy = ui.y - dy_w2;
+      const p = 'btn/imgS1';
+      targetState.set(p, {
+        x: small2_cx,
+        y: small2_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small2_cx, cy: small2_cy, side: sideBtn });
+    }
+  }
+
+  // Petite image #3 — SOUS "Creative Coding"
+  {
+    const code = readBtn('code');
+    if (code){
+      const small3_cx = code.x;
+      const small3_cy = code.y - sideBtn;
+      const p = 'btn/imgS2';
+      targetState.set(p, {
+        x: small3_cx,
+        y: small3_cy,
+        size: Math.max(0, sideBtn - config.borderWidth),
+        depth: 1,
+        path: p,
+        originalSize: sideBtn
+      });
+      imageCells.add(p);
+      allBlocks.push({ cx: small3_cx, cy: small3_cy, side: sideBtn });
+    }
+  }
+
+  // Random Stuff : même colonne que Fractal (on ajuste l'X maintenant, le Y sera fixé après G2)
+  {
+    const fractal = readBtn('fractal');
+    const random  = readBtn('random');
+    if (fractal && random){
+      moveBtn('random', fractal.x, random.y);
+    }
+  }
+
+  // ---------- 5) Grandes images ----------
+  // G1 : en haut à gauche (inchangé)
+  {
+    const p = 'btn/imgL0';
+    const imgL0_cx = xLeft;
+    const imgL0_cy = contentTop - sideOriginal / 2;
+    targetState.set(p, {
+      x: imgL0_cx,
+      y: imgL0_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
+    imageCells.add(p);
+    allBlocks.push({ cx: imgL0_cx, cy: imgL0_cy, side: sideOriginal });
+  }
+
+  // G2 : remontée d'un w → cy = contentTop - (3*w + sideOriginal/2)
+  {
+    const p = 'btn/imgL1';
+    const imgL1_cx = xRight;
+    const imgL1_cy = contentTop - (3 * w + sideOriginal / 2);
+    targetState.set(p, {
+      x: imgL1_cx,
+      y: imgL1_cy,
+      size: Math.max(0, sideOriginal - config.borderWidth),
+      depth: 1,
+      path: p,
+      originalSize: sideOriginal
+    });
+    imageCells.add(p);
+    allBlocks.push({ cx: imgL1_cx, cy: imgL1_cy, side: sideOriginal });
+  }
+
+  // ---------- 6) ALIGNE Random Stuff sur le BAS de la 2ᵉ grande image ----------
+  {
+  const random = readBtn('random');
+  const imgL1  = targetState.get('btn/imgL1');
+  if (random && imgL1){
+    const bottomImgL1 = imgL1.y - imgL1.originalSize / 2;
+    const topImgL1    = imgL1.y + imgL1.originalSize / 2;
+
+    const t = 0.5; // 0 = ancienne position ; 1 = position actuelle trop haute ; 0.5 = entre-deux
+    const targetBottomY = bottomImgL1 + (topImgL1 - bottomImgL1) * t;
+
+    const newRandomCy = targetBottomY + sideBtn / 2;
+    moveBtn('random', random.x, newRandomCy);
+  }
 }
 
+  // ---------- 7) Attribution d’images (évite les doublons) ----------
+  const urlsPool = (imageTextures && imageTextures.length) ? imageTextures.slice() : ['img/logo-sooxy-art.png'];
+  const startAt = Math.abs(sessionSalt) % urlsPool.length;
+  const takeUrl = (k) => urlsPool[(startAt + k) % urlsPool.length];
+
+  // Collecte des images à attribuer (ordre stable)
+  const imagePaths = ['btn/imgL0','btn/imgL1','btn/imgS0','btn/imgS1','btn/imgS2'].filter(p => targetState.has(p));
+  imagePaths.forEach((p, k) => {
+    imageAssignment.set(p, takeUrl(k));
+  });
+
+  // ---------- 8) Hauteur totale du contenu pour le scroll mobile ----------
+  let minBottomEdge = Infinity;
+  for (const b of allBlocks){
+    const bottom = b.cy - b.side / 2;
+    if (bottom < minBottomEdge) minBottomEdge = bottom;
+  }
+  mobileWorldContentHeight = Math.max(0, contentTop - minBottomEdge);
+  mobileBuildScrollAt = scrollOffsetWorld;
+  updateScrollDocHeight();
+
+  return persistentButtonPaths.length >= REQUIRED_BUTTONS;
+}
 
 
 
@@ -2303,11 +2516,11 @@ function getImageMaterial(url){
   
 
 
-// Overlays libres + gouttières 1px — version paysage
+// Overlays libres + gouttières 1px — version paysage (corrigé)
 const FREE_OVERLAYS = [
-  // IMAGE DROITE — rangée du haut (row 0), décalée d’1 col vers la droite
+  // Grande image 1×1 (inchangée)
   {
-    row: 0,
+    row: 1,
     col: 2,
     offsetCols: 1.0,
     offsetRows: 0,
@@ -2317,28 +2530,30 @@ const FREE_OVERLAYS = [
     gutters: { left: true, right: true, top: false, bottom: false }
   },
 
-  // IMAGE GAUCHE — rangée du haut (row 0), coin haut-gauche
-  {
-    row: 0,
-    col: 0,
-    offsetCols: 0,
-    offsetRows: 0,
-    wMul: 1,
-    hMul: 1,
-    url: null,
-    gutters: { left: true, right: true, top: false, bottom: false }
-  },
-
-  // IMAGE CENTRALE — déplacée de w/2 vers la droite (offsetCols: 0.5)
+  // Mini-image 0.5×0.5 SOUS “Fractal Art”
+  // ➜ corrige le décalage : -1w en X (0.75 → -0.25) et +¼w en Y (0 → +0.25)
   {
     row: 1,
-    col: 1,
-    offsetCols: 0.5,   // <-- w/2 plus à droite
-    offsetRows: 0,
-    wMul: 1,
-    hMul: 1,
+    col: 0,
+    offsetCols: -0.25,   // ← 1w vers la gauche (était +0.75)
+    offsetRows: +0.25,   // ↓ w/4 vers le bas      (était 0)
+    wMul: 0.5,
+    hMul: 0.5,
     url: null,
-    gutters: { left: true, right: true, top: false, bottom: false }
+    gutters: { left: true, right: true, top: true, bottom: true }
+  },
+
+  // Mini-image 0.5×0.5 AU-DESSUS de “Creative Coding”
+  // (anciennement positionnée au-dessus de “Random Stuff”)
+  {
+    row: 1,              // Creative Coding est sur la tuile D1 (row:1, col:1)
+    col: 1,
+    offsetCols: +0.25,   // quad haut-droit
+    offsetRows: -0.25,
+    wMul: 0.5,
+    hMul: 0.5,
+    url: null,
+    gutters: { left: true, right: true, top: true, bottom: true }
   },
 ];
 
@@ -2360,8 +2575,8 @@ function pickOverlayUrl(extraUsed = new Set()) {
 
 
 function buildFreeOverlays(){
-  // Formats verticaux : pas d’overlays (on garde le comportement actuel)
   if (isMobileBucket()){
+    // Pas d’overlays en formats verticaux
     for (const o of freeOverlays){
       scene.remove(o.mesh);
       if (o.vLeft)   scene.remove(o.vLeft);
@@ -2374,7 +2589,7 @@ function buildFreeOverlays(){
     return;
   }
 
-  // Reset complet
+  // Reset
   for (const o of freeOverlays){
     scene.remove(o.mesh);
     if (o.vLeft)   scene.remove(o.vLeft);
@@ -2385,72 +2600,51 @@ function buildFreeOverlays(){
   }
   freeOverlays.length = 0;
 
-  // === PATTERN DEMANDÉ ===
-  // 10 images au total, alternées par rangée, avec 1 "case vide" (gap) à droite de CHAQUE image.
-  // Rangée haute : images #1, #3, #5, #7, #9  -> colonnes 0,2,4,6,8
-  // Rangée basse : images #2, #4, #6, #8, #10 -> colonnes 1,3,5,7,9
-  const PATTERN_SLOTS = 5;                 // 5 positions par rangée
-  const PATTERN_COLS  = PATTERN_SLOTS * 2; // car 1 image + 1 gap = 2 colonnes
-
-  // On mémorise dans la scène l’info de scroll horizontal
-  scene.userData._hscroll = scene.userData._hscroll || { xWorld: 0, maxWorld: 0, patternCols: PATTERN_COLS };
-  scene.userData._hscroll.patternCols = PATTERN_COLS;
-
-  // Génération des 10 overlays
   const accUsed = new Set();
-  const makeStripe = () => {
-    const m = new THREE.Mesh(geometry, menuBorderMaterial);
-    m.renderOrder = 3.7;
-    m.position.set(0, 0, 0.21);
-    m.scale.set(0, 0, 1);
-    m._tPos   = new THREE.Vector3();
-    m._tScale = new THREE.Vector3();
-    scene.add(m);
-    return m;
-  };
 
-  for (let i = 0; i < 10; i++){
-    const isTopRow = (i % 2) === 0;                    // impairs (1,3,5,7,9) -> rangée du haut
-    const slot     = Math.floor(i / 2);                // 0..4
-    const col      = isTopRow ? (slot * 2) : (slot * 2 + 1);
-    const row      = isTopRow ? 0 : 1;
-
-    // Choix de l’image (évite doublons tant que possible)
-    const urlToUse = pickOverlayUrl(accUsed);
+  for (const spec of FREE_OVERLAYS){
+    const urlToUse = spec.url ? spec.url : pickOverlayUrl(accUsed);
     accUsed.add(urlToUse);
+    const mat = getImageMaterial(urlToUse);
 
-    // Image
-    const mesh = new THREE.Mesh(geometry, getImageMaterial(urlToUse));
+    // Image overlay
+    const mesh = new THREE.Mesh(geometry, mat);
     mesh.renderOrder = 3.6;
     mesh.position.set(0, 0, 0.20);
     mesh.scale.set(0, 0, 1);
     scene.add(mesh);
 
-    // Cache bleu sous l’image (évite le flash au build)
+    // Cache bleu sous l’image
     const cover = new THREE.Mesh(geometry, menuBorderMaterial);
     cover.renderOrder = 3.55;
     cover.position.set(0, 0, 0.19);
     cover.scale.set(0, 0, 1);
     scene.add(cover);
 
-    // Gouttières 1px gauche/droite
-    const vLeft  = makeStripe();
-    const vRight = makeStripe();
+    // Gouttières 1px
+    const makeStripe = () => {
+      const m = new THREE.Mesh(geometry, menuBorderMaterial);
+      m.renderOrder = 3.7;
+      m.position.set(0, 0, 0.21);
+      m.scale.set(0, 0, 1);
+      m._tPos   = new THREE.Vector3();
+      m._tScale = new THREE.Vector3();
+      scene.add(m);
+      return m;
+    };
+
+    const vLeft   = spec.gutters?.left   ? makeStripe() : null;
+    const vRight  = spec.gutters?.right  ? makeStripe() : null;
+    const hTop    = spec.gutters?.top    ? makeStripe() : null;
+    const hBottom = spec.gutters?.bottom ? makeStripe() : null;
 
     const targetPosition = new THREE.Vector3();
     const targetScale    = new THREE.Vector3(0, 0, 1);
 
-    freeOverlays.push({
-      mesh,
-      spec: { row, col }, // <- on posera en unités de grille
-      vLeft, vRight,
-      hTop: null, hBottom: null, // pas de traits haut/bas
-      targetPosition, targetScale, cover,
-      url: urlToUse
-    });
+    freeOverlays.push({ mesh, spec, vLeft, vRight, hTop, hBottom, targetPosition, targetScale, cover, url: urlToUse });
   }
 
-  // Calcule les cibles et fait un snap initial
+  // Cibles + snap initial
   updateFreeOverlays();
   for (const o of freeOverlays){
     o.mesh.position.copy(o.targetPosition);
@@ -2468,8 +2662,18 @@ function buildFreeOverlays(){
       o.vRight.position.copy(o.vRight._tPos);
       o.vRight.scale.set(o.vRight._tScale.x, 0, 1);
     }
+    if (o.hTop){
+      o.hTop.position.copy(o.hTop._tPos);
+      o.hTop.scale.set(0, o.hTop._tScale.y, 1);
+    }
+    if (o.hBottom){
+      o.hBottom.position.copy(o.hBottom._tPos);
+      o.hBottom.scale.set(0, o.hBottom._tScale.y, 1);
+    }
   }
 }
+
+
 
 
 
@@ -2478,43 +2682,39 @@ function updateFreeOverlays(){
 
   const { w, contentTop } = getLayoutMetrics();
   const bucketOffset = contentOffsetColsForBucket();
-  const contentCols  = contentColsForBucket();
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
-
-  const patternCols = H.patternCols || 10;
-  const gapXWorld   = (H.gapCols || 0) * w; // ← gap horizontal en unités “monde”
-
-  // largeur totale du pattern = colonnes * w + gaps entre colonnes
-  H.maxWorld = Math.max(
-    0,
-    (patternCols - contentCols) * w + Math.max(0, patternCols - 1) * gapXWorld
-  );
-
-  // Clamp du scroll actuel si la fenêtre a changé
-  H.xWorld = Math.max(0, Math.min(H.xWorld || 0, H.maxWorld));
 
   for (const o of freeOverlays){
-    const { row, col } = o.spec;
+    const { spec } = o;
 
-    // base centrée sur la 1ère colonne de contenu, moins le scroll
-    const baseX = camera.left + (bucketOffset + 0.5) * w - (H.xWorld || 0);
+    const colNudge = spec.offsetCols || 0;
+    const rowNudge = spec.offsetRows || 0;
 
-    // 👉 position X avec espacement horizontal : chaque “col” avance de (w + gapXWorld)
-    const cx = baseX + col * (w + gapXWorld);
-    const cy = contentTop - (row + 0.5) * w;
+    const cx = camera.left + (spec.col + 0.5 + bucketOffset + colNudge) * w;
+    const cy = contentTop   - (spec.row + 0.5 + rowNudge) * w;
+    const sx = w * (spec.wMul || 1);
+    const sy = w * (spec.hMul || 1);
 
-    const sx = w, sy = w;
-
+    // Cibles de l'image
     o.targetPosition.set(cx, cy, 0.20);
-    o.targetScale.set(Math.max(0, sx - config.borderWidth), Math.max(0, sy - config.borderWidth), 1);
+    o.targetScale.set(
+      Math.max(0, sx - config.borderWidth),
+      Math.max(0, sy - config.borderWidth),
+      1
+    );
 
-    const leftX  = cx - sx/2;
-    const rightX = cx + sx/2;
-    const bw     = config.borderWidth;
+    // Traits 1px
+    const leftX   = cx - sx/2;
+    const rightX  = cx + sx/2;
+    const topY    = cy + sy/2;
+    const bottomY = cy - sy/2;
+    const bw = config.borderWidth;
 
-    if (o.vLeft){  o.vLeft._tPos.set(leftX,  cy, 0.21);  o.vLeft._tScale.set(bw, sy + bw, 1); }
-    if (o.vRight){ o.vRight._tPos.set(rightX, cy, 0.21); o.vRight._tScale.set(bw, sy + bw, 1); }
+    if (o.vLeft){   o.vLeft._tPos.set(leftX,  cy, 0.21);    o.vLeft._tScale.set(bw,     sy + bw, 1); }
+    if (o.vRight){  o.vRight._tPos.set(rightX, cy, 0.21);   o.vRight._tScale.set(bw,     sy + bw, 1); }
+    if (o.hTop){    o.hTop._tPos.set(cx,    topY, 0.21);    o.hTop._tScale.set(sx + bw, bw,     1); }
+    if (o.hBottom){ o.hBottom._tPos.set(cx, bottomY, 0.21); o.hBottom._tScale.set(sx + bw, bw,     1); }
 
+    // Cache bleu (taille finale sans anim)
     if (o.cover){
       o.cover.position.set(cx, cy, 0.19);
       o.cover.scale.set(sx + bw*2, sy + bw*2, 1);
@@ -2959,6 +3159,7 @@ function getDotScale(state){
   return (gridSize / 256) * cappedDotSize;
 }
 
+
 function animate(){
   requestAnimationFrame(animate);
 
@@ -2980,10 +3181,6 @@ function animate(){
   const isMobile = isMobileBucket();
   const mobDelta = isMobile ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
-  // ⬅️ NOUVEAU : décalage “monde” horizontal basé sur le scroll
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10 });
-  const hDelta = isMobile ? 0 : -(H.xWorld || 0);
-
   // --- Curseur jaune : totalement masqué en version verticale ---
   mouseSquare.visible = !isMobile;
   cursorBorder.visible = !isMobile;
@@ -2991,6 +3188,7 @@ function animate(){
 
   // Mise à jour du curseur 3D (masqué en vertical)
   if (isMobile){
+    // ne montre rien
     mouseSquare.scale.set(0, 0, 1);
     cursorBorder.scale.set(0, 0, 1);
   } else {
@@ -3022,9 +3220,9 @@ function animate(){
 
   // ----- Grille -----
   for (const [key, st] of Array.from(fractalState.entries())){
-    // target = ancre + delta scroll (vertical + horizontal)
+    // target = ancre + delta scroll mobile
     if (st.anchorPosition){
-      st.targetPosition.x = st.anchorPosition.x + hDelta;     // ⬅️ ajouté
+      st.targetPosition.x = st.anchorPosition.x;
       st.targetPosition.y = st.anchorPosition.y + mobDelta;
     }
 
@@ -3097,7 +3295,7 @@ function animate(){
     }
   }
 
-  // Overlays “libres” (ils prennent déjà en compte H.xWorld de leur côté)
+  // Overlays : anim “grille”
   updateFreeOverlays();
   for (const o of freeOverlays){
     o.mesh.position.lerp(o.targetPosition, config.gridAnimationSpeed);
@@ -3112,6 +3310,7 @@ function animate(){
   const canvas = document.getElementById('webgl-canvas');
   if (canvas && canvas.style.opacity!=='1') canvas.style.opacity='1';
 }
+
 
 
 function isMobileBucket(){
@@ -3174,16 +3373,9 @@ function findLeafAt(worldPos, stateMap){
 }
   
 function refineTargetStateAt(worldPos){
-  const isMobile = isMobileBucket();
-  const mobDelta = isMobile ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
-
-  // ⬅️ NOUVEAU : retirer le décalage horizontal appliqué à l’affichage
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10 });
-  const hDelta = isMobile ? 0 : -(H.xWorld || 0);
-
+  const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
   const wp = worldPos.clone();
-  wp.y -= mobDelta;
-  wp.x -= hDelta;
+  wp.y -= mobDelta; // on revient dans le repère "ancré"
 
   let refined=false, it=0;
   while (it<64){
@@ -3201,7 +3393,6 @@ function refineTargetStateAt(worldPos){
   }
   return refined;
 }
-
 
 function computeDefaultGridCursorSize(){
   const { w, contentTop } = getLayoutMetrics();
@@ -3235,10 +3426,6 @@ function updateMouseSquareTarget(worldPos){
   const { w, contentTop } = getLayoutMetrics();
   const mobDelta = isMobileBucket() ? (scrollOffsetWorld - mobileBuildScrollAt) : 0;
 
-  // ⬅️ NOUVEAU : décalage horizontal courant
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10 });
-  const hDelta = -(H.xWorld || 0);
-
   // Souris dans le header (menu)
   if (worldPos.y >= contentTop) {
     mouseSquare.userData.anchor = null;
@@ -3264,10 +3451,9 @@ function updateMouseSquareTarget(worldPos){
     return;
   }
 
-  // Repère “ancré” (on enlève les offsets appliqués à l’affichage)
+  // Repère ancré (sans scroll)
   const wp = worldPos.clone();
   wp.y -= mobDelta;
-  wp.x -= hDelta;
 
   const leaf = findLeafAt(wp, targetState);
   if (!leaf) return;
@@ -3285,10 +3471,9 @@ function updateMouseSquareTarget(worldPos){
 
   mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
 
-  // ➜ on remet les offsets pour l’affichage
-  mouseSquare.userData.targetPosition.set(nx + hDelta, ny + mobDelta, 4);
+  mouseSquare.userData.targetPosition.set(nx, ny + mobDelta, 4);
   mouseSquare.userData.targetScale.set(fs, fs, 1);
-  cursorBorder.userData.targetPosition.set(nx + hDelta, ny + mobDelta, 3);
+  cursorBorder.userData.targetPosition.set(nx, ny + mobDelta, 3);
   cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
 
   lastGridCursorSizeWorld = fs;
