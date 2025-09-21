@@ -374,8 +374,8 @@
   
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
   
-  /* Sécurités pour le scroll horizontal desktop */
-  @media (min-width:1025px){
+  /* Sécurités pour le scroll horizontal — valable pour tout paysage */
+  @media (orientation: landscape){
     html{ overflow-x: auto !important; overflow-y: hidden !important; }
     body{ overflow: hidden !important; }
   }
@@ -463,8 +463,8 @@ let lastAspect = null;
 function pickBucket(w, h){
   const a = w / h;
 
-  // 👉 Tous les paysages sous desktop (w<1025) forcent le preset desktop-16:9
-  if (w > h && w < 1025) {
+  // 👉 Tous les formats paysage utilisent désormais le preset desktop-16:9
+  if (w > h) {
     lastAspect = a;
     return 'desktop-16:9';
   }
