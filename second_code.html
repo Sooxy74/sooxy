@@ -116,7 +116,7 @@
 
 
   body {
-    margin: 0; overflow: auto;
+    margin: 0;
     background-color: #0055ff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   }
@@ -1328,14 +1328,20 @@ function updateScrollDocHeight(){
     spacer.style.display = 'block';
 
     // Styles pour scroll vertical
-    root.style.overflowX = 'hidden';
-    root.style.overflowY = '';
+    root.style.setProperty('overflow-x', 'hidden', 'important');
+    root.style.setProperty('overflow-y', 'auto', 'important');
+    root.style.removeProperty('overscroll-behavior-x');
+    root.style.removeProperty('overscroll-behavior-y');
+    root.style.removeProperty('touch-action');
     root.style.webkitOverflowScrolling = 'touch';
 
     document.body.style.removeProperty('position');
     document.body.style.removeProperty('min-width');
     document.body.style.removeProperty('width');
     document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('touch-action');
+    document.body.style.removeProperty('overscroll-behavior-y');
+    if (typeof root.scrollLeft === 'number') root.scrollLeft = 0;
     return;
   }
 
@@ -1362,16 +1368,23 @@ function updateScrollDocHeight(){
   spacer.style.display = 'block';
 
   // Styles pour scroll horizontal
-  document.body.style.setProperty('overflow', 'visible', 'important');
+  document.body.style.setProperty('overflow', 'hidden', 'important');
   document.body.style.setProperty('min-width', stableW + 'px');
   document.body.style.removeProperty('position');
+  document.body.style.setProperty('touch-action', 'pan-x', 'important');
+  document.body.style.setProperty('overscroll-behavior-y', 'contain', 'important');
 
-  root.style.overflowX = 'auto';
-  root.style.overflowY = 'hidden';
+  root.style.setProperty('overflow-x', 'auto', 'important');
+  root.style.setProperty('overflow-y', 'hidden', 'important');
+  root.style.setProperty('overscroll-behavior-x', 'contain', 'important');
+  root.style.setProperty('overscroll-behavior-y', 'contain', 'important');
+  root.style.setProperty('touch-action', 'pan-x', 'important');
   root.style.webkitOverflowScrolling = 'touch';
 
   forceBrowserToLayoutForHScroll();
-  root.scrollLeft = Math.min(root.scrollLeft || 0, Math.max(0, (root.scrollWidth||0) - (root.clientWidth||0)));
+  root.scrollTop = 0;
+  const maxScrollX = Math.max(0, (root.scrollWidth||0) - (root.clientWidth||0));
+  root.scrollLeft = Math.min(root.scrollLeft || 0, maxScrollX);
 }
 
 
@@ -1419,31 +1432,6 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       ot: Math.round(window.visualViewport?.offsetTop || 0),
     };
   }
-
-  // Molette → X quand deltaY domine (sécurité globale)
-  (function enableHorizontalWheelScroll(){
-    function onWheel(e){
-      if (isMobileBucket()) return;
-      const absY = Math.abs(e.deltaY);
-      const absX = Math.abs(e.deltaX);
-      if (absX >= absY) return;
-      const root = document.documentElement;
-      root.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }
-    window.addEventListener('wheel', onWheel, { passive:false });
-  })();
-
-  // Flèches ← →
-  (function enableArrowKeyScroll(){
-    window.addEventListener('keydown', (e) => {
-      if (isMobileBucket()) return;
-      const root = document.documentElement;
-      const step = Math.round((STABLE_VP_W || window.innerWidth) * 0.25);
-      if (e.key === 'ArrowRight') { root.scrollLeft += step; e.preventDefault(); }
-      if (e.key === 'ArrowLeft')  { root.scrollLeft -= step; e.preventDefault(); }
-    });
-  })();
 
   function orientationFlip(pw, ph, w, h){
     const prevPortrait = ph >= pw;
@@ -1526,6 +1514,8 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
       updateFreeOverlays();
       needsRefineCheck = true;
     }
+
+    installDragSwipeScroll();
 
     lastW = w; lastH = h; lastOT = ot;
   }
@@ -1660,14 +1650,25 @@ function installDragSwipeScroll(){
   // Portrait : laisser le scroll vertical natif
   if (!isLandscapeLike()){
     html.style.setProperty('overflow-x','hidden','important');
-    html.style.removeProperty('overflow-y');
+    html.style.setProperty('overflow-y','auto','important');
+    html.style.removeProperty('overscroll-behavior-x');
+    html.style.removeProperty('overscroll-behavior-y');
     html.style.removeProperty('touch-action');
     document.body.style.removeProperty('touch-action');
-    if (dragTarget && dragTarget.style) dragTarget.style.setProperty('touch-action','pan-y','important');
+    document.body.style.removeProperty('overscroll-behavior-y');
+    if (dragTarget && dragTarget.style){
+      dragTarget.style.setProperty('touch-action','pan-y','important');
+      dragTarget.style.removeProperty('overscroll-behavior-y');
+    }
 
     // nettoyer wheel/arrow handlers horizontaux
     if (window.__wheelToHScroll){ window.removeEventListener('wheel', window.__wheelToHScroll); window.__wheelToHScroll = null; }
     if (window.__arrowHScroll){  window.removeEventListener('keydown', window.__arrowHScroll);  window.__arrowHScroll  = null; }
+    if (window.__rootScrollListener && window.__rootScrollEl){
+      window.__rootScrollEl.removeEventListener('scroll', window.__rootScrollListener);
+      window.__rootScrollListener = null;
+      window.__rootScrollEl = null;
+    }
     return;
   }
 
@@ -1678,16 +1679,25 @@ function installDragSwipeScroll(){
   html.style.setProperty('overscroll-behavior-y','contain','important');
   html.style.setProperty('touch-action','pan-x','important');
   document.body.style.setProperty('touch-action','pan-x','important');
-  if (dragTarget && dragTarget.style) dragTarget.style.setProperty('touch-action','none','important'); // on gère le drag
+  document.body.style.setProperty('overscroll-behavior-y','contain','important');
+  if (dragTarget && dragTarget.style){
+    dragTarget.style.setProperty('touch-action','pan-x','important');
+    dragTarget.style.setProperty('overscroll-behavior-y','contain','important');
+  }
+
+  if (scroller && typeof scroller.scrollTop === 'number') scroller.scrollTop = 0;
 
   // Handlers pour wheel → horizontal et flèches
   if (!window.__wheelToHScroll){
     window.__wheelToHScroll = (e)=>{
       if (!isLandscapeLike()) return;
       const absY = Math.abs(e.deltaY), absX = Math.abs(e.deltaX);
-      if (absX >= absY) return;
+      if (absY < absX) return;
       const root = rootScroller();
-      root.scrollLeft += e.deltaY;
+      if (!root) return;
+      const max = Math.max(0, (root.scrollWidth || 0) - (root.clientWidth || 0));
+      const next = (root.scrollLeft || 0) + e.deltaY;
+      root.scrollLeft = Math.max(0, Math.min(max, next));
       e.preventDefault();
     };
     window.addEventListener('wheel', window.__wheelToHScroll, { passive:false });
@@ -1696,9 +1706,32 @@ function installDragSwipeScroll(){
     window.__arrowHScroll = (e)=>{
       if (!isLandscapeLike()) return;
       const root = rootScroller();
-      const step = Math.round((STABLE_VP_W || window.innerWidth) * 0.25);
-      if (e.key === 'ArrowRight'){ root.scrollLeft += step; e.preventDefault(); }
-      else if (e.key === 'ArrowLeft'){ root.scrollLeft -= step; e.preventDefault(); }
+      if (!root) return;
+      const viewport = STABLE_VP_W || window.innerWidth;
+      const quarter = Math.round(viewport * 0.25);
+      const page = Math.round(viewport * 0.95);
+      const max = Math.max(0, (root.scrollWidth || 0) - (root.clientWidth || 0));
+      const clamp = (value)=> Math.max(0, Math.min(max, value));
+
+      if (e.key === 'ArrowRight'){
+        root.scrollLeft = clamp((root.scrollLeft || 0) + quarter);
+        e.preventDefault();
+      } else if (e.key === 'ArrowLeft'){
+        root.scrollLeft = clamp((root.scrollLeft || 0) - quarter);
+        e.preventDefault();
+      } else if (e.key === 'PageDown'){
+        root.scrollLeft = clamp((root.scrollLeft || 0) + page);
+        e.preventDefault();
+      } else if (e.key === 'PageUp'){
+        root.scrollLeft = clamp((root.scrollLeft || 0) - page);
+        e.preventDefault();
+      } else if (e.key === 'Home'){
+        root.scrollLeft = 0;
+        e.preventDefault();
+      } else if (e.key === 'End'){
+        root.scrollLeft = max;
+        e.preventDefault();
+      }
     };
     window.addEventListener('keydown', window.__arrowHScroll);
   }
@@ -1720,7 +1753,8 @@ function installDragSwipeScroll(){
     if (!dragging || ev.pointerId !== dragId) return;
     if (!scroller) return;
     const dx = ev.clientX - startX;
-    scroller.scrollLeft = Math.max(0, startLeft - dx);
+    const max = Math.max(0, (scroller.scrollWidth || 0) - (scroller.clientWidth || 0));
+    scroller.scrollLeft = Math.max(0, Math.min(max, startLeft - dx));
 
     // mise à jour immédiate du groupe
     const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0 });
@@ -1743,7 +1777,19 @@ function installDragSwipeScroll(){
   window.addEventListener('pointermove',     window.__pointerMoveH, { passive:false });
   window.addEventListener('pointerup',       window.__pointerUpH,   { passive:false });
   window.addEventListener('pointercancel',   window.__pointerCancelH, { passive:false });
-  rootScroller().addEventListener('scroll', onScroll, { passive:true });
+
+  if (scroller){
+    if (window.__rootScrollListener && window.__rootScrollEl && window.__rootScrollEl !== scroller){
+      window.__rootScrollEl.removeEventListener('scroll', window.__rootScrollListener);
+      window.__rootScrollListener = null;
+      window.__rootScrollEl = null;
+    }
+    if (!window.__rootScrollListener){
+      window.__rootScrollListener = (ev)=>onScroll(ev);
+      window.__rootScrollEl = scroller;
+      scroller.addEventListener('scroll', window.__rootScrollListener, { passive:true });
+    }
+  }
 }
 
 
