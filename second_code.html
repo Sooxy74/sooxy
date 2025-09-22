@@ -15,9 +15,9 @@
     color-scheme: dark;
     --menu-h: 48px;
     --menu-gap: 16px;
-    --doc-h: 100vh;
+    --doc-h: 0vh;
   }
-  html, body { height: 100%; }
+  html, body { height: 100%; overflow: hidden; }
 
     /* Masquer la souris au-dessus de la scène (canvas + labels) */
     #webgl-canvas,
@@ -98,8 +98,8 @@
     /* Loader overlay */
     #loader-overlay {
       position: fixed;
-      bottom: calc(100vw / 16);   /* mobile & tablettes */
-      right:  calc(100vw / 16);   /* mobile & tablettes */
+      bottom: calc(100vw / 32);
+      right:  calc(100vw / 32);
       z-index: 9999;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
       font-size: 32px;
@@ -110,18 +110,10 @@
       transition: opacity .4s ease;
     }
 
-    /* Desktop : marge ÷2 */
-    @media (min-width: 1025px) {
-      #loader-overlay {
-        bottom: calc(100vw / 32);
-        right:  calc(100vw / 32);
-      }
-    }
-
   
 
   body {
-    margin: 0; overflow: auto;
+    margin: 0; overflow: hidden;
     background-color: #0055ff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   }
@@ -209,16 +201,6 @@
     height: calc(var(--menu-h) * 1.00);
   }
 
-  /* Téléphone vertical ET tablette vertical */
-  @media (max-width: 640px), (max-width: 1024px) and (orientation: portrait) {
-    #header-inner { justify-content: center; }               /* logo centré */
-    #nav-links { display: none !important; }                 /* cacher les libellés */
-    #logo-link { margin-left: 0; }
-    #mobile-left, #mobile-right {                            /* afficher les icônes */
-      display: inline-flex;
-      align-items: center;
-    }
-  }
 
   #scroll-spacer { height: var(--doc-h); }
   
@@ -316,11 +298,6 @@
   z-index: 1;
 }
 
-  @media (min-width: 1025px){
-  :root { --doc-h: 0vh; }
-  html, body { overflow: hidden; } /* optionnel mais pratique */
-}
-  
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
@@ -371,36 +348,11 @@ let loaderOverlay;
   
 // Buckets (avec hystérésis)
 const BUCKETS = [
-  { id:'desktop-32:9', match:(w,h)=> w>=1025 && (w/h)>=3.1,                  grid:{cols:6, rows:2} },
-  { id:'desktop-21:9', match:(w,h)=> w>=1025 && (w/h)>=1.8 && (w/h)<3.1,     grid:{cols:5, rows:2} },
-  { id:'desktop-16:9', match:(w,h)=> (w/h)>=1.6 && (w/h)<1.8 && w>=768,      grid:{cols:4, rows:2} },
-  { id:'tablet-4:3',   match:(w,h)=> (w/h)>=1.28 && (w/h)<1.6 && w>=641 && w<1025, grid:{cols:3, rows:2} },
-  { id:'tablet-3:4',   match:(w,h)=> (h/w)>=1.2  && (h/w)<1.5 && w>=641 && w<1025, grid:{cols:2, rows:3} },
-  { id:'tablet-9:16',  match:(w,h)=> (h/w)>=1.5  && w>=641 && w<1025,              grid:{cols:2, rows:4} },
-  { id:'mobile-h',     match:(w,h)=> w<=640 && w>h, grid:{cols:6, rows:2} },
-  { id:'mobile-v',     match:(w,h)=> w<=640 && h>=w, grid:{cols:2, rows:4} },
+  { id:'desktop-16:9', grid:{cols:4, rows:2} },
 ];
-const HYST = 0.03;
 let currentBucket = null;
-let lastAspect = null;
-  
-function pickBucket(w, h){
-  const a = w / h;
-  if (currentBucket && lastAspect && Math.abs(a - lastAspect) < HYST) return currentBucket;
 
-  // 👉 Tous les paysages "sous-desktop" forcent le preset desktop-16:9
-  if (isSubDesktopLandscape()){
-    lastAspect = a;
-    return 'desktop-16:9';
-  }
-
-  for (const b of BUCKETS) {
-    if (b.match(w, h)) {
-      lastAspect = a;
-      return b.id;
-    }
-  }
-  lastAspect = a;
+function pickBucket(){
   return 'desktop-16:9';
 }
 
@@ -501,20 +453,6 @@ function makeDomLabelEl(text){
 }
 
   
-// Vœux d’images par bucket
-const LAYOUT_WISH = {
-  'desktop-32:9': { wantD1:2, wantD2:6, buttonsOnD2:true },
-  'desktop-21:9': { wantD1:2, wantD2:5, buttonsOnD2:true },
-  // Desktop 16:9 : on colle à ta maquette actuelle
-  'desktop-16:9': { wantD1:3, wantD2:4, buttonsOnD2:true },
-  'tablet-4:3'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
-  'tablet-3:4'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
-  'tablet-9:16' : { wantD1:1, wantD2:4, buttonsOnD2:false },
-  // Mobile : pas de D2 forcé via la grille (les boutons prennent la main)
-  'mobile-h'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
-  'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
-};
-
 // Desktop 16:9 — 5 boutons en D2, images : D1 à gauche, D2 au-dessus d’UI
 const PRESETS = {
   'desktop-16:9': {
@@ -537,61 +475,6 @@ const PRESETS = {
       { size:'D2', row:0, col:2, quad:1 }
     ],
   },
-
-  // Tablettes & mobiles (inchangés)
-  'tablet-4:3': {
-    buttons: [
-      { size:'D2', row:0, col:0, quad:0, key:'motion' },
-      { size:'D2', row:0, col:1, quad:0, key:'ui'     },
-      { size:'D2', row:0, col:2, quad:2, key:'fractal'},
-      { size:'D2', row:1, col:0, quad:1, key:'random' },
-      { size:'D2', row:1, col:2, quad:2, key:'code'   },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-  'tablet-3:4': {
-    buttons: [
-      { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'      },
-      { size:'D1', row:2, col:1, key:'fractal' },
-      { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-  'tablet-9:16': {
-    buttons: [
-      { size:'D1', row:0, col:1, key:'motion'  },
-      { size:'D1', row:1, col:0, key:'ui'      },
-      { size:'D1', row:2, col:1, key:'fractal' },
-      { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-  'mobile-v': {
-    buttons: [
-      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
-      { size:'D2', row:1, col:1, quad:2, key:'ui'      },
-      { size:'D2', row:2, col:0, quad:3, key:'fractal' },
-      { size:'D2', row:3, col:1, quad:0, key:'random'  },
-      { size:'D2', row:1, col:0, quad:0, key:'code'    },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-  'mobile-h': {
-    buttons: [
-      { size:'D2', row:0, col:0, quad:1, key:'motion'  },
-      { size:'D2', row:0, col:1, quad:2, key:'ui'      },
-      { size:'D2', row:1, col:2, quad:0, key:'fractal' },
-      { size:'D2', row:1, col:0, quad:3, key:'random'  },
-      { size:'D2', row:0, col:2, quad:2, key:'code'    },
-    ],
-    imagesD1: [], imagesD2: [],
-  },
-
-  'desktop-21:9': null,
-  'desktop-32:9': null,
 };
 
 
@@ -913,77 +796,23 @@ async function bootstrap(){
 
 
 function applyBucket(){
-  const b = BUCKETS.find(x=>x.id===currentBucket);
+  const bucket = BUCKETS[0];
 
-  const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
-  const isPhonePortrait  = (currentBucket === 'mobile-v');
-
-  // 👉 On ne force PAS les ½ colonnes si c’est une tablette en paysage
-  const isTabletLand = isTabletLandscapeStrict();
-  const forceSubDesktopLandscape = isSubDesktopLandscape() && !isTabletLand;
-
-  const ULTRAWIDE_AR = 22/9;
-  const aspect = window.innerWidth / window.innerHeight;
-
-  if (forceSubDesktopLandscape) {
-    // Tous les paysages sous-desktop SAUF tablettes : ½ colonnes
-    baseCols = 5;
-    baseRowsPrimary = 2;
-
-  } else if (isTabletPortrait) {
-    // Tablettes en portrait (inchangé)
-    if (isShortPortrait()){
-      baseCols = 2;
-    } else {
-      baseCols = 3;
-    }
-    baseRowsPrimary = b?.grid.rows || 3;
-
-  } else if (!isPhonePortrait) {
-    // Desktop & paysages non-mobiles
-    if (isTabletLand) {
-      // 🆕 Tablette paysage : PAS de ½ colonnes → on colle au grid du bucket
-      baseCols = b?.grid?.cols ?? 4;
-      baseRowsPrimary = b?.grid?.rows ?? 2;
-
-    } else if (aspect >= ULTRAWIDE_AR) {
-      baseCols = 8;
-      baseRowsPrimary = b?.grid.rows || 2;
-
-    } else if (config.baseColsOverride != null) {
-      baseCols = Math.max(1, config.baseColsOverride);
-      baseRowsPrimary = b?.grid.rows || 2;
-
-    } else if (config.targetCellPx) {
-      baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
-      baseRowsPrimary = b?.grid.rows || 2;
-
-    } else {
-      baseCols = b?.grid.cols || 4;
-      baseRowsPrimary = b?.grid.rows || 2;
-    }
-
+  if (config.baseColsOverride != null) {
+    baseCols = Math.max(1, config.baseColsOverride);
+  } else if (config.targetCellPx) {
+    baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
   } else {
-    // Mobile portrait
-    baseCols = 2;
-    baseRowsPrimary = 2;
+    baseCols = bucket.grid.cols;
   }
 
-  // Vœux de D1/D2 (inchangé)
-  const wishKey =
-    forceSubDesktopLandscape ? 'desktop-16:9'
-    : (currentBucket === 'mobile-h' ? 'desktop-16:9' : currentBucket);
+  baseRowsPrimary = bucket.grid.rows;
+  WANT_D1 = 3;
+  WANT_D2 = 4;
+  BUTTONS_ON_D2 = true;
 
-  const wish = LAYOUT_WISH[wishKey] || { wantD1:1, wantD2:4, buttonsOnD2:true };
-  WANT_D1 = wish.wantD1;
-  WANT_D2 = wish.wantD2;
-  BUTTONS_ON_D2 = wish.buttonsOnD2;
-
-  // Profondeur (inchangé)
-  const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
-                                    : (prefersReducedMotion ? 5 : 7);
-  config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
+  TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
+  config.refineChanceD2 = 0.55;
 
   updateScrollDocHeight();
 }
@@ -1125,7 +954,7 @@ function createMenuPlane(){
 // en se basant sur le *layout viewport* stable (pas le visualViewport).
 function computeScrollOffsetWorldFromScrollY(){
   // Mobile-like = mobile portrait + tablettes portrait
-  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  const isMobile = isMobileBucket();
   if (!isMobile) return 0;
 
   const { viewHeight, w, menuHeight, onePxWorld } = getLayoutMetrics();
@@ -1319,8 +1148,7 @@ function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - ca
 
 function updateScrollDocHeight(){
   // Mobile-like = portrait mobile + tablettes portrait
-  const isMobile =
-    isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  const isMobile = isMobileBucket();
 
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
@@ -1358,7 +1186,7 @@ function updateScrollDocHeight(){
 
 function onScroll(){
   // Mobile-like = portrait mobile + tablettes portrait
-  const isMobile = isMobileBucket() || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  const isMobile = isMobileBucket();
 
   if (!isMobile){
     scrollOffsetWorld = 0;
@@ -1462,11 +1290,6 @@ function contentOffsetColsForBucket(){
 
 // >>> NEW <<< : nb de colonnes "contenu" selon le bucket
 function contentColsForBucket(){
-  // Mobile portrait ET tablettes portrait => 2 colonnes de contenu
-  if (currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'){
-    return 2;
-  }
-  // Sinon: design desktop (4 colonnes de contenu)
   return CONTENT_COLS;
 }
   
@@ -1516,7 +1339,7 @@ function updateFractalBase(forceFull = false){
   targetState.clear();
 
   const { w, contentTop } = getLayoutMetrics();
-  const preset = presetForBucket(currentBucket);
+  const preset = presetForBucket();
 
   if (!preset) {
     ensureFallbackButtons();
@@ -1866,7 +1689,7 @@ function chooseButtonsThenImages(forceFull){
 
   // Desktop / tablettes : preset + fallback si nécessaire
   const { w, contentTop } = getLayoutMetrics();
-  const preset = presetForBucket(currentBucket);
+  const preset = presetForBucket();
 
   persistentButtonPaths = [];
   for (const b of (preset?.buttons || [])) {
@@ -1966,9 +1789,8 @@ function reformGridKeepImages(){
   
   
 
-function presetForBucket(id){
-  if (id === 'mobile-h') return PRESETS['desktop-16:9'];
-  return PRESETS[id] || PRESETS['desktop-16:9'];
+function presetForBucket(){
+  return PRESETS['desktop-16:9'];
 }
 
 function ensureD2Path(row, col, quad, contentTop, w){
@@ -2093,7 +1915,7 @@ function buildMobileButtonsDeterministic(){
   const stepY = sideBtn + gapBtn;
 
   // Centres des 2 colonnes "contenu" (jamais dans les colonnes filler)
-  const offsetCols = contentOffsetColsForBucket(); // 0 en mobile-v, 0.5 en tablettes portrait
+  const offsetCols = contentOffsetColsForBucket();
   const xLeft  = camera.left + (offsetCols + 0.5) * w;  // colonne contenu 0
   const xRight = camera.left + (offsetCols + 1.5) * w;  // colonne contenu 1
 
@@ -2906,14 +2728,7 @@ function ensureGlobalLabelFontPx(lm){
   const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px:null, refSize:0 });
 
   // Desktop = ratio un peu plus serré pour la 1re ligne
-  const isDesktopBucket =
-    currentBucket === 'desktop-16:9' ||
-    currentBucket === 'desktop-21:9' ||
-    currentBucket === 'desktop-32:9';
-
-  const DESKTOP_RATIO = 0.52;
-  const OTHER_RATIO   = 0.60;
-  const TARGET_RATIO  = isDesktopBucket ? DESKTOP_RATIO : OTHER_RATIO;
+  const TARGET_RATIO = 0.52;
 
   // Bouton de référence = “Creative …”
   let refSt = null;
@@ -3314,8 +3129,7 @@ function animate(){
 
 
 function isMobileBucket(){
-  // "mobile-like" portrait = mobile-v + tablet-3:4 + tablet-9:16
-  return currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+  return false;
 }
 
 
