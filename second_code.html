@@ -204,29 +204,6 @@
     height: calc(var(--menu-h) * 1.00);
   }
 
-/* Portrait uniquement (mobile & tablette) */
-@media (orientation: portrait) and (max-width: 1024px) {
-  /* En portrait : on garde l’UI “mobile” */
-  #header-inner { justify-content: center; }
-  #nav-links { display: none !important; }
-  #logo-link { margin-left: 0; }
-  #mobile-left, #mobile-right {
-    display: inline-flex;
-    align-items: center;
-  }
-}
-
-/* ✅ Paysage : menu fixé et identique desktop sur toutes largeurs */
-@media (orientation: landscape) {
-  #header-inner { justify-content: flex-end; }
-  #nav-links { display: flex !important; white-space: nowrap; }
-  #logo-link { display: inline-flex; }
-  #mobile-left, #mobile-right { display: none !important; }
-  #ui-header { position: fixed; left:0; right:0; top:0; max-width:100vw; overflow:hidden; }
-}
-
-
-
   #scroll-spacer { height: var(--doc-h); }
   
   #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
@@ -461,23 +438,7 @@ let currentBucket = null;
 let lastAspect = null;
   
 function pickBucket(w, h){
-  const a = w / h;
-
-  // 👉 Tous les paysages sous desktop (w<1025) forcent le preset desktop-16:9
-  if (w > h && w < 1025) {
-    lastAspect = a;
-    return 'desktop-16:9';
-  }
-
-  if (currentBucket && lastAspect && Math.abs(a - lastAspect) < HYST) return currentBucket;
-
-  for (const b of BUCKETS) {
-    if (b.match(w, h)) {
-      lastAspect = a;
-      return b.id;
-    }
-  }
-  lastAspect = a;
+  lastAspect = w / h;
   return 'desktop-16:9';
 }
 
@@ -1032,73 +993,19 @@ async function bootstrap(){
 
 
 function applyBucket(){
-  const b = BUCKETS.find(x=>x.id===currentBucket);
+  currentBucket = 'desktop-16:9';
+  const b = BUCKETS.find(x => x.id === currentBucket);
 
-  const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
-  const isPhonePortrait  = (currentBucket === 'mobile-v');
+  baseCols = b?.grid?.cols || 4;
+  baseRowsPrimary = b?.grid?.rows || 2;
 
-  // 👉 On ne force PAS les ½ colonnes si c’est une tablette en paysage
-  const isTabletLand = isTabletLandscapeStrict();
-  const forceSubDesktopLandscape = isSubDesktopLandscape() && !isTabletLand;
-
-  const ULTRAWIDE_AR = 22/9;
-  const aspect = window.innerWidth / window.innerHeight;
-
-  if (forceSubDesktopLandscape) {
-    // Tous les paysages sous‑desktop (tablettes et mobiles en paysage) gardent le design desktop :
-    // on force une grille de base à 4 colonnes pour conserver 4 dalles visibles. La hauteur primaire
-    // reste deux rangées, comme sur desktop.
-    baseCols = 4;
-    baseRowsPrimary = 2;
-
-  } else if (isTabletPortrait) {
-    // Tablettes en portrait (inchangé)
-    if (isShortPortrait()){
-      baseCols = 2;
-    } else {
-      baseCols = 3;
-    }
-    baseRowsPrimary = b?.grid.rows || 3;
-
-  } else if (!isPhonePortrait) {
-    // Desktop et paysages non‑mobiles : utilise la grille du bucket (4 colonnes pour 16:9,
-    // 5 colonnes pour 21:9, 6 colonnes pour 32:9). Pas de branche spéciale pour les ultra‑wide,
-    // afin de respecter la spécification (6 colonnes en 32:9).
-    if (isTabletLand) {
-      baseCols = b?.grid?.cols ?? 4;
-      baseRowsPrimary = b?.grid?.rows ?? 2;
-    } else if (config.baseColsOverride != null) {
-      baseCols = Math.max(1, config.baseColsOverride);
-      baseRowsPrimary = b?.grid?.rows ?? 2;
-    } else if (config.targetCellPx) {
-      baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
-      baseRowsPrimary = b?.grid?.rows ?? 2;
-    } else {
-      baseCols = b?.grid?.cols || 4;
-      baseRowsPrimary = b?.grid?.rows || 2;
-    }
-
-  } else {
-    // Mobile portrait
-    baseCols = 2;
-    baseRowsPrimary = 2;
-  }
-
-  // Vœux de D1/D2 (inchangé)
-  const wishKey =
-    forceSubDesktopLandscape ? 'desktop-16:9'
-    : (currentBucket === 'mobile-h' ? 'desktop-16:9' : currentBucket);
-
-  const wish = LAYOUT_WISH[wishKey] || { wantD1:1, wantD2:4, buttonsOnD2:true };
+  const wish = LAYOUT_WISH['desktop-16:9'] || { wantD1:1, wantD2:4, buttonsOnD2:true };
   WANT_D1 = wish.wantD1;
   WANT_D2 = wish.wantD2;
   BUTTONS_ON_D2 = wish.buttonsOnD2;
 
-  // Profondeur (inchangé)
-  const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
-                                    : (prefersReducedMotion ? 5 : 7);
-  config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
+  TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
+  config.refineChanceD2 = 0.55;
 
   updateScrollDocHeight();
 }
@@ -1168,7 +1075,7 @@ function createMenuPlane(){
 
   const MAX = 320; // px, hauteur max du pied de page (doit matcher le CSS)
   const PAD = 2;   // coussin anti-flash
-  const UNDER_DESKTOP = () => Math.min(innerWidth, innerHeight) <= 1024;
+  const UNDER_DESKTOP = () => false;
 
   let lastPX = MAX;  // translateY courant (MAX = caché)
   let lastH  = 0;
@@ -1214,6 +1121,7 @@ function createMenuPlane(){
         el.style.transform  = `translateY(${MAX}px)`;
         lastPX = MAX; lastH = 0;
       }
+      el.style.display = 'none';
       return;
     }
     el.style.display = 'block';
@@ -1284,9 +1192,7 @@ function isSubDesktopLandscapeNoScroll(){
 }
 
 function isSubDesktopLandscape(){
-  const W = STABLE_VP_W || window.innerWidth;
-  const H = STABLE_VP_H || window.innerHeight;
-  return (W > H) && (W < 1025);
+  return false;
 }
 
 
@@ -1585,10 +1491,7 @@ function mobileRowsNeeded(){
 }
 
 function isLandscapeLike(){
-  const W = STABLE_VP_W || window.innerWidth;
-  const H = STABLE_VP_H || window.innerHeight;
-  // Vrai paysage (tous devices)
-  return W > H;
+  return true;
 }
 
 function computeScrollOffsetWorldFromScrollX(){
