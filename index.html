@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fractale — Desktop preset (référence)</title>
-
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,22 +19,28 @@
   }
   html, body { height: 100%; }
 
-  #webgl-canvas, #labels-layer { cursor: none !important; }
+    #webgl-canvas,
+    #labels-layer {
+     cursor: none !important;
+    }
+    
+#ui-header{ position: fixed; inset:0 auto auto 0; z-index:4; background:#090B0B; }
 
-  #ui-header{ position: fixed; inset:0 auto auto 0; z-index:4; background:#090B0B; }
+#ui-header::before{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
 
-  #ui-header::before{
-    content:"";
-    position:absolute; inset:0;
-    pointer-events:none;
-    mix-blend-mode: overlay;
-    opacity: 1;
-    filter: contrast(500%) brightness(100%);
-    background-image: url("data:image/svg+xml;utf8,\
+  mix-blend-mode: overlay;
+  opacity: 1;
+  filter: contrast(500%) brightness(100%);
+
+  background-image: url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'>\
   <filter id='n'>\
     <feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' seed='7' stitchTiles='stitch' result='t'/>\
     <feColorMatrix type='saturate' values='0' in='t' result='g'/>\
+    <!-- Centré sur 50% gris (neutre pour overlay) -->\
     <feComponentTransfer in='g'>\
       <feFuncR type='linear' slope='1' intercept='0'/>\
       <feFuncG type='linear' slope='1' intercept='0'/>\
@@ -44,50 +49,65 @@
   </filter>\
   <rect width='96' height='96' filter='url(%23n)'/>\
 </svg>");
-    background-repeat: repeat;
-    background-size: 64px 64px;
-    image-rendering: crisp-edges;
-    z-index: 0;
+  background-repeat: repeat;
+  background-size: 64px 64px;
+  image-rendering: crisp-edges;
+  z-index: 0;
+}
+  
+  
+#ui-header::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: #0055ff;
+  transform: translateZ(0);
+  z-index: 1;
+}
+
+  
+    #ui-header, #ui-header * {
+        cursor: none !important;
+    }
+
+    #cursor-overlay{
+        position: fixed;
+        left: 0; top: 0;
+        width: 0; height: 0;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        z-index: 6;
+        opacity: 0;
+    }
+    #cursor-overlay .inner{
+      width: 100%;
+      height: 100%;
+      background: #f3ff00;
+      opacity: .85;
+      box-shadow: 0 0 0 1px #090B0B inset;
+    }
+    
+    /* Loader overlay */
+    #loader-overlay {
+      position: fixed;
+      bottom: calc(100vw / 16);
+      right:  calc(100vw / 16);
+      z-index: 9999;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+      font-size: 32px;
+      color: #f3f1ee;
+      letter-spacing: .02em;
+      opacity: 1;
+      pointer-events: none;
+      transition: opacity .4s ease;
+    }
+
+@media (min-width:1025px){
+  
   }
 
-  #ui-header::after{
-    content: "";
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 1px;
-    background: #0055ff;
-    transform: translateZ(0);
-    z-index: 1;
-  }
 
-  #ui-header, #ui-header * { cursor: none !important; }
-
-  #cursor-overlay{
-    position: fixed; left: 0; top: 0;
-    width: 0; height: 0; pointer-events: none;
-    transform: translate(-50%, -50%);
-    z-index: 6; opacity: 0;
-  }
-  #cursor-overlay .inner{
-    width: 100%; height: 100%;
-    background: #f3ff00; opacity: .85;
-    box-shadow: 0 0 0 1px #090B0B inset;
-  }
-
-  /* Loader overlay */
-  #loader-overlay {
-    position: fixed;
-    bottom: calc(100vw / 16);
-    right:  calc(100vw / 16);
-    z-index: 9999;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-size: 32px;
-    color: #f3f1ee;
-    letter-spacing: .02em;
-    opacity: 1;
-    pointer-events: none;
-    transition: opacity .4s ease;
-  }
 
   body {
     margin: 0; overflow: auto;
@@ -102,8 +122,9 @@
     position: fixed; top: 0; left: 0; right: 0; height: var(--menu-h);
     z-index: 4; pointer-events: none;
   }
+  
   #ui-header::after {
-    content: "";
+  content: "";
     position: absolute;
     left: 0; right: 0; bottom: 0;
     height: 1px;
@@ -120,112 +141,222 @@
   #nav-links { display: flex; gap: calc(var(--menu-gap) * 2); align-items: center; white-space: nowrap; pointer-events: auto; }
   .nav-btn {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-size: 14px; color: #f3f1ee; text-decoration: none; letter-spacing: .02em;
+    font-size: 14px; color: #f3f1ee; letter-spacing: .02em; text-decoration: none;
   }
   .nav-btn:hover, .nav-btn:focus { outline: none; color: #f3ff00; }
+  
+  #nav-links .nav-btn {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  line-height: 1.1;
+}
 
-  #nav-links .nav-btn { position: relative; display: inline-block; overflow: hidden; line-height: 1.1; }
-  #nav-links .nav-btn .text-container { position: relative; display: block; top: -1px; }
-  #nav-links .nav-btn .button-text { display: block; white-space: nowrap; }
-  #nav-links .nav-btn .letter { display: inline-block; will-change: transform; }
+  #nav-links .nav-btn .text-container {
+    position: relative;
+    display: block;
+    top: -1px;
+    }
 
-  #logo-link { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; margin-left: calc(var(--menu-gap) * 2); }
-  #logo-overlay { height: calc(var(--menu-h) * 0.5); max-height: 44px; aspect-ratio: auto; display: block; user-select: none; }
-  #mobile-left, #mobile-right { display: none; pointer-events: auto; color: #f3f1ee; position: absolute; top: 50%; transform: translateY(-50%); }
+  #nav-links .nav-btn .button-text {
+    display: block;
+    white-space: nowrap;
+  }
+
+  #nav-links .nav-btn .letter {
+    display: inline-block;
+    will-change: transform;
+  }
+
+
+
+  #logo-link { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center;
+    margin-left: calc(var(--menu-gap) * 2);
+  }
+  #logo-overlay {
+    height: calc(var(--menu-h) * 0.5);
+    max-height: 44px;
+    aspect-ratio: auto; display: block; user-select: none;
+  }
+  #mobile-left, #mobile-right {
+    display: none; pointer-events: auto; color: #f3f1ee;
+    position: absolute; top: 50%; transform: translateY(-50%);
+  }
+
   #mobile-left  { left: var(--menu-gap); }
   #mobile-right { right: var(--menu-gap); }
-  .mobile-icon { display: block; width: calc(var(--menu-h) * 1.00); height: calc(var(--menu-h) * 1.00); }
+  .mobile-icon {
+  display: block;
+    width:  calc(var(--menu-h) * 1.00);
+    height: calc(var(--menu-h) * 1.00);
+  }
 
-  @media (orientation: portrait) and (max-width: 1024px) {
-    #header-inner { justify-content: center; }
-    #nav-links { display: none !important; }
-    #logo-link { margin-left: 0; }
-    #mobile-left, #mobile-right { display: inline-flex; align-items: center; }
+@media (orientation: portrait) and (max-width: 1024px) {
+  #header-inner { justify-content: center; }
+  #nav-links { display: none !important; }
+  #logo-link { margin-left: 0; }
+  #mobile-left, #mobile-right {
+    display: inline-flex;
+    align-items: center;
   }
-  @media (orientation: landscape) {
-    #header-inner { justify-content: flex-end; }
-    #nav-links { display: flex !important; white-space: nowrap; }
-    #logo-link { display: inline-flex; }
-    #mobile-left, #mobile-right { display: none !important; }
-    #ui-header { position: fixed; left:0; right:0; top:0; max-width:100vw; overflow:hidden; }
-  }
+}
+
+@media (orientation: landscape) {
+  #header-inner { justify-content: flex-end; }
+  #nav-links { display: flex !important; white-space: nowrap; }
+  #logo-link { display: inline-flex; }
+  #mobile-left, #mobile-right { display: none !important; }
+  #ui-header { position: fixed; left:0; right:0; top:0; max-width:100vw; overflow:hidden; }
+}
+
+
 
   #scroll-spacer { height: var(--doc-h); }
+  
   #labels-layer{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+  
+.hover-label{
+  position: absolute;
+  font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-weight: 700;
+  font-size: 18px;       
+  color: #f3f1ee;
+  line-height: 1;
+  transform-origin: 100% 0%; 
+  will-change: transform;   
+  pointer-events: none;
+  white-space: normal;    
+}
 
-  .hover-label{
-    position: absolute;
-    font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-weight: 700;
-    font-size: 18px;
-    color: #f3f1ee;
-    line-height: 1;
-    transform-origin: 100% 0%;
-    will-change: transform;
-    pointer-events: none;
-    white-space: normal;
-  }
-  .hover-label .line{ display:block; white-space: nowrap; }
-  .hover-label .line.sub{ font-style: italic; font-weight: 400; font-size: .6em; line-height: 1.6667; white-space: nowrap; }
+.hover-label .line{
+  display:block;
+  white-space: nowrap;   
+}
 
-  #mobile-footer{
-    position: fixed; left: 0; right: 0; bottom: 0;
-    height: 320px; background: #090B0B; border-top: 1px solid #0055ff;
-    pointer-events: none; z-index: 3; transform: translateY(320px);
-    transition: transform .12s ease-out; will-change: transform;
-    padding-bottom: env(safe-area-inset-bottom, 0); backface-visibility: hidden;
-  }
+.hover-label .line.sub{
+  font-style: italic;
+  font-weight: 400;
+  font-size: .6em;
+  line-height: 1.6667;
+  white-space: nowrap;     
+}
 
-  #mobile-footer::before{
-    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .10;
-    background-image: url("data:image/svg+xml;utf8,\
+#mobile-footer{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 320px;                
+  background: #090B0B;          
+  border-top: 1px solid #0055ff; 
+  pointer-events: none;
+  z-index: 3;
+  transform: translateY(320px); 
+  transition: transform .12s ease-out; 
+  will-change: transform;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  backface-visibility: hidden;
+}
+
+#mobile-footer::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  opacity: .10;
+
+  background-image: url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'>\
   <filter id='n'>\
     <feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' seed='7' stitchTiles='stitch'/>\
   </filter>\
   <rect width='96' height='96' filter='url(%23n)'/>\
 </svg>");
-    background-repeat: repeat;
-    background-size: 96px 96px;
-    image-rendering: crisp-edges;
-    mix-blend-mode: normal;
-  }
+  background-repeat: repeat;
 
-  #ui-header{ background: transparent !important; }
-  #ui-header::before{ content: none !important; display: none !important; }
-  #ui-header::after{ content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #0055ff; transform: translateZ(0); z-index: 1; }
+  background-size: 96px 96px;
 
-  #images-layer{ position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: 0; }
+  image-rendering: crisp-edges;
+  mix-blend-mode: normal;
+}
 
-  .dom-ol{ position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); overflow: hidden; will-change: transform, width, height; image-rendering: auto; }
-  .dom-ol img{ display: block; width: 100%; height: 100%; object-fit: cover; }
-  .dom-ol .gut{ position: absolute; top: -1px; bottom: -1px; width: 1px; background: #090B0B; pointer-events: none; }
-  .dom-ol .gut.left{  left: -1px; }
-  .dom-ol .gut.right{ right: -1px; }
+#ui-header{
+  background: transparent !important;
+}
 
+#ui-header::before{
+  content: none !important;
+  display: none !important;
+}
+
+#ui-header::after{
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;                
+  background: #0055ff;
+  transform: translateZ(0);
+  z-index: 1;
+}
+  
+  
+#images-layer{
+  position: fixed; inset: 0;
+  pointer-events: none;  
+  z-index: 3;            
+  opacity: 0;
+}
+
+.dom-ol{
+  position: absolute;
+  left: 0; top: 0;
+  transform: translate(-50%, -50%);
+  overflow: hidden;
+  will-change: transform, width, height;
+  image-rendering: auto;
+}
+
+.dom-ol img{
+  display: block;
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+
+/* Gouttières 1px comme la grille WebGL */
+.dom-ol .gut{
+  position: absolute; top: -1px; bottom: -1px;
+  width: 1px; background: #090B0B;           
+  pointer-events: none;
+}
+.dom-ol .gut.left{  left: -1px; }
+.dom-ol .gut.right{ right: -1px; }
+  
+  
   @media (prefers-reduced-motion: reduce) { #webgl-canvas { transition: none; } }
-
+  
   @media (min-width:1025px){
     html{ overflow-x: auto !important; overflow-y: hidden !important; }
     body{ overflow: hidden !important; }
   }
   #scroll-spacer{ display:block; min-height:100vh; }
-</style>
 
-<script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
+  
+  
+</style>
+  <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
 </head>
 <body>
 
 <!-- Loader -->
 <div id="loader-overlay">[ 0% ]</div>
-
+  
 <header id="ui-header" aria-label="Top menu">
   <div id="header-inner">
     <a id="mobile-left" href="#about" aria-label="About / Info">
       <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path fill="#f3f1ee" d="M119.5,61.73c-7.8,0-14.72,3.82-19,9.69-4.28-5.87-11.2-9.69-19-9.69h-26.5v68h33c4.68,0,8.49,3.81,8.5,8.49v.05s9-.04,9-.04c0-4.69,3.81-8.5,8.5-8.5h31V61.73h-25.5ZM88,120.73h-24v-50h17.5c8,0,14.5,6.5,14.5,14.5v.04l.35,37.58c-2.48-1.36-5.33-2.13-8.35-2.13ZM136,120.73h-22c-3.14,0-6.09.85-8.64,2.3l-.36-37.81c0-7.99,6.51-14.49,14.5-14.49h16.5v50Z"/>
       </svg>
+
     </a>
     <nav id="nav-links" aria-label="Primary">
       <a class="nav-btn" href="#about">[ ABOUT ]</a>
@@ -238,53 +369,31 @@
       <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path fill="#f3f1ee" d="M55,136h90v-72H55v72ZM64,73h72v7.29l-36.47,23.82-35.53-23.85v-7.25ZM64,91.09l35.47,23.81,36.53-23.86v35.96h-72v-35.91Z"/>
       </svg>
+
     </a>
   </div>
 </header>
 
 <div id="scroll-spacer" aria-hidden="true"></div>
+  
 <div id="labels-layer" aria-hidden="true"></div>
+
 <div id="images-layer" aria-hidden="true"></div>
 
+
+
 <script type="module">
-/* ===========================================================
-   =============  IMPORTS & HELPERS (unchanged)  =============
-   =========================================================== */
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js';
 import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/esm/simplex-noise.js';
 
-function rootScroller(){ return document.scrollingElement || document.documentElement; }
+  
+function rootScroller(){
+  return document.scrollingElement || document.documentElement;
+}
 
 let loaderOverlay;
 
-/* ===========================================================
-   ================  DATA-DRIVEN PROJECTS  ===================
-   =========================================================== */
-/* 👉 Renseigne ici les projets de la catégorie (ex: Motion Design)
-   thumb: chemin vers la vignette (image carrée recommandé)
-   title: titre court
-   url  : lien de la page projet (pour lightbox plus tard)
-*/
-const PROJECTS = [
-  { thumb: 'img/BY-pics/01.png', title: 'Projet 01', url: '#' },
-  { thumb: 'img/BY-pics/02.png', title: 'Projet 02', url: '#' },
-  { thumb: 'img/BY-pics/03.png', title: 'Projet 03', url: '#' },
-  { thumb: 'img/BY-pics/04.png', title: 'Projet 04', url: '#' },
-  { thumb: 'img/BY-pics/05.png', title: 'Projet 05', url: '#' },
-  { thumb: 'img/BY-pics/06.png', title: 'Projet 06', url: '#' },
-  { thumb: 'img/BY-pics/07.png', title: 'Projet 07', url: '#' },
-  { thumb: 'img/BY-pics/08.png', title: 'Projet 08', url: '#' },
-  { thumb: 'img/BY-pics/09.png', title: 'Projet 09', url: '#' },
-  { thumb: 'img/BY-pics/10.png', title: 'Projet 10', url: '#' }
-];
-
-/* Fallback “scan” si jamais tu veux garder l'ancien comportement :
-   — on ne s’en sert que si PROJECTS est vide. */
-let imageTextures = []; // array d’URL de thumbs (rempli par PROJECTS ou fallback scan)
-
-/* ===========================================================
-   ================  BUCKETS & LAYOUT SETUP  =================
-   =========================================================== */
+  
 const BUCKETS = [
   { id:'desktop-32:9', match:(w,h)=> w>=1025 && (w/h)>=3.1,                  grid:{cols:6, rows:2} },
   { id:'desktop-21:9', match:(w,h)=> w>=1025 && (w/h)>=1.8 && (w/h)<3.1,     grid:{cols:5, rows:2} },
@@ -298,24 +407,33 @@ const BUCKETS = [
 const HYST = 0.03;
 let currentBucket = null;
 let lastAspect = null;
-
+  
 function pickBucket(w, h){
   const a = w / h;
-  if (w > h && w < 1025) { lastAspect = a; return 'desktop-16:9'; }
+
+  if (w > h && w < 1025) {
+    lastAspect = a;
+    return 'desktop-16:9';
+  }
+
   if (currentBucket && lastAspect && Math.abs(a - lastAspect) < HYST) return currentBucket;
-  for (const b of BUCKETS) { if (b.match(w, h)) { lastAspect = a; return b.id; } }
-  lastAspect = a; return 'desktop-16:9';
+
+  for (const b of BUCKETS) {
+    if (b.match(w, h)) {
+      lastAspect = a;
+      return b.id;
+    }
+  }
+  lastAspect = a;
+  return 'desktop-16:9';
 }
 
-/* ===========================================================
-   =================  CONFIG & CONSTANTS  ====================
-   =========================================================== */
 const prefersReducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const COLORS = {
-  background: 0x0055ff,
-  square:     0x090B0B,
-  accent:     0xf3ff00,
-  textCSS:    '#f3f1ee',
+  background: 0x0055ff,           
+  square:     0x090B0B,           
+  accent:     0xf3ff00,           
+  textCSS:    '#f3f1ee',          
   placeholder:'#CAC4B7'
 };
 
@@ -331,10 +449,7 @@ const config = {
   maxDepthVariation: 7,
   mouseSquareAnimationSpeed: prefersReducedMotion ? 0.15 : 0.4,
   gridAnimationSpeed: prefersReducedMotion ? 0.05 : 0.08,
-
-  /* Grain via texture (désactivé si noise.png introuvable) */
-  grainOpacity: prefersReducedMotion ? 0.06 : 0.12,
-
+  grainOpacity: prefersReducedMotion ? 0.0 : 0.12,
   showDots: true,
   dotSize: 0.12,
   dotColor: COLORS.accent,
@@ -342,37 +457,64 @@ const config = {
   baseColsOverride: null,
   overlayGapCols: 0.5,
 
+
   labelBaffleSpeedMs: 30,
   labelRevealMs: 50,
   refineChanceD2: 0.55,
-  extraChildChanceAfterD2: 0.30
-};
+  extraChildChanceAfterD2: 0.30,
 
-/* ===========================================================
-   ===================  LABEL LAYOUT TUNING  =================
-   =========================================================== */
+};
+  
 const LABEL_MARGIN_DEPTH_RIGHT = 6;
 const LABEL_MARGIN_DEPTH_TOP   = 6;
 const LABEL_NUDGE_PX_Y         = -2;
 const LABEL_RIGHT_EXTRA_PX     = 1;
 const SAFE_TOP_GAP_PX          = 0;
 
-/* ===========================================================
-   ================  RUNTIME (globals/refs)  =================
-   =========================================================== */
+
 function viewportLabelScaleFactor() {
   const s = Math.min(window.innerWidth, window.innerHeight);
-  const MIN = 360, OK = 912; const t = (s - MIN) / (OK - MIN);
+  const MIN = 360;
+  const OK  = 912;
+  const t = (s - MIN) / (OK - MIN);
   return Math.max(0.70, Math.min(1.00, t));
 }
+  
+  
 function worldToClientXY(v3){
   const v = v3.clone().project(camera);
   const pxW = STABLE_VP_W || window.innerWidth;
   const pxH = STABLE_VP_H || window.innerHeight;
-  return { x: (v.x * 0.5 + 0.5) * pxW, y: (-v.y * 0.5 + 0.5) * pxH };
+  return {
+    x: (v.x * 0.5 + 0.5) * pxW,
+    y: (-v.y * 0.5 + 0.5) * pxH
+  };
 }
 
-/* ====== Categories & presets (inchangés visuellement) ====== */
+
+function makeDomLabelEl(text){
+  const el = document.createElement('div');
+  el.className = 'hover-label';
+
+  const parts = String(text).replace(/\\n/g, '\n').split('\n');
+  el.innerHTML = parts
+    .map((s,i)=>`<span class="line${i===2?' sub':''}">${s}</span>`)
+    .join('');
+
+  el.style.textAlign = 'right';
+  el.style.direction  = 'ltr';
+
+  el.querySelectorAll('.line').forEach(line => {
+    line.style.display = 'block';
+    line.style.whiteSpace = 'nowrap';
+    line.style.textAlign = 'right';
+  });
+
+  return el;
+}
+
+  
+// Vœux d’images par bucket
 const LAYOUT_WISH = {
   'desktop-32:9': { wantD1:2, wantD2:6, buttonsOnD2:true },
   'desktop-21:9': { wantD1:2, wantD2:5, buttonsOnD2:true },
@@ -381,11 +523,12 @@ const LAYOUT_WISH = {
   'tablet-3:4'  : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'tablet-9:16' : { wantD1:1, wantD2:4, buttonsOnD2:false },
   'mobile-h'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
-  'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false }
+  'mobile-v'    : { wantD1:0, wantD2:0, buttonsOnD2:false },
 };
 
 const PRESETS = {
   'desktop-16:9': {
+
     buttons: [
       { size:'D2', row:0, col:1, quad:0, key:'motion'  },
       { size:'D2', row:1, col:2, quad:1, key:'ui'      },
@@ -393,18 +536,25 @@ const PRESETS = {
       { size:'D2', row:0, col:3, quad:3, key:'random'  },
       { size:'D2', row:1, col:1, quad:3, key:'code'    }
     ],
-    imagesD1: [ { row:0, col:0 } ],
-    imagesD2: [ { size:'D2', row:0, col:2, quad:1 } ]
+
+    imagesD1: [
+      { row:0, col:0 }
+    ],
+
+    imagesD2: [
+      { size:'D2', row:0, col:2, quad:1 }
+    ],
   },
+
   'tablet-4:3': {
     buttons: [
       { size:'D2', row:0, col:0, quad:0, key:'motion' },
       { size:'D2', row:0, col:1, quad:0, key:'ui'     },
       { size:'D2', row:0, col:2, quad:2, key:'fractal'},
       { size:'D2', row:1, col:0, quad:1, key:'random' },
-      { size:'D2', row:1, col:2, quad:2, key:'code'   }
+      { size:'D2', row:1, col:2, quad:2, key:'code'   },
     ],
-    imagesD1: [], imagesD2: []
+    imagesD1: [], imagesD2: [],
   },
   'tablet-3:4': {
     buttons: [
@@ -412,9 +562,9 @@ const PRESETS = {
       { size:'D1', row:1, col:0, key:'ui'      },
       { size:'D1', row:2, col:1, key:'fractal' },
       { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    }
+      { size:'D1', row:4, col:1, key:'code'    },
     ],
-    imagesD1: [], imagesD2: []
+    imagesD1: [], imagesD2: [],
   },
   'tablet-9:16': {
     buttons: [
@@ -422,9 +572,9 @@ const PRESETS = {
       { size:'D1', row:1, col:0, key:'ui'      },
       { size:'D1', row:2, col:1, key:'fractal' },
       { size:'D1', row:3, col:0, key:'random'  },
-      { size:'D1', row:4, col:1, key:'code'    }
+      { size:'D1', row:4, col:1, key:'code'    },
     ],
-    imagesD1: [], imagesD2: []
+    imagesD1: [], imagesD2: [],
   },
   'mobile-v': {
     buttons: [
@@ -432,9 +582,9 @@ const PRESETS = {
       { size:'D2', row:1, col:1, quad:2, key:'ui'      },
       { size:'D2', row:2, col:0, quad:3, key:'fractal' },
       { size:'D2', row:3, col:1, quad:0, key:'random'  },
-      { size:'D2', row:1, col:0, quad:0, key:'code'    }
+      { size:'D2', row:1, col:0, quad:0, key:'code'    },
     ],
-    imagesD1: [], imagesD2: []
+    imagesD1: [], imagesD2: [],
   },
   'mobile-h': {
     buttons: [
@@ -442,10 +592,11 @@ const PRESETS = {
       { size:'D2', row:0, col:1, quad:2, key:'ui'      },
       { size:'D2', row:1, col:2, quad:0, key:'fractal' },
       { size:'D2', row:1, col:0, quad:3, key:'random'  },
-      { size:'D2', row:0, col:2, quad:2, key:'code'    }
+      { size:'D2', row:0, col:2, quad:2, key:'code'    },
     ],
-    imagesD1: [], imagesD2: []
+    imagesD1: [], imagesD2: [],
   },
+
   'desktop-21:9': {
     buttons: [
       { size:'D2', row:0, col:1, quad:0, key:'motion'  },
@@ -455,7 +606,7 @@ const PRESETS = {
       { size:'D2', row:1, col:1, quad:3, key:'code'    }
     ],
     imagesD1: [ { row:0, col:0 } ],
-    imagesD2: [ { size:'D2', row:0, col:2, quad:1 } ]
+    imagesD2: [ { size:'D2', row:0, col:2, quad:1 } ],
   },
   'desktop-32:9': {
     buttons: [
@@ -466,40 +617,28 @@ const PRESETS = {
       { size:'D2', row:1, col:1, quad:3, key:'code'    }
     ],
     imagesD1: [ { row:0, col:0 } ],
-    imagesD2: [ { size:'D2', row:0, col:2, quad:1 } ]
-  }
+    imagesD2: [ { size:'D2', row:0, col:2, quad:1 } ],
+  },
 };
+
+
 
 const CATEGORIES = [
   { key:'motion',  label:'Motion\nDesign',       url:'/motion-design' },
   { key:'fractal', label:'Fractal\nArt',         url:'/fractal-art'   },
-  { key:'code',    label:'Creative\nCoding\nAI-assisted', url:'/creative-coding' },
-  { key:'ui',      label:'UI\nDesign',           url:'/UI-design' },
+  { key:'code', label:'Creative\nCoding\nAI-assisted', url:'/creative-coding' },
+  { key:'ui',     label:'UI\nDesign',          url:'/UI-design' },
   { key:'random',  label:'Random\nStuff',        url:'/random-stuff' }
 ];
 const REQUIRED_BUTTONS = 5;
 
-/* ===========================================================
-   ================  THREE / FRACTAL RUNTIME  ================
-   =========================================================== */
+// Runtime state
 let scene, camera, renderer, noise2D, rngFn, mouseSquare, cursorBorder, grainPlane, menuPlane, menuBorderBottom;
 let lastMouseScreenPos = new THREE.Vector2(0, 0);
 const fractalState = new Map(); const meshPool = []; const dotMeshPool = [];
 let targetState = new Map();
 let darkMaterial, cursorMaterial, geometry, dotMaterial, menuBorderMaterial;
-let needsBaseUpdate = true; let needsRefineCheck = false;
-
-/* 🔸 dynamique : budget de raffinement selon CPU */
-let refineBudgetPerFrame = 64;
-function computeRefineBudget(){
-  const hc = (navigator.hardwareConcurrency || 4);
-  if (hc <= 2) return 16;
-  if (hc <= 4) return 24;
-  if (hc <= 6) return 48;
-  return 64;
-}
-refineBudgetPerFrame = computeRefineBudget();
-
+let needsBaseUpdate = true; let needsRefineCheck = false; let refineBudgetPerFrame = 64;
 const imageCells = new Set(); const buttonCells = new Map(); let persistentButtonPaths = [];
 const imageAssignment = new Map(); const imageSlots = new Set(); const buttonSlots = new Set();
 const materialCache = new Map(); const textureLoader = new THREE.TextureLoader();
@@ -516,59 +655,52 @@ const MOBILE_CATEGORY_ORDER = ['motion','fractal','ui','code','random'];
 const MOBILE_BTN_OCCLUDER_PAD_PX = 1;
 
 let contentGroup;
+  
 let mobileWorldContentHeight = 0;
 let instantKill = new Set();
 let STABLE_VP_W = window.innerWidth;
 let STABLE_VP_H = window.innerHeight;
 
+
+
 let scrollOffsetWorld = 0;
 let mobileBuildScrollAt = 0;
 
-/* ===== Raffinement “seulement quand la cellule change” + throttle ===== */
-let lastHoverLeafPath = null;
-let lastRefinedPath = null;
-const REFINE_THROTTLE_MS = 33;
-let nextRefineAllowedAt = 0;
-
-/* ===== Grain via texture ===== */
-let grainTexture = null;
-
-/* ===== Projets/images ===== */
+  
+let imageTextures = [];
 const LOCAL_IMG_DIR = 'img/BY-pics/';
 const IMG_EXT = '.png';
 const IMG_PAD = 2;
 const MAX_INDEX = 200;
 const STOP_AFTER_MISSES = 10;
 
-/* ===========================================================
-   ====================  IMAGE SOURCING  =====================
-   =========================================================== */
-async function loadProjectThumbsOrScan(onProgress){
+async function scanLocalImages(onProgress){
   imageTextures = [];
-
-  // 1) Data-driven si PROJECTS fourni
-  if (Array.isArray(PROJECTS) && PROJECTS.length){
-    imageTextures = PROJECTS.map(p=>p.thumb).filter(Boolean);
-    if (onProgress) onProgress(1,1);
-    return;
-  }
-
-  // 2) Fallback : scan séquentiel 001..200
   let misses = 0;
+
   for (let i = 1; i <= MAX_INDEX; i++) {
     const num = String(i).padStart(IMG_PAD, '0');
     const url = `${LOCAL_IMG_DIR}${num}${IMG_EXT}`;
     const ok = await imageExists(url);
-    if (ok) { imageTextures.push(url); misses = 0; } else { misses++; }
+
+    if (ok) { imageTextures.push(url); misses = 0; }
+    else { misses++; }
+
     if (onProgress) {
       const expectedTotal = Math.min(MAX_INDEX, i + Math.max(0, STOP_AFTER_MISSES - misses));
       onProgress(i, expectedTotal);
     }
+
     if (misses >= STOP_AFTER_MISSES && imageTextures.length > 0) break;
   }
+
   imageTextures.sort((a,b)=> a.localeCompare(b, undefined, { numeric:true, sensitivity:'base' }));
-  if (onProgress) onProgress(1,1);
+
+  if (onProgress) onProgress(1, 1);
 }
+
+
+
 function imageExists(url) {
   return new Promise(resolve => {
     const img = new Image();
@@ -578,9 +710,7 @@ function imageExists(url) {
   });
 }
 
-/* ===========================================================
-   ==================  RANDOM / NOISE / RNG  =================
-   =========================================================== */
+
 function hashCode(str){ let h=0; for(let i=0;i<str.length;i++) h=((h<<5)-h+str.charCodeAt(i))|0; return h; }
 function saltedKey(path, salt){ return (hashCode(path) ^ salt) | 0; }
 const sessionSalt = (Math.random()*0x7fffffff) | 0;
@@ -606,9 +736,7 @@ function reseed(extraSeed = 0){
   scene.userData._randSalt = base >>> 0;
 }
 
-/* ===========================================================
-   =====================  LAYOUT METRICS  ====================
-   =========================================================== */
+
 function getLayoutMetrics(){
   const headerEl = document.getElementById('ui-header');
   const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
@@ -621,6 +749,7 @@ function getLayoutMetrics(){
 
   const viewHeight = camera.top - camera.bottom;
   const viewWidth  = camera.right - camera.left;
+
   const w = viewWidth / baseCols;
 
   const pxH = STABLE_VP_H || window.innerHeight;
@@ -636,35 +765,71 @@ function getLayoutMetrics(){
   getLayoutMetrics._memo = { key, val };
   return val;
 }
-function syncCssHeaderHeight(){
-  const headerEl = document.getElementById('ui-header');
-  const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-  document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
+
+
+
+function isInCullWindow(x, y, size){
+  const { contentTop } = getLayoutMetrics();
+  const gx = (contentGroup?.position?.x || 0);
+  const gy = (contentGroup?.position?.y || 0);
+  const viewW = camera.right - camera.left;
+  const viewH = contentTop - camera.bottom;
+  const extendX = isLandscapeLike() ? viewW * 2.5 : 0;
+  const extendY = isLandscapeLike() ? 0 : viewH * 2.5;
+  const L = camera.left   - gx - extendX;
+  const R = camera.right  - gx + extendX;
+  const B = camera.bottom - gy - extendY;
+  const T = contentTop    - gy + extendY;
+  const h = size * 0.5;
+  const l = x - h, r = x + h, b = y - h, t = y + h;
+  return !(r <= L || l >= R || t <= B || b >= T);
 }
-syncCssHeaderHeight();
-window.addEventListener('resize', syncCssHeaderHeight, { passive: true });
 
-/* ===========================================================
-   ==================  VISIBILITY / RAF PAUSE  ===============
-   =========================================================== */
-let __rafHandle = 0;
-function startRAF(){ if (!__rafHandle) __rafHandle = requestAnimationFrame(animate); }
-function stopRAF(){ if (__rafHandle){ cancelAnimationFrame(__rafHandle); __rafHandle = 0; } }
 
-document.addEventListener('visibilitychange', ()=>{
-  if (document.hidden) { stopRAF(); }
-  else { startRAF(); }
-});
 
-/* ===========================================================
-   ========================  INIT  ===========================
-   =========================================================== */
+
+
+function isFullyVisible(x, y, size, contentTop){
+  const { contentTop: ct, onePxWorld } = getLayoutMetrics();
+  const gx = (contentGroup?.position?.x || 0);
+  const gy = (contentGroup?.position?.y || 0);
+  const eps = Math.max(config.borderWidth * 2, onePxWorld * 0.5);
+  const L = camera.left   - gx + eps;
+  const R = camera.right  - gx - eps;
+  const B = camera.bottom - gy + eps;
+  const T = ct            - gy - eps;
+  const h = size * 0.5;
+  return (x - h >= L && x + h <= R && y - h >= B && y + h <= T);
+}
+
+  
+function isVisibleEnough(x, y, size, contentTop, minRatio = 0.5){
+  const { contentTop: ct } = getLayoutMetrics();
+  const gx = (contentGroup?.position?.x || 0);
+  const gy = (contentGroup?.position?.y || 0);
+  const L = camera.left   - gx;
+  const R = camera.right  - gx;
+  const B = camera.bottom - gy;
+  const T = ct            - gy;
+  const h = size * 0.5;
+  const l = Math.max(L, x - h);
+  const r = Math.min(R, x + h);
+  const b = Math.max(B, y - h);
+  const t = Math.min(T, y + h);
+  const w = Math.max(0, r - l);
+  const hh = Math.max(0, t - b);
+  const overlap = w * hh;
+  const full = size * size;
+  return full > 0 ? (overlap / full) >= minRatio : false;
+}
+
+
 const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; document.body.appendChild(canvas);
 
 (async () => {
   init();
   await bootstrap();
-  startRAF();
+  animate();
 
   if (loaderOverlay && window.baffle) {
     const loaderBaffle = window.baffle(loaderOverlay);
@@ -676,15 +841,19 @@ const canvas = document.createElement('canvas'); canvas.id = 'webgl-canvas'; doc
     }, 300);
   } else if (loaderOverlay) {
     loaderOverlay.style.opacity = '0';
-    loaderOverlay.addEventListener('transitionend', () => { if (loaderOverlay) loaderOverlay.remove(); }, { once: true });
+    loaderOverlay.addEventListener('transitionend', () => {
+      if (loaderOverlay) loaderOverlay.remove();
+    }, { once: true });
   }
 })();
+
 
 function init(){
   scene = new THREE.Scene(); scene.background = new THREE.Color(config.backgroundColor);
 
   const aspect = window.innerWidth / window.innerHeight;
-  const height = 10; const width  = height * aspect;
+  const height = 10;
+  const width  = height * aspect;
 
   camera = new THREE.OrthographicCamera(-width/2, width/2, height/2, -height/2, 1, 1000);
   camera.position.z = 10;
@@ -701,19 +870,23 @@ function init(){
   dotMaterial     = new THREE.MeshBasicMaterial({ color: config.dotColor, depthTest: false });
   menuBorderMaterial = new THREE.MeshBasicMaterial({ color: config.backgroundColor });
 
-  contentGroup = new THREE.Group(); contentGroup.name = 'contentRoot'; scene.add(contentGroup);
+  contentGroup = new THREE.Group();
+  contentGroup.name = 'contentRoot';
+  scene.add(contentGroup);
 
   mouseSquare = new THREE.Mesh(geometry, cursorMaterial);
   mouseSquare.userData.targetPosition = new THREE.Vector3();
   mouseSquare.userData.targetScale    = new THREE.Vector3();
-  mouseSquare.renderOrder = 4; scene.add(mouseSquare);
+  mouseSquare.renderOrder = 4;
+  scene.add(mouseSquare);
 
   cursorBorder = new THREE.Mesh(geometry, darkMaterial);
   cursorBorder.userData.targetPosition = new THREE.Vector3();
   cursorBorder.userData.targetScale    = new THREE.Vector3();
-  cursorBorder.renderOrder = 3; scene.add(cursorBorder);
+  cursorBorder.renderOrder = 3;
+  scene.add(cursorBorder);
 
-  createGrainPlane();        // 🔸 texture noise.png, sinon off
+  createGrainPlane();
   createMenuPlane();
   menuBorderBottom.visible = false;
 
@@ -721,38 +894,42 @@ function init(){
   window.addEventListener('click',     onClick,     { passive:true });
   window.addEventListener('scroll',    onScroll,    { passive:true });
 
-  function enableNavButtonHoverAnimation(){
-    if (typeof window.gsap === 'undefined') { requestAnimationFrame(enableNavButtonHoverAnimation); return; }
-    const buttons = document.querySelectorAll('#nav-links .nav-btn');
-    buttons.forEach(setupAnimatedNavButton);
+function enableNavButtonHoverAnimation(){
+  if (typeof window.gsap === 'undefined') {
+    requestAnimationFrame(enableNavButtonHoverAnimation);
+    return;
   }
-  function setupAnimatedNavButton(button){
-    if (!button) return;
-    const label = button.textContent.trim();
-    button.innerHTML = `
-      <span class="text-container">
-        <span class="button-text initial-text">${label}</span>
-        <span class="button-text hover-text">${label}</span>
-      </span>
-    `;
-    const splitTextIntoSpans = (el) => {
-      const text = el.textContent;
-      el.innerHTML = [...text].map(ch => `<span class="letter">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
-      return el.querySelectorAll('.letter');
-    };
-    const initialEl = button.querySelector('.initial-text');
-    const hoverEl   = button.querySelector('.hover-text');
-    const initialLetters = splitTextIntoSpans(initialEl);
-    const hoverLetters   = splitTextIntoSpans(hoverEl);
-    gsap.set(hoverEl,        { position:'absolute', top:0, left:0 });
-    gsap.set(initialLetters, { y:'0%' });
-    gsap.set(hoverLetters,   { y:'100%' });
-    const tl = gsap.timeline({ paused:true });
-    tl.to(initialLetters, { y:'-100%', stagger:0.015, duration:0.20, ease:'power2.inOut' })
-      .to(hoverLetters,   { y:'0%',    stagger:0.015, duration:0.20, ease:'power2.inOut' }, '<0.05');
-    button.addEventListener('mouseenter', () => tl.play());
-    button.addEventListener('mouseleave', () => tl.reverse());
-  }
+  const buttons = document.querySelectorAll('#nav-links .nav-btn');
+  buttons.forEach(setupAnimatedNavButton);
+}
+
+function setupAnimatedNavButton(button){
+  if (!button) return;
+  const label = button.textContent.trim();
+  button.innerHTML = `
+    <span class="text-container">
+      <span class="button-text initial-text">${label}</span>
+      <span class="button-text hover-text">${label}</span>
+    </span>
+  `;
+  const splitTextIntoSpans = (el) => {
+    const text = el.textContent;
+    el.innerHTML = [...text].map(ch => `<span class="letter">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+    return el.querySelectorAll('.letter');
+  };
+  const initialEl = button.querySelector('.initial-text');
+  const hoverEl   = button.querySelector('.hover-text');
+  const initialLetters = splitTextIntoSpans(initialEl);
+  const hoverLetters   = splitTextIntoSpans(hoverEl);
+  gsap.set(hoverEl,        { position:'absolute', top:0, left:0 });
+  gsap.set(initialLetters, { y:'0%' });
+  gsap.set(hoverLetters,   { y:'100%' });
+  const tl = gsap.timeline({ paused:true });
+  tl.to(initialLetters, { y:'-100%', stagger:0.015, duration:0.20, ease:'power2.inOut' })
+    .to(hoverLetters,   { y:'0%',    stagger:0.015, duration:0.20, ease:'power2.inOut' }, '<0.05');
+  button.addEventListener('mouseenter', () => tl.play());
+  button.addEventListener('mouseleave', () => tl.reverse());
+}
 
   (function createDomCursor(){
     const el = document.createElement('div');
@@ -763,9 +940,22 @@ function init(){
   })();
 
   enableNavButtonHoverAnimation();
+
   requestAnimationFrame(()=>{ updateMenuGeometry(); });
 }
 
+
+
+function syncCssHeaderHeight(){
+  const headerEl = document.getElementById('ui-header');
+  const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
+}
+syncCssHeaderHeight();
+window.addEventListener('resize', syncCssHeaderHeight, { passive: true });
+
+  
+  
 async function bootstrap(){
   const onProgress = (current, total) => {
     if (loaderOverlay) {
@@ -774,39 +964,133 @@ async function bootstrap(){
     }
   };
 
-  await loadProjectThumbsOrScan(onProgress);
+  await scanLocalImages(onProgress);
   if (loaderOverlay) loaderOverlay.textContent = `[ 100% ]`;
 
   const w = window.innerWidth, h = window.innerHeight;
   currentBucket = pickBucket(w, h);
   applyBucket();
 
-  resetFractalRandom();
+  resetFractalRandom(); 
+
   buildFreeOverlays();
 
   syncStateToMeshes();
 
+  // 5) entrées/sorties & scroll
   installDragSwipeScroll();
   forceBrowserToLayoutForHScroll();
 
   lastGridCursorSizeWorld = computeDefaultGridCursorSize();
+
   setContentTransformFromScroll();
 }
 
-/* ===========================================================
-   ===================  MENU & GRAIN LAYERS  =================
-   =========================================================== */
+
+function applyBucket(){
+  const b = BUCKETS.find(x=>x.id===currentBucket);
+
+  const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+  const isPhonePortrait  = (currentBucket === 'mobile-v');
+
+  const isTabletLand = isTabletLandscapeStrict();
+  const forceSubDesktopLandscape = isSubDesktopLandscape() && !isTabletLand;
+
+  const ULTRAWIDE_AR = 22/9;
+  const aspect = window.innerWidth / window.innerHeight;
+
+  if (forceSubDesktopLandscape) {
+    baseCols = 4;
+    baseRowsPrimary = 2;
+
+  } else if (isTabletPortrait) {
+    if (isShortPortrait()){
+      baseCols = 2;
+    } else {
+      baseCols = 3;
+    }
+    baseRowsPrimary = b?.grid.rows || 3;
+
+  } else if (!isPhonePortrait) {
+    if (isTabletLand) {
+      baseCols = b?.grid?.cols ?? 4;
+      baseRowsPrimary = b?.grid?.rows ?? 2;
+    } else if (config.baseColsOverride != null) {
+      baseCols = Math.max(1, config.baseColsOverride);
+      baseRowsPrimary = b?.grid?.rows ?? 2;
+    } else if (config.targetCellPx) {
+      baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx));
+      baseRowsPrimary = b?.grid?.rows ?? 2;
+    } else {
+      baseCols = b?.grid?.cols || 4;
+      baseRowsPrimary = b?.grid?.rows || 2;
+    }
+
+  } else {
+    baseCols = 2;
+    baseRowsPrimary = 2;
+  }
+
+  const wishKey =
+    forceSubDesktopLandscape ? 'desktop-16:9'
+    : (currentBucket === 'mobile-h' ? 'desktop-16:9' : currentBucket);
+
+  const wish = LAYOUT_WISH[wishKey] || { wantD1:1, wantD2:4, buttonsOnD2:true };
+  WANT_D1 = wish.wantD1;
+  WANT_D2 = wish.wantD2;
+  BUTTONS_ON_D2 = wish.buttonsOnD2;
+
+  const portraitMobileLike = isPhonePortrait || isTabletPortrait;
+
+// plafond par défaut (inchangé)
+TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
+                                  : (prefersReducedMotion ? 5 : 7);
+
+// en formats verticaux uniquement → on enlève 1 niveau au max
+if (portraitMobileLike) {
+  TARGET_DEPTH = Math.max(config.minDepth, (TARGET_DEPTH | 0) - 1);
+}
+  config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
+
+  updateScrollDocHeight();
+}
+
+  
+function createGrainPlane(){
+  const mat = new THREE.ShaderMaterial({
+    transparent: config.grainOpacity > 0,
+    depthTest: false,
+    depthWrite: false,
+    uniforms: { uOpacity: { value: config.grainOpacity } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader:'uniform float uOpacity; varying vec2 vUv; float r(vec2 st){ return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);} void main(){ vec2 uv=gl_FragCoord.xy/512.0; float g=r(uv); gl_FragColor=vec4(1.0,1.0,1.0,g*uOpacity); }'
+  });
+  grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), mat);
+  grainPlane.position.z = 1; grainPlane.renderOrder = 2; scene.add(grainPlane);
+  grainPlane.visible = config.grainOpacity > 0;
+  updateGrainPlaneSize();
+}
+
 function createMenuPlane(){
   const menuOccluderMaterial = new THREE.MeshBasicMaterial({
-    color: config.darkColor, depthTest: false, depthWrite: false, transparent: false
+    color: config.darkColor,
+    depthTest: false,
+    depthWrite: false,
+    transparent: false
   });
+
   menuPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuOccluderMaterial);
-  menuPlane.position.z  = 10; menuPlane.renderOrder = 100; scene.add(menuPlane);
+  menuPlane.position.z  = 10;
+  menuPlane.renderOrder = 100;
+  scene.add(menuPlane);
 
   menuBorderBottom = new THREE.Mesh(new THREE.PlaneGeometry(1,1), menuBorderMaterial);
-  menuBorderBottom.position.z  = 11; menuBorderBottom.renderOrder = 101; scene.add(menuBorderBottom);
+  menuBorderBottom.position.z  = 11;
+  menuBorderBottom.renderOrder = 101;
+  scene.add(menuBorderBottom);
 
-  menuPlane.visible = true; menuBorderBottom.visible = false;
+  menuPlane.visible        = true;
+  menuBorderBottom.visible = false;
 
   const header = document.getElementById('ui-header');
   if (header) header.style.background = 'transparent';
@@ -814,123 +1098,102 @@ function createMenuPlane(){
   updateMenuGeometry();
 }
 
-function updateMenuGeometry(){
-  const { viewWidth, menuHeight } = getLayoutMetrics();
-  menuPlane.scale.set(viewWidth, menuHeight, 1);
-  menuPlane.position.set((camera.left + camera.right) / 2, camera.top - menuHeight / 2, 0.1);
-
-  const headerEl = document.getElementById('ui-header');
-  const layer = document.getElementById('labels-layer');
-  if (headerEl && layer){
-    const headerPx = Math.round(headerEl.getBoundingClientRect().height);
-    headerEl.style.maxWidth = '100vw'; headerEl.style.overflow = 'hidden';
-    layer.style.clipPath = `inset(${headerPx}px 0 0 0)`;
-    layer.style.webkitClipPath = `inset(${headerPx}px 0 0 0)`;
-    layer.style.zIndex = '3';
-    document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
+(function installMobileFooterGPU(){
+  const ID = 'mobile-footer';
+  let el = document.getElementById(ID);
+  if (!el){
+    el = document.createElement('div');
+    el.id = ID;
+    el.setAttribute('aria-hidden','true');
+    document.body.appendChild(el);
   }
-}
 
-/* ===========================================================
-   =====================  GRAIN (texture)  ===================
-   =========================================================== */
-function createGrainPlane(){
-  // Essaye de charger img/noise.png ; si échec => pas de grain
-  textureLoader.load(
-    'img/noise.png',
-    (tex)=>{
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      tex.colorSpace = THREE.SRGBColorSpace;
-      grainTexture = tex;
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex, depthTest:false, depthWrite:false,
-        transparent:true, opacity: config.grainOpacity
-      });
-      grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1,1), mat);
-      grainPlane.position.z = 2; grainPlane.renderOrder = 2.5;
-      scene.add(grainPlane);
-      updateGrainPlaneSize();
-      updateGrainTiling();
-    },
-    undefined,
-    ()=>{
-      grainTexture = null;
-      grainPlane = null; // pas de grain si texture absente
+  const MAX = 320;
+  const PAD = 2;
+  const UNDER_DESKTOP = () => Math.min(innerWidth, innerHeight) <= 1024;
+
+  let lastPX = MAX;
+  let lastH  = 0;
+
+  function layoutHeight(){
+    return (typeof STABLE_VP_H === 'number' && STABLE_VP_H > 0) ? STABLE_VP_H : innerHeight;
+  }
+
+  function measureH(){
+    const vv = visualViewport;
+    let extra = 0;
+    if (vv){
+      const vvBottom = vv.height + (vv.offsetTop || 0);
+      extra = Math.max(0, vvBottom - layoutHeight());
     }
-  );
-}
+    return Math.max(0, Math.ceil(extra) + PAD);
+  }
 
-function updateGrainPlaneSize(){
-  if(!grainPlane) return;
-  const h=camera.top - camera.bottom;
-  const w=camera.right - camera.left;
-  grainPlane.scale.set(w, h, 1);
-  grainPlane.position.set((camera.left + camera.right)/2, (camera.top + camera.bottom)/2, 0.02);
-}
-function updateGrainTiling(){
-  if(!grainPlane || !grainTexture) return;
-  // Tiling basé sur taille viewport et une tile ~256px
-  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-  const pxPerWorldY = (STABLE_VP_H || window.innerHeight) / (camera.top - camera.bottom);
-  const tilePx = 256;
-  const tileWorldX = tilePx / pxPerWorldX;
-  const tileWorldY = tilePx / pxPerWorldY;
-  const viewW  = camera.right - camera.left;
-  const viewH  = camera.top - camera.bottom;
-  const repeatX = Math.max(1, Math.floor(viewW  / tileWorldX));
-  const repeatY = Math.max(1, Math.floor(viewH  / tileWorldY));
-  grainTexture.repeat.set(repeatX, repeatY);
-  grainTexture.needsUpdate = true;
-}
+  function setTransformInstant(h){
+    el.style.transition = 'transform 0s';
+    const ty = Math.max(0, MAX - h);
+    if (ty !== lastPX){
+      el.style.transform = `translateY(${ty}px)`;
+      lastPX = ty; lastH = h;
+    }
+  }
 
-/* ===========================================================
-   =====================  BUCKET APPLY  ======================
-   =========================================================== */
-function applyBucket(){
-  const b = BUCKETS.find(x=>x.id===currentBucket);
-  const isTabletPortrait = (currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
-  const isPhonePortrait  = (currentBucket === 'mobile-v');
-  const isTabletLand = isTabletLandscapeStrict();
-  const forceSubDesktopLandscape = isSubDesktopLandscape() && !isTabletLand;
+  function setTransformAnimated(h){
+    el.style.transition = 'transform .12s ease-out';
+    const ty = Math.max(0, MAX - h);
+    if (ty !== lastPX){
+      el.style.transform = `translateY(${ty}px)`;
+      lastPX = ty; lastH = h;
+    }
+  }
 
-  if (forceSubDesktopLandscape) {
-    baseCols = 4; baseRowsPrimary = 2;
-  } else if (isTabletPortrait) {
-    baseCols = isShortPortrait() ? 2 : 3;
-    baseRowsPrimary = b?.grid.rows || 3;
-  } else if (!isPhonePortrait) {
-    if (isTabletLand) { baseCols = b?.grid?.cols ?? 4; baseRowsPrimary = b?.grid?.rows ?? 2; }
-    else if (config.baseColsOverride != null) { baseCols = Math.max(1, config.baseColsOverride); baseRowsPrimary = b?.grid?.rows ?? 2; }
-    else if (config.targetCellPx) { baseCols = Math.max(1, Math.round(window.innerWidth / config.targetCellPx)); baseRowsPrimary = b?.grid?.rows ?? 2; }
-    else { baseCols = b?.grid?.cols || 4; baseRowsPrimary = b?.grid?.rows || 2; }
-  } else { baseCols = 2; baseRowsPrimary = 2; }
+   function tick(){
+    if (!UNDER_DESKTOP()){
+      if (lastPX !== MAX){
+        el.style.transition = 'transform .12s ease-out';
+        el.style.transform  = `translateY(${MAX}px)`;
+        lastPX = MAX; lastH = 0;
+      }
+      return;
+    }
+    el.style.display = 'block';
 
-  const wishKey =
-    forceSubDesktopLandscape ? 'desktop-16:9'
-    : (currentBucket === 'mobile-h' ? 'desktop-16:9' : currentBucket);
+    const h = measureH();
+    if (h > lastH) setTransformInstant(h);
+    else if (h < lastH) setTransformAnimated(h); 
+  }
 
-  const wish = LAYOUT_WISH[wishKey] || { wantD1:1, wantD2:4, buttonsOnD2:true };
-  WANT_D1 = wish.wantD1; WANT_D2 = wish.wantD2; BUTTONS_ON_D2 = wish.buttonsOnD2;
+  window.__mobileFooterTick = tick;
 
-  const portraitMobileLike = isPhonePortrait || isTabletPortrait;
-  TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6) : (prefersReducedMotion ? 5 : 7);
-  if (portraitMobileLike) TARGET_DEPTH = Math.max(config.minDepth, (TARGET_DEPTH | 0) - 1);
-  config.refineChanceD2 = portraitMobileLike ? 0.3 : 0.55;
+  tick();
+  addEventListener('resize', tick, { passive: true });
+  addEventListener('orientationchange', tick, { passive: true });
+  if (window.visualViewport){
+    visualViewport.addEventListener('resize', tick, { passive: true });
+    visualViewport.addEventListener('scroll', tick,  { passive: true });
+  }
+})();
 
-  updateScrollDocHeight();
-}
-
-/* ===========================================================
-   =============  SCROLL & INPUT / H/V patterns =============
-   =========================================================== */
 function computeScrollOffsetWorldFromScrollY(){
   const V = (scene.userData._vscroll ||= { yWorld:0, maxWorld:0, patternRows:10, gapRows:0 });
   const y = Math.max(0, Math.min(V.yWorld || 0, V.maxWorld || 0));
   const { onePxWorld } = getLayoutMetrics();
   return Math.round(y / (onePxWorld || 1e-6)) * (onePxWorld || 0);
 }
-function isSubDesktopLandscapeNoScroll(){ return false; }
-function isSubDesktopLandscape(){ const W = STABLE_VP_W || window.innerWidth; const H = STABLE_VP_H || window.innerHeight; return (W > H) && (W < 1025); }
+
+
+
+
+function isSubDesktopLandscapeNoScroll(){
+  return false;
+}
+
+function isSubDesktopLandscape(){
+  const W = STABLE_VP_W || window.innerWidth;
+  const H = STABLE_VP_H || window.innerHeight;
+  return (W > H) && (W < 1025);
+}
+
 
 function setContentTransformFromScroll(){
   if (!contentGroup) return;
@@ -939,38 +1202,38 @@ function setContentTransformFromScroll(){
     const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
     contentGroup.position.set(-(H.xWorld || 0), 0, 0);
     const last = scene.userData._lastBuildX || 0;
-    if (Math.abs((H.xWorld || 0) - last) > w * 0.5){ needsBaseUpdate = true; scene.userData._lastBuildX = H.xWorld || 0; }
+    if (Math.abs((H.xWorld || 0) - last) > w * 0.5){
+      needsBaseUpdate = true;
+      scene.userData._lastBuildX = H.xWorld || 0;
+    }
   } else {
     const V = (scene.userData._vscroll ||= { yWorld:0, maxWorld:0, patternRows:10, gapRows:0 });
     const v = (Math.max(0, Math.min(V.yWorld || 0, V.maxWorld || 0)) - mobileBuildScrollAt);
     contentGroup.position.set(0, v, 0);
     const last = scene.userData._lastBuildY || 0;
-    if (Math.abs((V.yWorld || 0) - last) > w * 0.5){ needsBaseUpdate = true; scene.userData._lastBuildY = V.yWorld || 0; }
+    if (Math.abs((V.yWorld || 0) - last) > w * 0.5){
+      needsBaseUpdate = true;
+      scene.userData._lastBuildY = V.yWorld || 0;
+    }
   }
   const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
   updateMouseSquareTarget(wp);
 }
 
-/* === Data-driven scroll sizing === */
+
+
+
 function updateScrollDocHeight(){
   const spacer = document.getElementById('scroll-spacer');
   if (!spacer) return;
   const stableW = STABLE_VP_W || window.innerWidth;
   const stableH = STABLE_VP_H || window.innerHeight;
 
-  // Nombre de projets → nb slots d’overlay
-  const overlaysCount = (imageTextures && imageTextures.length) ? imageTextures.length :
-                        (Array.isArray(PROJECTS) ? PROJECTS.length : 0);
-
   if (!isLandscapeLike()){
     const { viewHeight, w, menuHeight } = getLayoutMetrics();
     const V = (scene.userData._vscroll ||= { yWorld:0, maxWorld:0, patternRows:10, gapRows:0 });
+    V.patternRows = 10;
     V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-
-    // Portrait : 2 colonnes → rows = ceil(N/2)
-    const patternRows = Math.max(baseRowsPrimary, Math.ceil(overlaysCount / 2));
-    V.patternRows = Math.max(patternRows, baseRowsPrimary);
-
     const gapYWorld = Math.max(0, V.gapRows) * w;
     const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
     const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
@@ -993,16 +1256,12 @@ function updateScrollDocHeight(){
 
   const { w } = getLayoutMetrics();
   const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
+  H.patternCols = 10;
   H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-
-  // Paysage : 2 rangées → colonnes = N (1 projet = 1 colonne)
-  const overlayCols = Math.max(0, overlaysCount);
-  const contentCols = contentColsForBucket();
-  const patternCols = Math.max(overlayCols, contentCols); // garde un minimum de largeur
-  H.patternCols = Math.max(patternCols, contentCols);
-
+  const patternCols = H.patternCols || 10;
   const gapXWorld   = Math.max(0, H.gapCols) * w;
-  const totalWorld   = (H.patternCols * w) + Math.max(0, H.patternCols - 1) * gapXWorld;
+  const contentCols = contentColsForBucket();
+  const totalWorld   = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
   const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
   const extraWorld   = Math.max(0, totalWorld - visibleWorld);
   H.maxWorld = extraWorld;
@@ -1019,9 +1278,34 @@ function updateScrollDocHeight(){
   H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
 }
 
-/* ===========================================================
-   ===============  SIZE/RESIZE LISTENERS  ===================
-   =========================================================== */
+
+
+
+
+function updateMenuGeometry(){
+  const { viewWidth, menuHeight } = getLayoutMetrics();
+
+  menuPlane.scale.set(viewWidth, menuHeight, 1);
+  menuPlane.position.set((camera.left + camera.right) / 2, camera.top - menuHeight / 2, 0.1);
+
+  const headerEl = document.getElementById('ui-header');
+  const layer = document.getElementById('labels-layer');
+  if (headerEl && layer){
+    const headerPx = Math.round(headerEl.getBoundingClientRect().height);
+    headerEl.style.maxWidth = '100vw';
+    headerEl.style.overflow = 'hidden';
+
+    layer.style.clipPath = `inset(${headerPx}px 0 0 0)`;
+    layer.style.webkitClipPath = `inset(${headerPx}px 0 0 0)`;
+    layer.style.zIndex = '3';
+    document.documentElement.style.setProperty('--menu-h', headerPx + 'px');
+  }
+}
+
+
+
+function updateGrainPlaneSize(){ if(!grainPlane) return; const h=camera.top - camera.bottom; const w=camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
+
 (function installStableResizeHandlers(){
   let lastW = Math.round(window.visualViewport?.width  || window.innerWidth);
   let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
@@ -1036,11 +1320,28 @@ function updateScrollDocHeight(){
     return {
       w: Math.round(window.visualViewport?.width  || window.innerWidth),
       h: Math.round(window.visualViewport?.height || window.innerHeight),
-      ot: Math.round(window.visualViewport?.offsetTop || 0)
+      ot: Math.round(window.visualViewport?.offsetTop || 0),
     };
   }
 
-  function enableArrowKeyScroll(){
+  /*(function enableHorizontalWheelScroll(){
+    function onWheel(e){
+      if (!isLandscapeLike()) return;
+      const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
+      const absY = Math.abs(e.deltaY);
+      const absX = Math.abs(e.deltaX);
+      const delta = (absX > absY ? e.deltaX : e.deltaY);
+      const pxW = STABLE_VP_W || window.innerWidth;
+      const worldW = (camera.right - camera.left) || 1;
+      const pxPerWorldX = pxW / worldW;
+      H.xWorld = Math.max(0, Math.min((H.xWorld || 0) + delta / pxPerWorldX, H.maxWorld || 0));
+      setContentTransformFromScroll();
+      e.preventDefault();
+    }
+    window.addEventListener('wheel', onWheel, { passive:false });
+  })(); */
+
+  (function enableArrowKeyScroll(){
     window.addEventListener('keydown', (e) => {
       if (!isLandscapeLike()) return;
       const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
@@ -1051,10 +1352,19 @@ function updateScrollDocHeight(){
       if (e.key === 'ArrowRight') { H.xWorld = Math.min((H.xWorld||0) + step, H.maxWorld||0); setContentTransformFromScroll(); e.preventDefault(); }
       if (e.key === 'ArrowLeft')  { H.xWorld = Math.max((H.xWorld||0) - step, 0);             setContentTransformFromScroll(); e.preventDefault(); }
     });
-  }
-  enableArrowKeyScroll();
+  })();
 
-  function orientationFlip(pw, ph, w, h){ const prevPortrait = ph >= pw; const nowPortrait  = h  >= w; return prevPortrait !== nowPortrait; }
+  function orientationFlip(pw, ph, w, h){
+    const prevPortrait = ph >= pw;
+    const nowPortrait  = h  >= w;
+    return prevPortrait !== nowPortrait;
+  }
+
+  function applyFooterTick(){
+    if (typeof window.__mobileFooterTick === 'function') {
+      window.__mobileFooterTick();
+    }
+  }
 
   function handleResizeNow(){
     raf = 0;
@@ -1076,41 +1386,60 @@ function updateScrollDocHeight(){
       const nextWorld = computeScrollOffsetWorldFromScrollY();
       scrollOffsetWorld = nextWorld;
 
-      if (mouseSquare?.userData?.anchor){ mobileBuildScrollAt += (nextWorld - prevWorld); }
+      if (mouseSquare?.userData?.anchor){
+        mobileBuildScrollAt += (nextWorld - prevWorld);
+      }
 
+      applyFooterTick();
       needsRefineCheck = true;
+
       lastW = w; lastH = h; lastOT = ot;
       return;
     }
 
     const aspect = (w || 1) / (h || 1);
-    const height = 10; const width  = height * aspect;
-    camera.left = -width / 2; camera.right =  width / 2;
-    camera.top =    height / 2; camera.bottom = -height / 2;
+    const height = 10;
+    const width  = height * aspect;
+
+    camera.left = -width / 2;
+    camera.right =  width / 2;
+    camera.top =    height / 2;
+    camera.bottom = -height / 2;
     camera.updateProjectionMatrix();
+
     renderer.setSize(w, h);
 
-    STABLE_VP_W = w; STABLE_VP_H = h;
+    STABLE_VP_W = w;
+    STABLE_VP_H = h;
 
-    updateGrainPlaneSize(); updateGrainTiling();
-    syncCssHeaderHeight(); updateMenuGeometry();
+    updateGrainPlaneSize();
+    syncCssHeaderHeight();
+    updateMenuGeometry();
+    applyFooterTick();
 
     const newBucket = pickBucket(w, h);
     if (newBucket !== currentBucket){
-      currentBucket = newBucket; applyBucket();
-      reformGridKeepImages(); buildFreeOverlays();
+      currentBucket = newBucket;
+      applyBucket();
+      reformGridKeepImages();
+      buildFreeOverlays();
       lastGridCursorSizeWorld = computeDefaultGridCursorSize();
-      needsRefineCheck = true; updateScrollDocHeight(); installDragSwipeScroll();
+      needsRefineCheck = true;
+      updateScrollDocHeight();
+      installDragSwipeScroll();
     } else {
-      updateScrollDocHeight(); updateFreeOverlays();
-      needsRefineCheck = true; installDragSwipeScroll();
+      updateScrollDocHeight();
+      updateFreeOverlays();
+      needsRefineCheck = true;
+      installDragSwipeScroll();
     }
 
     lastW = w; lastH = h; lastOT = ot;
   }
 
   function onResize(){
-    if (raf) return; raf = requestAnimationFrame(handleResizeNow);
+    if (raf) return;
+    raf = requestAnimationFrame(handleResizeNow);
   }
 
   window.addEventListener('resize', onResize, { passive: true });
@@ -1120,6 +1449,8 @@ function updateScrollDocHeight(){
     visualViewport.addEventListener('scroll', onResize,  { passive: true });
   }
 })();
+
+
 
 function forceBrowserToLayoutForHScroll(){
   if (!isLandscapeLike()) {
@@ -1132,6 +1463,8 @@ function forceBrowserToLayoutForHScroll(){
   }
 }
 
+
+
 function mobileRowsNeeded(){
   const { viewHeight, w, menuHeight } = getLayoutMetrics();
   const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
@@ -1140,7 +1473,9 @@ function mobileRowsNeeded(){
   const EXTRA_BOTTOM_ROWS = 3;
   const SAFETY_ROWS = 2;
   let rowsPattern = 0;
-  if (!isLandscapeLike()){ rowsPattern = Math.max(baseRowsPrimary, (V.patternRows || 10) + SAFETY_ROWS); }
+  if (!isLandscapeLike()){
+    rowsPattern = Math.max(baseRowsPrimary, (V.patternRows || 10) + SAFETY_ROWS);
+  }
   return Math.max(
     baseRowsPrimary,
     rowsScrolled + rowsVisible + EXTRA_BOTTOM_ROWS + SAFETY_ROWS,
@@ -1148,16 +1483,32 @@ function mobileRowsNeeded(){
   );
 }
 
-function isLandscapeLike(){ const W = STABLE_VP_W || window.innerWidth; const H = STABLE_VP_H || window.innerHeight; return W > H; }
+
+
+function isLandscapeLike(){
+  const W = STABLE_VP_W || window.innerWidth;
+  const H = STABLE_VP_H || window.innerHeight;
+  return W > H;
+}
+
 function computeScrollOffsetWorldFromScrollX(){
   const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
   return Math.max(0, Math.min(H.xWorld || 0, H.maxWorld || 0));
 }
-function onScroll(){ return; }
+
+
+
+function onScroll(){
+  return;
+}
+
+
+
 
 function installDragSwipeScroll(){
   const dragTarget = document.getElementById('webgl-canvas') || window;
-  const html = document.documentElement; const body = document.body;
+  const html = document.documentElement;
+  const body = document.body;
 
   if (window.__pointerDrag){  dragTarget.removeEventListener('pointerdown', window.__pointerDrag); window.__pointerDrag = null; }
   if (window.__pointerMove){  window.removeEventListener('pointermove', window.__pointerMove);     window.__pointerMove = null; }
@@ -1209,7 +1560,7 @@ function installDragSwipeScroll(){
     const nx = (ev.clientX / W) * 2 - 1;
     const ny = -(ev.clientY / H) * 2 + 1;
     lastMouseScreenPos.set(nx, ny);
-    // 🔸 ne rafine pas ici : le throttle/leaf-change gère
+    needsRefineCheck = true;
   };
 
   let dragId = null, startX = 0, startY = 0, startWorld = 0, dragging = false;
@@ -1255,6 +1606,7 @@ function installDragSwipeScroll(){
   window.addEventListener('pointercancel',   window.__pointerCancel, { passive:false });
 
   const WHEEL_SENS = 1;
+
   window.__wheelScroll = (e)=>{
     if (isLand){
       const absY = Math.abs(e.deltaY), absX = Math.abs(e.deltaX);
@@ -1287,13 +1639,14 @@ function installDragSwipeScroll(){
   window.addEventListener('keydown', window.__arrowScroll);
 }
 
-/* ===========================================================
-   ====================  FRACTAL ENGINE  =====================
-   =========================================================== */
+
+
+
 function resetFractalRandom(){
   forceRecreateLabelsOnce = true;
   for (const [key, st] of Array.from(fractalState.entries())){
-    contentGroup.remove(st.mesh); meshPool.push(st.mesh);
+    contentGroup.remove(st.mesh);
+    meshPool.push(st.mesh);
     if (st.dotMesh){ contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
     if (st.labelSprite){ scene.remove(st.labelSprite); }
     if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -1301,7 +1654,7 @@ function resetFractalRandom(){
     if (st.occluderMesh){ contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
     fractalState.delete(key);
   }
-  instantKill.clear();
+  if (typeof instantKill !== 'undefined' && instantKill.clear) instantKill.clear();
   targetState.clear();
   imageCells.clear();
   buttonCells.clear();
@@ -1327,6 +1680,7 @@ function resetFractalRandom(){
   needsBaseUpdate = false;
 }
 
+
 function createQuadTree(x, y, size, depth, path, maxDepthOverride = -1){
   if (!isInCullWindow(x, y, size)) return;
   const salt = ((scene?.userData?._randSalt | 0) >>> 0);
@@ -1345,7 +1699,9 @@ function createQuadTree(x, y, size, depth, path, maxDepthOverride = -1){
   const stop = depth >= regionalMaxDepth || (depth > 0 && rand > currentProbability) || size / 2 <= config.borderWidth;
   if (stop){
     const scale = size - config.borderWidth;
-    if (scale > 0){ targetState.set(path, { x, y, size: scale, depth, path, originalSize: size }); }
+    if (scale > 0){
+      targetState.set(path, { x, y, size: scale, depth, path, originalSize: size });
+    }
     return;
   }
   const ns = size / 2, o = size / 4, d = depth + 1;
@@ -1355,80 +1711,92 @@ function createQuadTree(x, y, size, depth, path, maxDepthOverride = -1){
   createQuadTree(x + o, y - o, ns, d, path + '/3', maxDepthOverride);
 }
 
-function isInCullWindow(x, y, size){
-  const { contentTop } = getLayoutMetrics();
-  const gx = (contentGroup?.position?.x || 0);
-  const gy = (contentGroup?.position?.y || 0);
-  const viewW = camera.right - camera.left;
-  const viewH = contentTop - camera.bottom;
-  const extendX = isLandscapeLike() ? viewW * 2.5 : 0;
-  const extendY = isLandscapeLike() ? 0 : viewH * 2.5;
-  const L = camera.left   - gx - extendX;
-  const R = camera.right  - gx + extendX;
-  const B = camera.bottom - gy - extendY;
-  const T = contentTop    - gy + extendY;
-  const h = size * 0.5;
-  const l = x - h, r = x + h, b = y - h, t = y + h;
-  return !(r <= L || l >= R || t <= B || b >= T);
-}
-function isFullyVisible(x, y, size, contentTop){
-  const { contentTop: ct, onePxWorld } = getLayoutMetrics();
-  const gx = (contentGroup?.position?.x || 0);
-  const gy = (contentGroup?.position?.y || 0);
-  const eps = Math.max(config.borderWidth * 2, onePxWorld * 0.5);
-  const L = camera.left   - gx + eps;
-  const R = camera.right  - gx - eps;
-  const B = camera.bottom - gy + eps;
-  const T = ct            - gy - eps;
-  const h = size * 0.5;
-  return (x - h >= L && x + h <= R && y - h >= B && y + h <= T);
-}
-function isVisibleEnough(x, y, size, contentTop, minRatio = 0.5){
-  const { contentTop: ct } = getLayoutMetrics();
-  const gx = (contentGroup?.position?.x || 0);
-  const gy = (contentGroup?.position?.y || 0);
-  const L = camera.left   - gx;
-  const R = camera.right  - gx;
-  const B = camera.bottom - gy;
-  const T = ct            - gy;
-  const h = size * 0.5;
-  const l = Math.max(L, x - h);
-  const r = Math.min(R, x + h);
-  const b = Math.max(B, y - h);
-  const t = Math.min(T, y + h);
-  const w = Math.max(0, r - l);
-  const hh = Math.max(0, t - b);
-  const overlap = w * hh;
-  const full = size * size;
-  return full > 0 ? (overlap / full) >= minRatio : false;
-}
 
-/* Content sizing helpers */
+
 const CONTENT_COLS = 4;
 const NO_D1_CONTENT_COLS = new Set([1, 2]);
 const D1_EXCEPTIONS = new Set();
 
+  
 function contentOffsetColsForBucket(){
   if (isShortPortrait()) return 0;
+
   if (isTabletLandscapeStrict()) return 0;
+
   const contentCols = contentColsForBucket();
   return Math.max(0, (baseCols - contentCols) / 2);
 }
+
+
+
 function contentColsForBucket(){
-  if (currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'){
+    if (currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'){
     return 2;
   }
   return CONTENT_COLS;
 }
+  
+  
+function addPrimaryRowSideFillers(row, offsetCols){
+  if (isShortPortrait()) return;
+  if (isTabletLandscapeStrict()) return;
 
-/* ====== base fractal update ====== */
+  const { w, contentTop } = getLayoutMetrics();
+  const y = contentTop - row * w - w / 2;
+
+  const innerLeftEdge  = camera.left + offsetCols * w;
+
+  const x = innerLeftEdge - 0.5 * w;
+  const p = `filler/L/${row}/0`;
+  createQuadTree(x, y, w, 1, p, -1);
+}
+
+function addRightFillersForOverlayPattern(row, offsetCols){
+  const { w, contentTop } = getLayoutMetrics();
+  const y = contentTop - row * w - w / 2;
+
+  const contentCols = contentColsForBucket();
+
+  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
+  const patternCols = H.patternCols || 10;
+  H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+  const gapXWorld = Math.max(0, H.gapCols) * w;
+
+  const baseX = camera.left + (offsetCols + 0.5) * w;
+  const lastCenterX = baseX + (patternCols - 1) * (w + gapXWorld);
+  const rightEdge = lastCenterX + w / 2;
+
+  const innerRightEdge = camera.left + (offsetCols + contentCols) * w;
+
+  const stepX = w;
+  const startX = innerRightEdge + w / 2;
+
+  const EPS = 1e-6;
+  let i = 0;
+  for (let cx = startX; cx - w / 2 <= rightEdge + EPS; cx += stepX){
+    const p = `fillR/${row}/${i++}`;
+    createQuadTree(cx, y, w, 1, p, -1);
+  }
+}
+
+
+
+function addUltrawideRightFiller(row, offsetCols){
+  return;
+}
+
+
 function updateFractalBase(forceFull = false){
   const carry = forceFull ? new Map() : new Map(targetState);
   targetState = carry;
 
   const { w } = getLayoutMetrics();
   const preset = presetForBucket(currentBucket);
-  if (!preset) { ensureFallbackButtons(); return true; }
+
+  if (!preset) {
+    ensureFallbackButtons();
+    return true;
+  }
 
   const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
 
@@ -1452,17 +1820,30 @@ function updateFractalBase(forceFull = false){
   for (let row = 0; row < totalRows; row++) {
     const isPrimary = row < baseRowsPrimary;
     const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
+
     for (let col = 0; col < colsThisRow; col++) {
       const pref = isPrimary ? 'content' : 'filler';
       const path = `${pref}/${row}/${col}`;
+
       const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
       const y = (getLayoutMetrics().contentTop) - row * w - w/2;
+
       const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
       createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
     }
+
     if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
   }
-  for (let row = 0; row < totalRows; row++) addRightFillersForOverlayPattern(row, offsetCols);
+
+  for (let row = 0; row < totalRows; row++) {
+    addRightFillersForOverlayPattern(row, offsetCols);
+  }
+
+  if (currentBucket === 'desktop-21:9' || currentBucket === 'desktop-32:9'){
+    for (let row = 0; row < totalRows; row++){
+      addUltrawideRightFiller(row, offsetCols);
+    }
+  }
 
   if (!isMobileBucket()){
     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
@@ -1472,74 +1853,71 @@ function updateFractalBase(forceFull = false){
     const protectedD1Paths = new Set();
     (preset?.buttons  || []).forEach(b  => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
     (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); });
+
     ensureMinDepth2Cells(requiredD2, 0, protectedD1Paths);
   }
 
-  if (isMobileBucket()) forceMobilePattern();
+  if (isMobileBucket()){
+    forceMobilePattern();
+  }
   cutOutUnderButtons();
+
   dedupeTargetState();
   forceNoD1GlobalExceptFixed();
+
   sprinkleRefinements(isMobileBucket() ? 24 : 24);
-  if (!isMobileBucket()) enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+
+  if (!isMobileBucket()){
+    enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+  }
 
   return true;
 }
 
-function addPrimaryRowSideFillers(row, offsetCols){
-  if (isShortPortrait()) return;
-  if (isTabletLandscapeStrict()) return;
-  const { w, contentTop } = getLayoutMetrics();
-  const y = contentTop - row * w - w / 2;
-  const innerLeftEdge  = camera.left + offsetCols * w;
-  const x = innerLeftEdge - 0.5 * w;
-  const p = `filler/L/${row}/0`;
-  createQuadTree(x, y, w, 1, p, -1);
-}
-function addRightFillersForOverlayPattern(row, offsetCols){
-  const { w, contentTop } = getLayoutMetrics();
-  const y = contentTop - row * w - w / 2;
 
-  const contentCols = contentColsForBucket();
-  const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
-  const patternCols = H.patternCols || 10;
-  H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-  const gapXWorld = Math.max(0, H.gapCols) * w;
 
-  const baseX = camera.left + (offsetCols + 0.5) * w;
-  const lastCenterX = baseX + (patternCols - 1) * (w + gapXWorld);
-  const rightEdge = lastCenterX + w / 2;
-  const innerRightEdge = camera.left + (offsetCols + contentCols) * w;
 
-  const stepX = w; const startX = innerRightEdge + w / 2;
-  const EPS = 1e-6;
-  let i = 0;
-  for (let cx = startX; cx - w / 2 <= rightEdge + EPS; cx += stepX){
-    const p = `fillR/${row}/${i++}`;
-    createQuadTree(cx, y, w, 1, p, -1);
-  }
-}
-function addUltrawideRightFiller(row, offsetCols){ return; }
 
-/* ======= Mobile pattern forcing ======= */
 function forceMobilePattern(){
   if (!isMobileBucket()) return;
+
   const { w } = getLayoutMetrics();
+
   const subdivideToD2 = (path, s) => {
     if (Math.abs(s.originalSize - w) > 1e-6) return;
+
     targetState.delete(path);
+
     const size = s.originalSize;
     const ns   = size / 2;
     const d    = 2;
     const o    = size / 4;
     const childSize = Math.max(0, ns - config.borderWidth);
+
     const add = (suffix, dx, dy) => {
       const p = path + suffix;
-      targetState.set(p, { x: s.x + dx, y: s.y + dy, size: childSize, depth: d, path: p, originalSize: ns });
+      targetState.set(p, {
+        x: s.x + dx,
+        y: s.y + dy,
+        size: childSize,
+        depth: d,
+        path: p,
+        originalSize: ns
+      });
     };
-    add('/0', -o, +o); add('/1', +o, +o); add('/2', -o, -o); add('/3', +o, -o);
+
+    add('/0', -o, +o);
+    add('/1', +o, +o);
+    add('/2', -o, -o);
+    add('/3', +o, -o);
   };
-  for (const [path, s] of Array.from(targetState.entries())){ if (path.startsWith('content/')) subdivideToD2(path, s); }
-  for (const [path, s] of Array.from(targetState.entries())){ if (path.startsWith('filler/'))  subdivideToD2(path, s); }
+
+  for (const [path, s] of Array.from(targetState.entries())){
+    if (path.startsWith('content/')) subdivideToD2(path, s);
+  }
+  for (const [path, s] of Array.from(targetState.entries())){
+    if (path.startsWith('filler/')) subdivideToD2(path, s);
+  }
   for (const [path, s] of Array.from(targetState.entries())){
     if (path.startsWith('btn/')) continue;
     if (Math.abs(s.originalSize - w) > 1e-6) continue;
@@ -1547,36 +1925,162 @@ function forceMobilePattern(){
   }
 }
 
-/* ======= Helpers to control D1/D2 ======= */
+
+
+function cutOutUnderButtons(){
+  const { onePxWorld } = getLayoutMetrics();
+  const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+  const inset = insetPx * onePxWorld;
+  const eps = Math.max(config.borderWidth * 0.5, 0);
+  const rects = [];
+  const pushRect = (s) => {
+    const h = s.originalSize / 2;
+    rects.push({
+      left: s.x - h + inset - eps,
+      right: s.x + h - inset + eps,
+      bottom: s.y - h + inset - eps,
+      top: s.y + h - inset + eps
+    });
+  };
+  for (const [btnPath] of buttonCells.entries()){
+    const s = targetState.get(btnPath);
+    if (s) pushRect(s);
+  }
+  for (const imgPath of imageCells){
+    const s = targetState.get(imgPath);
+    if (s) pushRect(s);
+  }
+  if (rects.length === 0) return;
+  const intersects = (tile, r) => {
+    const h = tile.originalSize / 2;
+    const L = tile.x - h, R = tile.x + h, B = tile.y - h, T = tile.y + h;
+    return !(R <= r.left || L >= r.right || T <= r.bottom || B >= r.top);
+  };
+  for (const [path, s] of Array.from(targetState.entries())){
+    if (buttonCells.has(path) || imageCells.has(path)) continue;
+    for (const r of rects){
+      if (intersects(s, r)){
+        targetState.delete(path);
+        if (typeof instantKill !== 'undefined' && instantKill.add) instantKill.add(path);
+        break;
+      }
+    }
+  }
+}
+
+
+
+function dedupeTargetState(){
+  const { onePxWorld } = getLayoutMetrics();
+  const EPS = Math.max(1e-6, (onePxWorld || 0.001) * 0.25);
+  const keyOf = s => `${Math.round(s.x/EPS)}|${Math.round(s.y/EPS)}|${Math.round(s.originalSize/EPS)}`;
+  const rank = (path) => {
+    if (imageCells.has(path)) return 100;
+    if (buttonCells.has(path)) return 90;
+    if (path.startsWith('content/')) return 80;
+    if (/^filler\/[LR]/.test(path)) return 70;
+    if (path.startsWith('filler/')) return 60;
+    if (path.startsWith('fillR/')) return 50;
+    if (path.startsWith('rib/')) return 95;
+    return 10;
+  };
+  const items = Array.from(targetState.entries()).map(([path,s])=>({path,s})).sort((a,b)=>rank(b.path)-rank(a.path));
+  const kept = new Set();
+  const keptBoxes = [];
+  const box = (s)=>{ const h=s.originalSize*0.5; return {L:s.x-h,R:s.x+h,B:s.y-h,T:s.y+h}; };
+  const overlap = (A,B)=>{
+    const w = Math.max(0, Math.min(A.R,B.R) - Math.max(A.L,B.L));
+    const h = Math.max(0, Math.min(A.T,B.T) - Math.max(A.B,B.B));
+    return (w >= EPS && h >= EPS);
+  };
+  for (const it of items){
+    const b = box(it.s);
+    let collides = false;
+    for (const kb of keptBoxes){ if (overlap(b,kb)) { collides = true; break; } }
+    if (!collides){
+      kept.add(it.path);
+      keptBoxes.push(b);
+    }
+  }
+  for (const [path] of Array.from(targetState.entries())){ if (!kept.has(path)){ targetState.delete(path); if (typeof instantKill!=='undefined'&&instantKill.add) instantKill.add(path); } }
+}
+
+
+function forceNoD1GlobalExceptFixed(){
+  const { w } = getLayoutMetrics();
+  const toSplit = [];
+
+  for (const [path, s] of targetState.entries()){
+    if (imageCells.has(path)) continue;
+
+    if (Math.abs(s.originalSize - w) < 1e-6){
+      toSplit.push({ path, s });
+    }
+  }
+
+  for (const { path, s } of toSplit){
+    targetState.delete(path);
+    const size = s.originalSize;
+    const ns   = size / 2;
+    const nd   = (s.depth || 1) + 1;
+    const o    = size / 4;
+
+    createQuadTree(s.x - o, s.y + o, ns, nd, path + '/0', -1);
+    createQuadTree(s.x + o, s.y + o, ns, nd, path + '/1', -1);
+    createQuadTree(s.x - o, s.y - o, ns, nd, path + '/2', -1);
+    createQuadTree(s.x + o, s.y - o, ns, nd, path + '/3', -1);
+  }
+}
+
+
+  
 function enforceNoD1InColumns(colsSet){
   const { w, contentTop } = getLayoutMetrics();
   const toSplit = [];
+
   for (const [path, s] of targetState.entries()){
     if (!path.startsWith('content/')) continue;
+
     const m = path.match(/^content\/(\d+)\/(\d+)$/);
     if (!m) continue;
+
     const col = parseInt(m[2], 10);
     if (!colsSet.has(col)) continue;
+
     if (Math.abs(s.originalSize - w) > 1e-6) continue;
     if (!isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) continue;
+
     toSplit.push({ path, s });
   }
+
   for (const { path, s } of toSplit){
     targetState.delete(path);
-    const size = s.originalSize; const ns = size / 2; const d = 2; const o = size / 4;
+
+    const size = s.originalSize;
+    const ns = size / 2;
+    const d  = 2;
+    const o  = size / 4;
+
     const quads = [
       { x: s.x - o, y: s.y + o, suffix: '/0' },
       { x: s.x + o, y: s.y + o, suffix: '/1' },
       { x: s.x - o, y: s.y - o, suffix: '/2' },
-      { x: s.x + o, y: s.y - o, suffix: '/3' }
+      { x: s.x + o, y: s.y - o, suffix: '/3' },
     ];
+
     for (const q of quads){
       if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
       const p = path + q.suffix;
-      targetState.set(p, { x: q.x, y: q.y, size: ns - config.borderWidth, depth: d, path: p, originalSize: ns });
+      targetState.set(p, {
+        x: q.x, y: q.y,
+        size: ns - config.borderWidth,
+        depth: d, path: p, originalSize: ns
+      });
     }
   }
 }
+
+
 function enforceNoD1InSideFillers(){
   const { w, contentTop } = getLayoutMetrics();
   const toSplit = [];
@@ -1588,45 +2092,103 @@ function enforceNoD1InSideFillers(){
   }
   for (const { path, s } of toSplit){
     targetState.delete(path);
-    const size = s.originalSize; const ns = size / 2; const d  = 2; const o  = size / 4;
+    const size = s.originalSize;
+    const ns = size / 2;
+    const d  = 2;
+    const o  = size / 4;
     const quads = [
       { x: s.x - o, y: s.y + o, suffix: '/0' },
       { x: s.x + o, y: s.y + o, suffix: '/1' },
       { x: s.x - o, y: s.y - o, suffix: '/2' },
-      { x: s.x + o, y: s.y - o, suffix: '/3' }
+      { x: s.x + o, y: s.y - o, suffix: '/3' },
     ];
     for (const q of quads){
       if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
       const p = path + q.suffix;
-      targetState.set(p, { x: q.x, y: q.y, size: ns - config.borderWidth, depth: d, path: p, originalSize: ns });
+      targetState.set(p, {
+        x: q.x, y: q.y,
+        size: ns - config.borderWidth,
+        depth: d, path: p, originalSize: ns
+      });
     }
   }
 }
-function forceNoD1GlobalExceptFixed(){
-  const { w } = getLayoutMetrics();
-  const toSplit = [];
-  for (const [path, s] of targetState.entries()){
-    if (imageCells.has(path)) continue;
-    if (Math.abs(s.originalSize - w) < 1e-6) toSplit.push({ path, s });
+
+  
+function specToPath(spec, contentTop, w) {
+  if (!spec) return null;
+
+  if (spec.size === 'D1') {
+    const quad = (typeof spec.quad === 'number') ? spec.quad : 0;
+    return ensureD2Path(spec.row, spec.col, quad, contentTop, w);
   }
-  for (const { path, s } of toSplit){
-    targetState.delete(path);
-    const size = s.originalSize; const ns = size/2; const nd = (s.depth || 1) + 1; const o = size/4;
-    createQuadTree(s.x - o, s.y + o, ns, nd, path + '/0', -1);
-    createQuadTree(s.x + o, s.y + o, ns, nd, path + '/1', -1);
-    createQuadTree(s.x - o, s.y - o, ns, nd, path + '/2', -1);
-    createQuadTree(s.x + o, s.y - o, ns, nd, path + '/3', -1);
+
+  if (spec.size === 'D2') {
+    return ensureD2Path(spec.row, spec.col, spec.quad, contentTop, w);
   }
+
+  return null;
 }
 
-/* ====== images + buttons ====== */
-function presetForBucket(id){ if (id === 'mobile-h') return PRESETS['desktop-16:9']; return PRESETS[id] || PRESETS['desktop-16:9']; }
+
+function reformGridKeepImages(){
+  scene.userData = scene.userData || {};
+  scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
+  globalClickNonce = (globalClickNonce + 1) | 0;
+  forceRecreateLabelsOnce = true;
+  reseed(globalClickNonce);
+
+  for (const [key, st] of Array.from(fractalState.entries())){
+    if (st.isImage) continue;
+    contentGroup.remove(st.mesh);
+    meshPool.push(st.mesh);
+    if (st.dotMesh){ contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
+    if (st.labelSprite){ scene.remove(st.labelSprite); }
+    if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
+    if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+    if (st.occluderMesh){ contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+    fractalState.delete(key);
+  }
+
+  if (typeof instantKill !== 'undefined' && instantKill.clear) instantKill.clear();
+
+  targetState.clear();
+  buttonCells.clear();
+  buttonSlots.clear();
+  imageSlots.clear();
+
+  if (isMobileBucket()) mobileWorldContentHeight = 0;
+
+  updateFractalBase(false);
+  buildFreeOverlays();
+  syncStateToMeshes();
+  needsRefineCheck = true;
+  updateScrollDocHeight();
+  forceBrowserToLayoutForHScroll();
+}
+
+  
+  
+
+function presetForBucket(id){
+  if (id === 'mobile-h') return PRESETS['desktop-16:9'];
+  return PRESETS[id] || PRESETS['desktop-16:9'];
+}
+
 function ensureD2Path(row, col, quad, contentTop, w){
   const force = isSubDesktopLandscape();
-  const parent = `content/${row}/${col}`; const child  = `${parent}/${quad}`;
+
+  const parent = `content/${row}/${col}`;
+  const child  = `${parent}/${quad}`;
+
   const sChild = targetState.get(child);
-  if (sChild){ if (!force && !isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null; return child; }
-  const s = targetState.get(parent); if (!s) return null;
+  if (sChild){
+    if (!force && !isVisibleEnough(sChild.x, sChild.y, sChild.originalSize, contentTop, 0.40)) return null;
+    return child;
+  }
+
+  const s = targetState.get(parent);
+  if (!s) return null;
   if (Math.abs(s.originalSize - w) > 1e-6) return null;
   if (!force && !isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05)) return null;
 
@@ -1636,18 +2198,23 @@ function ensureD2Path(row, col, quad, contentTop, w){
     {x:s.x-o, y:s.y+o, suffix:'/0'},
     {x:s.x+o, y:s.y+o, suffix:'/1'},
     {x:s.x-o, y:s.y-o, suffix:'/2'},
-    {x:s.x+o, y:s.y-o, suffix:'/3'}
+    {x:s.x+o, y:s.y-o, suffix:'/3'},
   ];
   for (const q of quads){
     if (!force && !isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
     const p = parent + q.suffix;
     targetState.set(p, { x:q.x, y:q.y, size:ns - config.borderWidth, depth:2, path:p, originalSize:ns });
   }
+
   const sNew = targetState.get(child);
   if (!sNew) return null;
   if (!force && !isVisibleEnough(sNew.x, sNew.y, sNew.originalSize, contentTop, 0.40)) return null;
   return child;
 }
+
+
+
+
 function ensureFallbackButtons(){
   const { w, contentTop } = getLayoutMetrics();
   const candidates = [];
@@ -1657,8 +2224,10 @@ function ensureFallbackButtons(){
     candidates.push({ path, s });
   }
   candidates.sort((a,b)=> a.s.y===b.s.y ? a.s.x - b.s.x : b.s.y - a.s.y);
+
   const need = Math.min(REQUIRED_BUTTONS, candidates.length);
   const keys = ['motion','ui','fractal','random','code'];
+
   for (let i=0; i<need; i++){
     const p = candidates[i].path;
     const spec = CATEGORIES.find(c => c.key === keys[i % keys.length]);
@@ -1667,14 +2236,21 @@ function ensureFallbackButtons(){
     if (!persistentButtonPaths.includes(p)) persistentButtonPaths.push(p);
   }
 }
+
+
+
 function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new Set()){
   const { w, contentTop } = getLayoutMetrics();
   let d1 = [], d2 = [];
   for (const [path, s] of targetState.entries()){
     if (!path.startsWith('content/')) continue;
     if (!isFullyVisible(s.x, s.y, s.originalSize, contentTop)) continue;
-    if (Math.abs(s.originalSize - w) < 1e-6){ if (!protectedD1Paths.has(path)) d1.push({ path, s }); }
-    if (Math.abs(s.originalSize - w/2) < 1e-6){ d2.push({ path, s }); }
+    if (Math.abs(s.originalSize - w) < 1e-6){
+      if (!protectedD1Paths.has(path)) d1.push({ path, s });
+    }
+    if (Math.abs(s.originalSize - w/2) < 1e-6){
+      d2.push({ path, s });
+    }
   }
   if (d2.length < required){
     const salt = ((scene?.userData?._randSalt | 0) >>> 0);
@@ -1689,7 +2265,7 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
         {x:s.x-o, y:s.y+o, suffix:'/0'},
         {x:s.x+o, y:s.y+o, suffix:'/1'},
         {x:s.x-o, y:s.y-o, suffix:'/2'},
-        {x:s.x+o, y:s.y-o, suffix:'/3'}
+        {x:s.x+o, y:s.y-o, suffix:'/3'},
       ];
       for (const q of quads){
         if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
@@ -1710,7 +2286,7 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
         {x:s.x-o, y:s.y+o, suffix:'/0'},
         {x:s.x+o, y:s.y+o, suffix:'/1'},
         {x:s.x-o, y:s.y-o, suffix:'/2'},
-        {x:s.x+o, y:s.y-o, suffix:'/3'}
+        {x:s.x+o, y:s.y-o, suffix:'/3'},
       ];
       for (const q of quads){
         if (!isVisibleEnough(q.x, q.y, ns, contentTop, 0.05)) continue;
@@ -1720,109 +2296,21 @@ function ensureMinDepth2Cells(required, preserveD1Count, protectedD1Paths = new 
     }
   }
 }
+
+
+
 function buildMobileButtonsDeterministic(){
-  imageCells.clear(); buttonCells.clear(); persistentButtonPaths = []; return true;
-}
-
-function cutOutUnderButtons(){
-  // S'il n'y a ni boutons ni images, on ne fait rien
-  const hasButtons = buttonCells && buttonCells.size;
-  const hasImages  = imageCells && imageCells.size;
-  if (!hasButtons && !hasImages) return;
-
-  const buttonPaths = hasButtons ? Array.from(buttonCells.keys()) : [];
-
-  // Rectangles de toutes les images (overlays "rib/…")
-  const imageRects = [];
-  if (hasImages){
-    for (const path of imageCells){
-      const s = targetState.get(path);
-      if (!s) continue;
-      const half = s.originalSize * 0.5;
-      imageRects.push({
-        left:   s.x - half,
-        right:  s.x + half,
-        bottom: s.y - half,
-        top:    s.y + half
-      });
-    }
-  }
-
-  // Petite marge numérique pour éviter les effets de flottants
-  const EPS = 1e-6;
-
-  // Parcourt toutes les cellules de la fractale
-  for (const [path, s] of Array.from(targetState.entries())){
-    if (!s) continue;
-
-    // On ne touche pas :
-    // - aux cellules qui SONT elles-mêmes des boutons
-    // - aux cellules qui SONT elles-mêmes des images (overlays)
-    if (hasButtons && buttonCells.has(path)) continue;
-    if (hasImages  && imageCells.has(path))  continue;
-
-    let remove = false;
-
-    // 1) Cas des boutons : même région dans l'arbre quadtree
-    if (hasButtons){
-      for (const btnPath of buttonPaths){
-        // path descendant de btnPath (btnPath/…)
-        // ou btnPath descendant de path (path/…)
-        if (path.startsWith(btnPath + '/') || btnPath.startsWith(path + '/')){
-          remove = true;
-          break;
-        }
-      }
-    }
-
-    // 2) Cas des images : on ne supprime QUE les cellules
-    //    entièrement contenues dans le rectangle de l'image
-    if (!remove && imageRects.length){
-      const half = s.originalSize * 0.5;
-      const l2 = s.x - half;
-      const r2 = s.x + half;
-      const b2 = s.y - half;
-      const t2 = s.y + half;
-
-      for (const r of imageRects){
-        const inside =
-          l2 >= r.left  - EPS &&
-          r2 <= r.right + EPS &&
-          b2 >= r.bottom- EPS &&
-          t2 <= r.top   + EPS;
-
-        if (inside){
-          remove = true;
-          break;
-        }
-      }
-    }
-
-    if (remove){
-      // On enlève la cellule de la cible…
-      targetState.delete(path);
-      // …et on demande un kill instantané côté meshes
-      instantKill.add(path);
-    }
-  }
+  imageCells.clear();
+  buttonCells.clear();
+  persistentButtonPaths = [];
+  return true;
 }
 
 
-function dedupeTargetState(){
-  // Map ne peut pas avoir deux fois la même clé,
-  // mais on s'assure de virer les cellules bizarres ou de taille nulle.
-  for (const [path, s] of Array.from(targetState.entries())) {
-    if (!s || !isFinite(s.size) || s.size <= 0) {
-      targetState.delete(path);
-    }
-  }
-}
-  
-  
-/* ======= Refinements (with throttling / budget) ======= */
 function sprinkleRefinements(maxOps = 24){
   const { w, contentTop } = getLayoutMetrics();
   const isMobileLike = isMobileBucket();
+
   if (isMobileLike) refineHaloAroundFixed(56);
 
   const nonce = (scene.userData && (scene.userData._regenNonce | 0)) || 0;
@@ -1853,6 +2341,7 @@ function sprinkleRefinements(maxOps = 24){
       }
     }
     front.sort((a, b) => saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
+
     for (const it of front){
       if (ops >= maxOps) break;
       if (rngFn() < (config.refineChanceD2 ?? 0.5)){
@@ -1874,26 +2363,36 @@ function sprinkleRefinements(maxOps = 24){
     if (!isMobileLike && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
     if (imageCells.has(path) || buttonCells.has(path)) continue;
     if (s.depth >= TARGET_DEPTH) continue;
+
     if (isMobileLike && Math.abs(s.originalSize - w/2) < 1e-6) {
       if (rngFn() > (config.refineChanceD2 ?? 0.3)) continue;
     }
     candidates.push({ path, s });
   }
+
   candidates.sort((a, b) => saltedKey(a.path, saltAll) - saltedKey(b.path, saltAll));
-  for (const it of candidates){ if (ops >= maxOps) break; refineOnce(it); ops++; }
+
+  for (const it of candidates){
+    if (ops >= maxOps) break;
+    refineOnce(it); ops++;
+  }
 }
+
 
 function refineHaloAroundFixed(maxOps = 56){
   const { w, contentTop } = getLayoutMetrics();
   const d2Size = w / 2;
+
   const rects = [];
   for (const [p] of buttonCells){
     const s = targetState.get(p); if (!s) continue;
-    const h = s.originalSize / 2; rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
+    const h = s.originalSize / 2;
+    rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
   }
   for (const p of imageCells){
     const s = targetState.get(p); if (!s) continue;
-    const h = s.originalSize / 2; rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
+    const h = s.originalSize / 2;
+    rects.push({ left:s.x-h, right:s.x+h, bottom:s.y-h, top:s.y+h });
   }
   if (!rects.length) return 0;
 
@@ -1917,11 +2416,13 @@ function refineHaloAroundFixed(maxOps = 56){
     }
     if (d >= inner && d <= outer) cand.push({ path, s, d });
   }
+
   cand.sort((a,b)=>a.d - b.d);
+
   let ops = 0;
   for (const it of cand){
     if (ops >= maxOps) break;
-    if (rngFn() > chance) continue;
+    if (rngFn() > chance) continue;              // 👈
     targetState.delete(it.path);
     const { x, y, originalSize: os, depth: d, path: p } = it.s;
     const ns = os / 2, nd = d + 1, o = os / 4;
@@ -1934,9 +2435,7 @@ function refineHaloAroundFixed(maxOps = 56){
   return ops;
 }
 
-/* ===========================================================
-   ==================  MATERIALS / IMAGES  ===================
-   =========================================================== */
+
 function getImageMaterial(url){
   const PLACEHOLDER_KEY = '__placeholder__';
   const getPlaceholder = () => {
@@ -1945,7 +2444,9 @@ function getImageMaterial(url){
     }
     return materialCache.get(PLACEHOLDER_KEY);
   };
+
   if (!url) return getPlaceholder();
+
   if (materialCache.has(url)) return materialCache.get(url);
 
   const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, map: null });
@@ -1953,25 +2454,32 @@ function getImageMaterial(url){
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
     mat.map = tex; mat.needsUpdate = true;
-  }, undefined, ()=>{ mat.map = null; mat.color.set(COLORS.placeholder); mat.needsUpdate = true; });
+  }, undefined, ()=>{
+    mat.map = null; mat.color.set(COLORS.placeholder);
+    mat.needsUpdate = true;
+  });
 
   materialCache.set(url, mat);
   return mat;
 }
+  
 
-/* ===========================================================
-   ================  DATA-DRIVEN OVERLAYS  ===================
-   =========================================================== */
 let overlayCursor = 0;
-function pickOverlayUrl() {
+function pickOverlayUrl(extraUsed = new Set()) {
   if (!imageTextures || imageTextures.length === 0) return 'img/logo-sooxy-art.png';
   const url = imageTextures[overlayCursor % imageTextures.length];
   overlayCursor = (overlayCursor + 1) % imageTextures.length;
   return url;
 }
 
+
+
 function buildFreeOverlays(){
-  if (!imageTextures || imageTextures.length === 0){ updateScrollDocHeight(); forceBrowserToLayoutForHScroll(); return; }
+  if (!imageTextures || imageTextures.length === 0){
+    updateScrollDocHeight();
+    forceBrowserToLayoutForHScroll();
+    return;
+  }
 
   const lm = getLayoutMetrics();
   const { w, contentTop } = lm;
@@ -1985,32 +2493,31 @@ function buildFreeOverlays(){
   const baseX = camera.left + (bucketOffset + 0.5) * w;
 
   const isPortrait = !isLandscapeLike();
-  const expectedCount = imageTextures.length; // 🔸 data-driven
+  const expectedCount = 10;
   const desired = new Set();
   const slots = [];
 
   if (isPortrait){
     const V = (scene.userData._vscroll ||= { yWorld:0, maxWorld:0, patternRows:10, gapRows:0 });
-    V.patternRows = Math.max(baseRowsPrimary, Math.ceil(expectedCount / 2));
+    V.patternRows = 10;
     V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
     const gapYWorld = Math.max(0, V.gapRows) * w;
 
     for (let i = 0; i < expectedCount; i++){
       const col = (i % 2 === 0) ? 0 : 1;
       const cx = camera.left + (bucketOffset + col + 0.5) * w;
-      const rowIdx = Math.floor(i / 2);
-      const cy = stableTop - (rowIdx * (w + gapYWorld) + w/2);
+      const cy = stableTop - (i * (w + gapYWorld) + w/2);
       const path = `rib/${i}`;
       desired.add(path);
       slots.push({ index:i, path, x:cx, y:cy, os:w, sz:Math.max(0, w - config.borderWidth) });
     }
-    const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
+    const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
     mobileWorldContentHeight = totalWorld;
   } else {
-    // Paysage : 2 rangées, colonnes = expectedCount
     for (let i = 0; i < expectedCount; i++){
       const row = (i % 2 === 0) ? 0 : 1;
-      const col = i; // 1 projet = 1 colonne
+      const slot = Math.floor(i / 2);
+      const col = (row === 0) ? (2*slot) : (2*slot + 1);
       const cx = baseX + col * (w + gapXWorld);
       const cy = stableTop - (row + 0.5) * w;
       const path = `rib/${i}`;
@@ -2024,7 +2531,11 @@ function buildFreeOverlays(){
     if (!existing){
       targetState.set(s.path, { x:s.x, y:s.y, size:s.sz, depth:1, path:s.path, originalSize:s.os });
     } else {
-      existing.x = s.x; existing.y = s.y; existing.originalSize = s.os; existing.size = s.sz; existing.depth = 1;
+      existing.x = s.x;
+      existing.y = s.y;
+      existing.originalSize = s.os;
+      existing.size = s.sz;
+      existing.depth = 1;
     }
     imageCells.add(s.path);
     const url = imageTextures[s.index % imageTextures.length] || 'img/logo-sooxy-art.png';
@@ -2038,10 +2549,14 @@ function buildFreeOverlays(){
     }
   }
 
-  cutOutUnderButtons(); dedupeTargetState();
+  cutOutUnderButtons();
+  dedupeTargetState();
   syncStateToMeshes();
-  updateScrollDocHeight(); forceBrowserToLayoutForHScroll();
+  updateScrollDocHeight();
+  forceBrowserToLayoutForHScroll();
 }
+
+
 
 function updateFreeOverlays(){
   if (!imageTextures || imageTextures.length === 0) return;
@@ -2058,31 +2573,33 @@ function updateFreeOverlays(){
   const baseX = camera.left + (bucketOffset + 0.5) * w;
 
   const isPortrait = !isLandscapeLike();
-  const expectedCount = imageTextures.length; // 🔸 data-driven
+  const expectedCount = 10;
   const desired = new Set();
   let changed = false;
 
   if (isPortrait){
     const V = (scene.userData._vscroll ||= { yWorld:0, maxWorld:0, patternRows:10, gapRows:0 });
-    V.patternRows = Math.max(baseRowsPrimary, Math.ceil(expectedCount / 2));
+    V.patternRows = 10;
     V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
     const gapYWorld = Math.max(0, V.gapRows) * w;
 
     for (let i = 0; i < expectedCount; i++){
       const col = (i % 2 === 0) ? 0 : 1;
       const cx = camera.left + (bucketOffset + col + 0.5) * w;
-      const rowIdx = Math.floor(i / 2);
-      const cy = stableTop - (rowIdx * (w + gapYWorld) + w/2);
+      const cy = stableTop - (i * (w + gapYWorld) + w/2);
       const path = `rib/${i}`;
       desired.add(path);
       const s = targetState.get(path);
-      const os = w; const sz = Math.max(0, os - config.borderWidth);
+      const os = w;
+      const sz = Math.max(0, os - config.borderWidth);
       if (!s){
-        targetState.set(path, { x:cx, y:cy, size:sz, depth:1, path, originalSize:os }); changed = true;
+        targetState.set(path, { x:cx, y:cy, size:sz, depth:1, path, originalSize:os });
+        changed = true;
       } else {
         if (Math.abs(s.x - cx) > 1e-6 || Math.abs(s.y - cy) > 1e-6 ||
             Math.abs(s.originalSize - os) > 1e-6 || Math.abs(s.size - sz) > 1e-6 || s.depth !== 1){
-          s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1; changed = true;
+          s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1;
+          changed = true;
         }
       }
       imageCells.add(path);
@@ -2090,24 +2607,31 @@ function updateFreeOverlays(){
       if (imageAssignment.get(path) !== url){ imageAssignment.set(path, url); changed = true; }
     }
 
-    const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
-    if (totalWorld > (mobileWorldContentHeight || 0)){ mobileWorldContentHeight = totalWorld; updateScrollDocHeight(); }
+    const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
+    if (totalWorld > (mobileWorldContentHeight || 0)){
+      mobileWorldContentHeight = totalWorld;
+      updateScrollDocHeight();
+    }
   } else {
     for (let i = 0; i < expectedCount; i++){
       const row = (i % 2 === 0) ? 0 : 1;
-      const col = i;
+      const slot = Math.floor(i / 2);
+      const col = (row === 0) ? (2*slot) : (2*slot + 1);
       const cx = baseX + col * (w + gapXWorld);
       const cy = stableTop - (row + 0.5) * w;
       const path = `rib/${i}`;
       desired.add(path);
       const s = targetState.get(path);
-      const os = w; const sz = Math.max(0, os - config.borderWidth);
+      const os = w;
+      const sz = Math.max(0, os - config.borderWidth);
       if (!s){
-        targetState.set(path, { x:cx, y:cy, size:sz, depth:1, path, originalSize:os }); changed = true;
+        targetState.set(path, { x:cx, y:cy, size:sz, depth:1, path, originalSize:os });
+        changed = true;
       } else {
         if (Math.abs(s.x - cx) > 1e-6 || Math.abs(s.y - cy) > 1e-6 ||
             Math.abs(s.originalSize - os) > 1e-6 || Math.abs(s.size - sz) > 1e-6 || s.depth !== 1){
-          s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1; changed = true;
+          s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1;
+          changed = true;
         }
       }
       imageCells.add(path);
@@ -2118,31 +2642,44 @@ function updateFreeOverlays(){
 
   for (const key of Array.from(targetState.keys())){
     if (key.startsWith('rib/') && !desired.has(key)){
-      targetState.delete(key); imageCells.delete(key); changed = true;
+      targetState.delete(key);
+      imageCells.delete(key);
+      changed = true;
     }
   }
 
-  if (changed){ cutOutUnderButtons(); dedupeTargetState(); syncStateToMeshes(); }
+  if (changed){
+    cutOutUnderButtons();
+    dedupeTargetState();
+    syncStateToMeshes();
+  }
 }
 
-/* ===========================================================
-   ======================  LABELS DOM  =======================
-   =========================================================== */
-function makeDomLabelEl(text){
-  const el = document.createElement('div');
-  el.className = 'hover-label';
-  const parts = String(text).replace(/\\n/g, '\n').split('\n');
-  el.innerHTML = parts.map((s,i)=>`<span class="line${i===2?' sub':''}">${s}</span>`).join('');
-  el.style.textAlign = 'right'; el.style.direction = 'ltr';
-  el.querySelectorAll('.line').forEach(line => {
-    line.style.display = 'block';
-    line.style.whiteSpace = 'nowrap';
-    line.style.textAlign = 'right';
-  });
-  return el;
+
+
+
+
+
+
+function makeTopRightLabelSprite(text, squareSize){
+  const lines = text.split('\\n');
+  const cvs = document.createElement('canvas'); const W=1024, H=768;
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = COLORS.textCSS;
+  ctx.textBaseline = 'top'; ctx.textAlign = 'right';
+  const fontPx = Math.floor(H * 0.11);
+  ctx.font = `700 ${fontPx}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace`;
+  const margin = Math.floor(H * 0.08); const lineGap = Math.floor(fontPx * 0.12);
+  let y = margin; for (const line of lines){ ctx.fillText(line, W - margin, y); y += fontPx + lineGap; }
+  const tex = new THREE.CanvasTexture(cvs); tex.colorSpace = THREE.SRGBColorSpace;
+  const sprMat = new THREE.SpriteMaterial({ map: tex, depthTest:false, depthWrite:false, transparent:true, color: new THREE.Color(COLORS.textCSS) });
+  const spr = new THREE.Sprite(sprMat); const aspect = H/W; spr.scale.set(squareSize, squareSize*aspect, 1); spr.center.set(1,1); spr.renderOrder = 6; return spr;
 }
 
 let forceRecreateLabelsOnce = false;
+
 function destroyDomLabel(st){
   if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
   if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -2156,46 +2693,112 @@ function rebuildDomLabel(st, label){
   if (layer) layer.style.zIndex = '3';
 
   const el = makeDomLabelEl(label);
+
   el.style.transformOrigin = '100% 0%';
   el.style.position = 'absolute';
-  el.style.left = '0px'; el.style.top  = '0px';
+  el.style.left = '0px';
+  el.style.top  = '0px';
   el.style.textRendering = 'optimizeLegibility';
   el.style.webkitFontSmoothing = 'antialiased';
-  el.style.textAlign = 'right'; el.style.direction  = 'ltr';
-  el.querySelectorAll('.line').forEach(line => { line.style.textAlign = 'right'; });
+
+  el.style.textAlign = 'right';
+  el.style.direction  = 'ltr';
+  el.querySelectorAll('.line').forEach(line => {
+    line.style.textAlign = 'right';
+  });
 
   layer?.appendChild(el);
-  st.domLabelEl = el; st.labelText = label;
+  st.domLabelEl = el;
+  st.labelText = label;
 
   const prev = el.style.transform;
   el.style.transform = 'translate(-10000px,-10000px)';
   try {
     const cs = window.getComputedStyle(el);
     st.baseFontPx = parseFloat(cs.fontSize) || 18;
+
     st.labelBaseWidthPx = Math.ceil(el.getBoundingClientRect().width) || 0;
+
     const firstLineEl = el.querySelector('.line');
     st.firstLineBaseWidthPx = firstLineEl
       ? Math.ceil(firstLineEl.getBoundingClientRect().width) || 0
       : (st.labelBaseWidthPx || 0);
   } catch {
-    st.baseFontPx = 18; st.labelBaseWidthPx = 0; st.firstLineBaseWidthPx = 0;
+    st.baseFontPx = 18;
+    st.labelBaseWidthPx = 0;
+    st.firstLineBaseWidthPx = 0;
   }
   el.style.transform = prev || '';
 
-  // 🔸 Baffle activé uniquement si device “confortable”
-  const canScramble =
-    !prefersReducedMotion &&
-    !isMobileBucket() &&
-    ((navigator.hardwareConcurrency || 4) >= 6) &&
-    typeof window.baffle !== 'undefined';
-
-  if (canScramble){
+  if (!isMobileBucket() && window.baffle){
     const lines = Array.from(el.querySelectorAll('.line'));
-    st.baffles = lines.map(line => window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed:100 }));
+    st.baffles = lines.map(line =>
+      window.baffle(line).set({ characters:'!/|~#.^+*$#%sooxy', speed:100 })
+    );
   } else {
     st.baffles = null;
   }
 }
+
+
+function updateDomLabelLayout(st, lm){
+  if (!st.domLabelEl) return;
+  const { w } = lm;
+  const dispS = Math.max(0, st.mesh.scale.x);
+  const half = dispS / 2;
+  const dispX = st.mesh.position.x;
+  const dispY = st.mesh.position.y;
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+  const marginPctTop = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP - 2));
+  const mRightWorld = dispS * marginPctRight;
+  const mTopWorld = dispS * marginPctTop;
+  const tx = dispX + half - mRightWorld;
+  const ty = dispY + half - mTopWorld;
+  if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
+    const prev = st.domLabelEl.style.transform;
+    st.domLabelEl.style.transform = 'translate(-10000px,-10000px)';
+    try {
+      const cs = window.getComputedStyle(st.domLabelEl);
+      st.baseFontPx = parseFloat(cs.fontSize) || 18;
+      st.labelBaseWidthPx = Math.ceil(st.domLabelEl.getBoundingClientRect().width) || 0;
+      const firstLineEl = st.domLabelEl.querySelector('.line');
+      st.firstLineBaseWidthPx = firstLineEl
+        ? Math.ceil(firstLineEl.getBoundingClientRect().width) || 0
+        : (st.labelBaseWidthPx || 0);
+    } catch {}
+    st.domLabelEl.style.transform = prev || '';
+  }
+  const targetS = Math.max(0, st.targetScale?.x || dispS);
+  const availablePxFinal = computeSquareInnerWidthPx(targetS);
+  const uniformFontPx = ensureGlobalLabelFontPx(lm);
+  const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
+    ? (st.labelBaseWidthPx / st.baseFontPx)
+    : 0;
+  let finalFontPx = perPx > 0
+    ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
+    : (uniformFontPx || st.baseFontPx);
+  finalFontPx = Math.round(finalFontPx * 2) / 2;
+  finalFontPx = Math.max(10, Math.min(96, finalFontPx));
+  st.domLabelEl.style.fontSize = finalFontPx + 'px';
+  if (!isMobileBucket()){
+    const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+    const inside =
+      wp.x >= dispX - half && wp.x <= dispX + half &&
+      wp.y >= dispY - half && wp.y <= dispY + half;
+    st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
+    if (inside && st.baffles && !st.hovering){
+      st.hovering = true;
+      st.baffles.forEach(b=>{ b.start(); b.reveal(600); });
+    }
+    if (!inside){ st.hovering = false; }
+  } else {
+    st.domLabelEl.style.color = '#f3f1ee';
+  }
+  const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
+  st.domLabelEl.style.transform =
+    `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
+}
+
 
 function ensureGlobalLabelFontPx(lm){
   const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px:null, refSize:0 });
@@ -2230,7 +2833,9 @@ function ensureGlobalLabelFontPx(lm){
     el.style.transform = prev || '';
   }
   if (!refSt.firstLineBaseWidthPx || !refSt.baseFontPx) return cache.px;
-  const needRecalc = !cache.px || Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-3;
+  const needRecalc =
+    !cache.px ||
+    Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-3;
   if (needRecalc){
     const innerPx = computeSquareInnerWidthPx(refSizeWorld);
     if (innerPx > 0){
@@ -2238,158 +2843,120 @@ function ensureGlobalLabelFontPx(lm){
       let fontPx = (TARGET_RATIO * innerPx) / perPx;
       fontPx = Math.round(fontPx * 2) / 2;
       fontPx = Math.max(10, Math.min(96, fontPx));
-      cache.px = fontPx; cache.refSize = refSizeWorld;
+      cache.px = fontPx;
+      cache.refSize = refSizeWorld;
     }
   }
   return cache.px;
 }
 
-/* 🔸 Mise à jour label moins fréquente: seulement si taille cible varie > epsilon */
-function updateDomLabelLayout(st, lm){
-  if (!st.domLabelEl) return;
 
-  const { w, onePxWorld } = lm;
-  const dispS = Math.max(0, st.mesh.scale.x);
-  const half  = dispS / 2;
-  const dispX = st.mesh.position.x;
-  const dispY = st.mesh.position.y;
 
-  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-  const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP - 2));
-  const mRightWorld = dispS * marginPctRight;
-  const mTopWorld   = dispS * marginPctTop;
-
-  const tx = dispX + half - mRightWorld;
-  const ty = dispY + half - mTopWorld;
-
-  const targetS = Math.max(0, st.targetScale?.x || dispS);
-
-  // 👉 recalcul de la font uniquement si l’écart dépasse ~2px
-  const EPS_WORLD = Math.max(onePxWorld * 2, 0.001);
-  const needsFont = (st.__lastFontForWorldSize == null) ||
-                    (Math.abs(targetS - st.__lastFontForWorldSize) > EPS_WORLD);
-
-  if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl){
-    const prev = st.domLabelEl.style.transform;
-    st.domLabelEl.style.transform = 'translate(-10000px,-10000px)';
-    try {
-      const cs = window.getComputedStyle(st.domLabelEl);
-      st.baseFontPx = parseFloat(cs.fontSize) || 18;
-      st.labelBaseWidthPx = Math.ceil(st.domLabelEl.getBoundingClientRect().width) || 0;
-      const firstLineEl = st.domLabelEl.querySelector('.line');
-      st.firstLineBaseWidthPx = firstLineEl ? Math.ceil(firstLineEl.getBoundingClientRect().width) || 0 : (st.labelBaseWidthPx || 0);
-    } catch {}
-    st.domLabelEl.style.transform = prev || '';
-  }
-
-  if (needsFont){
-    const availablePxFinal = computeSquareInnerWidthPx(targetS);
-    const uniformFontPx = ensureGlobalLabelFontPx(lm);
-    const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
-      ? (st.labelBaseWidthPx / st.baseFontPx) : 0;
-    let finalFontPx = perPx > 0 ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
-                                : (uniformFontPx || st.baseFontPx);
-    finalFontPx = Math.round(finalFontPx * 2) / 2;
-    finalFontPx = Math.max(10, Math.min(96, finalFontPx));
-    st.domLabelEl.style.fontSize = finalFontPx + 'px';
-    st.__lastFontForWorldSize = targetS;
-  }
-
-  if (!isMobileBucket()){
-    const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-    const inside = (wp.x >= dispX - half && wp.x <= dispX + half && wp.y >= dispY - half && wp.y <= dispY + half);
-    st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
-    if (inside && st.baffles && !st.hovering){ st.hovering = true; st.baffles.forEach(b=>{ b.start(); b.reveal(600); }); }
-    if (!inside){ st.hovering = false; }
-  } else {
-    st.domLabelEl.style.color = '#f3f1ee';
-  }
-
-  const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
-  st.domLabelEl.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) translateX(-100%)`;
-}
-
-/* ===========================================================
-   ==============  STATE <-> MESH SYNC & DOTS  ===============
-   =========================================================== */
 function syncStateToMeshes(){
   const getOccluderMaterial = () => {
     if (!scene.userData.occluderMaterial) {
-      scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({
-        color: config.darkColor,
-        depthTest: false,
-        depthWrite: false
-      });
+      scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({ color: config.darkColor, depthTest: false, depthWrite: false });
     }
     return scene.userData.occluderMaterial;
   };
-
   const isMobile = isMobileBucket();
   const newKeys = new Set(targetState.keys());
-
-  const IMAGE_ORDER       = 2.96;
-  const DOT_ORDER_NONBTN  = 2.50;
-  const BUTTON_ORDER      = 3.00;
-  const DOT_ORDER_BUTTON  = 3.40;
-
+  const IMAGE_ORDER = 2.96;
+  const DOT_ORDER_NONBTN = 2.50;
+  const BUTTON_ORDER = 3.00;
+  const DOT_ORDER_BUTTON = 3.40;
   const lm = getLayoutMetrics();
+  const gx = contentGroup?.position?.x || 0;
+  const gy = contentGroup?.position?.y || 0;
+  const viewW = camera.right - camera.left;
+  const viewH = lm.contentTop - camera.bottom;
+  const extendX = isLandscapeLike() ? viewW * 1.2 : 0;
+  const extendY = isLandscapeLike() ? 0 : viewH * 1.2;
+  const hardX = isLandscapeLike() ? viewW * 1.2 : extendX;
+  const hardY = isLandscapeLike() ? extendY : viewH * 1.2;
+  const Lhard = camera.left - gx - hardX;
+  const Rhard = camera.right - gx + hardX;
+  const Bhard = camera.bottom - gy - hardY;
+  const Thard = lm.contentTop - gy + hardY;
 
-  // 1) Purge totale : toute clé absente de targetState est retirée
   for (const [key, st] of Array.from(fractalState.entries())) {
     if (!newKeys.has(key)) {
-      contentGroup.remove(st.mesh);
-      meshPool.push(st.mesh);
-
-      if (st.dotMesh){
-        contentGroup.remove(st.dotMesh);
-        dotMeshPool.push(st.dotMesh);
+      const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, st.mesh.scale.x) * 0.5;
+      const cx = st.mesh.position.x;
+      const cy = st.mesh.position.y;
+      const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
+      const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
+      if (tooFar || instantKill.has(key)) {
+        contentGroup.remove(st.mesh); meshPool.push(st.mesh);
+        if (st.dotMesh){ contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
+        if (st.labelSprite){ scene.remove(st.labelSprite); }
+        if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
+        if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
+        if (st.occluderMesh){ contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+        fractalState.delete(key);
+      } else {
+        st.targetScale.set(0,0,0);
+        if (st.dotMesh) st.dotMesh.scale.set(0,0,0);
+        if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
+        if (st.occluderMesh){ contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+        if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
+        if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
       }
-      if (st.labelSprite){
-        scene.remove(st.labelSprite);
-      }
-      if (st.domLabelEl){
-        st.domLabelEl.remove();
-        st.domLabelEl = null;
-      }
-      if (st.baffles){
-        st.baffles.forEach(b => b.stop());
-        st.baffles = null;
-      }
-      if (st.occluderMesh){
-        contentGroup.remove(st.occluderMesh);
-        st.occluderMesh = null;
-      }
-
-      fractalState.delete(key);
     }
   }
-  // plus besoin des flags de kill, on les vide
-  instantKill.clear();
 
-  // 2) Mise à jour / création des carrés présents dans targetState
-  for (const key of newKeys) {
+  for (const key of newKeys){
     const t = targetState.get(key);
-    let ex  = fractalState.get(key);
-
+    const ex = fractalState.get(key);
     const isImg = imageCells.has(key);
     const isBtn = buttonCells.has(key);
-
     let material = darkMaterial;
-    if (isImg){
+    if (isImg) {
       const url = imageAssignment.get(key);
       material = getImageMaterial(url);
     }
-
-    if (!ex){
-      // --- Nouveau carré ---
+    if (ex){
+      ex.logicalCenter ||= new THREE.Vector3();
+      ex.logicalCenter.set(t.x, t.y, 0);
+      ex.anchorPosition ||= new THREE.Vector3();
+      ex.anchorPosition.set(t.x, t.y, 0);
+      ex.mesh.position.set(t.x, t.y, 0);
+      ex.targetScale.set(t.size, t.size, 1);
+      ex.originalSize = t.originalSize;
+      if (ex.mesh.material !== material) ex.mesh.material = material;
+      ex.isButton = isBtn;
+      ex.isImage = isImg;
+      ex.mesh.renderOrder = isBtn ? BUTTON_ORDER : (isImg ? IMAGE_ORDER : 0);
+      if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
+      if (ex.dotMesh) ex.dotMesh.position.set(t.x, t.y, 0.02);
+      if (isBtn){
+        const label = buttonCells.get(key)?.label || '';
+        if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce){ rebuildDomLabel(ex, label); }
+      } else { destroyDomLabel(ex); }
+      if (isBtn && isMobile){
+        const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+        const inset = lm.onePxWorld * insetPx;
+        if (!ex.occluderMesh){
+          ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+          contentGroup.add(ex.occluderMesh);
+        }
+        ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+        ex.occluderMesh.position.set(t.x, t.y, 0.05);
+        const sz = Math.max(0, t.size - inset * 2);
+        ex.occluderMesh.scale.set(sz, sz, 1);
+      } else if (ex.occluderMesh){
+        contentGroup.remove(ex.occluderMesh);
+        ex.occluderMesh = null;
+      }
+    } else {
       const mesh = meshPool.pop() || new THREE.Mesh(geometry);
       mesh.material = material;
       mesh.position.set(t.x, t.y, 0);
-      mesh.scale.set(0, 0, 1); // on animera vers targetScale
+      const startScale = 0;
+      mesh.scale.set(startScale, startScale, 1);
       mesh.renderOrder = isBtn ? BUTTON_ORDER : (isImg ? IMAGE_ORDER : 0);
       contentGroup.add(mesh);
-
-      ex = {
+      const st = {
         mesh,
         dotMesh: null,
         labelSprite: null,
@@ -2403,123 +2970,55 @@ function syncStateToMeshes(){
         targetScale: new THREE.Vector3(t.size, t.size, 1),
         originalSize: t.originalSize,
         isButton: isBtn,
-        isImage: isImg,
-        skipLerpFrames: 0,
-        _backupMaterial: null
+        isImage: isImg
       };
-      fractalState.set(key, ex);
-
+      fractalState.set(key, st);
       if (!isImg && config.showDots){
-        addDotToState(ex);
-        if (ex.dotMesh) {
-          ex.dotMesh.position.set(t.x, t.y, 0.02);
-        }
+        addDotToState(st);
+        if (st.dotMesh) st.dotMesh.position.set(t.x, t.y, 0.02);
       }
-    } else {
-      // --- Carré existant ---
-      ex.logicalCenter ||= new THREE.Vector3();
-      ex.logicalCenter.set(t.x, t.y, 0);
-
-      ex.anchorPosition ||= new THREE.Vector3();
-      ex.anchorPosition.set(t.x, t.y, 0);
-
-      ex.mesh.position.set(t.x, t.y, 0);
-      ex.targetScale.set(t.size, t.size, 1);
-      ex.originalSize = t.originalSize;
-
-      if (ex.mesh.material !== material){
-        ex.mesh.material = material;
-      }
-
-      ex.isButton = isBtn;
-      ex.isImage  = isImg;
-      ex.mesh.renderOrder = isBtn ? BUTTON_ORDER : (isImg ? IMAGE_ORDER : 0);
-
-      if (!isImg && config.showDots){
-        if (!ex.dotMesh) {
-          addDotToState(ex);
-        }
-        if (ex.dotMesh) {
-          ex.dotMesh.position.set(t.x, t.y, 0.02);
-        }
-      } else if (ex.dotMesh){
-        contentGroup.remove(ex.dotMesh);
-        dotMeshPool.push(ex.dotMesh);
-        ex.dotMesh = null;
-      }
-    }
-
-    // --- Labels pour les boutons ---
-    if (isBtn){
-      const label = buttonCells.get(key)?.label || '';
-      if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce){
-        rebuildDomLabel(ex, label);
-      }
-    } else {
-      destroyDomLabel(ex);
-    }
-
-    // --- Occluder mobile : une seule couche noire, pas deux ---
-    if (isBtn && isMobile){
-      const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-      const inset   = lm.onePxWorld * insetPx;
-
-      if (!ex.occluderMesh){
-        ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-        contentGroup.add(ex.occluderMesh);
-      }
-
-      ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-      ex.occluderMesh.position.set(t.x, t.y, 0.05);
-
-      const sz = Math.max(0, t.size - inset * 2);
-      ex.occluderMesh.scale.set(sz, sz, 1);
-
-      // on garde le matériau original en backup
-      if (!ex._backupMaterial && ex.mesh.material){
-        ex._backupMaterial = ex.mesh.material;
-      }
-
-      // Le mesh du bouton devient transparent : seule l’occlusion reste visible
-      if (ex.mesh.material){
-        ex.mesh.material = ex.mesh.material.clone();
-        ex.mesh.material.transparent = true;
-        ex.mesh.material.opacity = 0.0;
-      }
-    } else {
-      // Si ce n’est pas (ou plus) un bouton mobile, on enlève l’occluder
-      if (ex.occluderMesh){
-        contentGroup.remove(ex.occluderMesh);
-        ex.occluderMesh = null;
-      }
-      // et on remet le matériau plein si on l’avait « ghosté »
-      if (ex._backupMaterial && ex.mesh.material !== ex._backupMaterial){
-        ex.mesh.material = ex._backupMaterial;
+      if (isBtn && isMobile){
+        const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+        const inset = lm.onePxWorld * insetPx;
+        st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+        st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+        st.occluderMesh.position.set(t.x, t.y, 0.05);
+        const sz = Math.max(0, t.size - inset * 2);
+        st.occluderMesh.scale.set(sz, sz, 1);
+        contentGroup.add(st.occluderMesh);
       }
     }
   }
 
-  // 3) Ordre de rendu des points
   for (const st of fractalState.values()){
     if (!st.dotMesh) continue;
     st.dotMesh.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
   }
-
-  forceRecreateLabelsOnce = false;
 }
+
+
 
 
 function addDotToState(st){
   const m = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
+
+  // même logique d'ordre que dans syncStateToMeshes()
   const DOT_ORDER_NONBTN = 2.50;
   const DOT_ORDER_BUTTON = 3.40;
+
   m.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
+
   m.position.set(st.targetPosition.x, st.targetPosition.y, 0.02);
   const sc = getDotScale(st);
   m.scale.set(sc, sc, 1);
+
   contentGroup.add(m);
   st.dotMesh = m;
 }
+
+
+
+
 
 function getDotScale(state){
   if (isMobileBucket()) {
@@ -2534,26 +3033,30 @@ function getDotScale(state){
   return (gridSize / 256) * cappedDotSize;
 }
 
-/* ===========================================================
-   ========================  ANIMATE  ========================
-   =========================================================== */
-function animate(){
-  __rafHandle = requestAnimationFrame(animate);
 
+
+function animate(){
+  requestAnimationFrame(animate);
   if (window.__mobileFooterTick) window.__mobileFooterTick();
 
   if (needsBaseUpdate){
     const ok = updateFractalBase(false);
-    if (ok){ buildFreeOverlays(); syncStateToMeshes(); }
+    if (ok){
+      buildFreeOverlays();
+      syncStateToMeshes();
+    }
     needsBaseUpdate = false;
   }
 
   const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
 
-  // 🔸 raffinement seulement si demandé (throttle + changement de feuille)
   if (!isMobileBucket() && needsRefineCheck){
     const did = refineTargetStateAt(wp);
-    if (did){ cutOutUnderButtons(); dedupeTargetState(); syncStateToMeshes(); }
+    if (did){
+      cutOutUnderButtons();
+      dedupeTargetState();
+      syncStateToMeshes();
+    }
     needsRefineCheck = false;
   }
 
@@ -2561,7 +3064,9 @@ function animate(){
   if (hv && hv.size){
     hv.forEach(key=>{
       const st = fractalState.get(key);
-      if (st && st.mesh){ st.skipLerpFrames = 0; }
+      if (st && st.mesh){
+        st.skipLerpFrames = 0;
+      }
     });
     hv.clear();
   }
@@ -2569,7 +3074,10 @@ function animate(){
   if (hs && hs.size){
     hs.forEach(key=>{
       const st = fractalState.get(key);
-      if (st && st.mesh){ st.mesh.scale.set(0,0,1); st.skipLerpFrames = 0; }
+      if (st && st.mesh){
+        st.mesh.scale.set(0,0,1);
+        st.skipLerpFrames = 0;
+      }
     });
     hs.clear();
   }
@@ -2591,11 +3099,13 @@ function animate(){
   updateMouseSquareTarget(wp);
 
   const isMobile = isMobileBucket();
-  mouseSquare.visible = !isMobile; cursorBorder.visible = !isMobile;
+  mouseSquare.visible = !isMobile;
+  cursorBorder.visible = !isMobile;
   if (domCursorEl && isMobile) domCursorEl.style.opacity = '0';
 
   const clock = scene.userData.__clock || (scene.userData.__clock = new THREE.Clock());
-  let dt = clock.getDelta(); dt = Math.min(0.05, Math.max(0.001, dt));
+  let dt = clock.getDelta();
+  dt = Math.min(0.05, Math.max(0.001, dt));
   const toLambda = (perFrame)=>{ const p = Math.min(0.999, Math.max(0, perFrame)); return -Math.log(1 - p) * 60; };
   const lerpFactor = (perFrame)=>{ const λ = toLambda(perFrame); return 1 - Math.exp(-λ * dt); };
 
@@ -2603,7 +3113,8 @@ function animate(){
   const fCursor = lerpFactor(config.mouseSquareAnimationSpeed);
 
   if (isMobile){
-    mouseSquare.scale.set(0, 0, 1); cursorBorder.scale.set(0, 0, 1);
+    mouseSquare.scale.set(0, 0, 1);
+    cursorBorder.scale.set(0, 0, 1);
   } else {
     const snap = (scene.userData._cursorSnapFrames|0) > 0;
     if (snap){
@@ -2634,11 +3145,14 @@ function animate(){
   for (const st of fractalState.values()){
     if (!st.isButton) continue;
     const half = Math.max(0, st.mesh.scale.x) / 2;
-    const cx = st.mesh.position.x; const cy = st.mesh.position.y;
+    const cx = st.mesh.position.x;
+    const cy = st.mesh.position.y;
     buttonBoxes.push({ x: cx, y: cy, half });
   }
   const isInsideAnyButton = (x, y) => {
-    for (const b of buttonBoxes){ if (x >= b.x - b.half && x <= b.x + b.half && y >= b.y - b.half && y <= b.y + b.half) return true; }
+    for (const b of buttonBoxes){
+      if (x >= b.x - b.half && x <= b.x + b.half && y >= b.y - b.half && y <= b.y + b.half) return true;
+    }
     return false;
   };
 
@@ -2666,7 +3180,8 @@ function animate(){
       const DOT_ORDER_NONBTN = 2.50;
       const DOT_ORDER_BUTTON = 3.40;
       st.dotMesh.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
-      const lx = st.mesh.position.x; const ly = st.mesh.position.y;
+      const lx = st.mesh.position.x;
+      const ly = st.mesh.position.y;
       const centerVisible = lx >= L + eps && lx <= R - eps && ly >= B + eps && ly <= T - eps && st.mesh.scale.x > 0.0001;
       const sc = getDotScale(st);
       const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(lx, ly));
@@ -2690,14 +3205,69 @@ function animate(){
   if (canvas && canvas.style.opacity !== '1') canvas.style.opacity = '1';
 }
 
-/* ===========================================================
-   =====================  HOVER / REFINE  ====================
-   =========================================================== */
+
+
+
+
+function isMobileBucket(){
+  // "mobile-like" portrait = mobile-v + tablet-3:4 + tablet-9:16
+  return currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+}
+
+
+function isMobileLandscapeHard(){
+  return window.innerWidth <= 640 && window.innerWidth > window.innerHeight;
+}  
+
+// subDesktopLandscape function remains but not used to disable scroll
+// isSubDesktopLandscape() defined above
+  
+
+// Portrait "court" : on voulait justement ça (< ~1000px de haut)
+// Utilise les dimensions "stables" pour ne pas réagir à la barre d’URL iOS.
+function isShortPortrait(){
+  const H = STABLE_VP_H || window.innerHeight;
+  const W = STABLE_VP_W || window.innerWidth;
+  return (H > W) && (H < 1000);
+}
+
+// Tablette paysage stricte : largeur entre 641 et 1024px, en mode landscape
+function isTabletLandscapeStrict(){
+  const W = STABLE_VP_W || window.innerWidth;
+  const H = STABLE_VP_H || window.innerHeight;
+  return (W > H) && (W >= 641) && (W < 1025);
+}
+  
+  
+function computeSquareInnerWidthPx(sideWorld){
+  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+  const marginWorld = Math.max(0, sideWorld * marginPctRight);
+  const innerWorld = Math.max(0, sideWorld - marginWorld * 2);
+  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
+  return innerWorld * pxPerWorldX;
+}
+
+ 
+// ——— FIX: même position pour l'image de la 2e ligne sur tous les formats paysages ———
+function extraImageOffsetForPath(path){
+  // on neutralise tout décalage en formats paysages
+  const isLandscape =
+    !(currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16');
+
+  if (isLandscape) return 0;
+
+  // en formats verticaux, pas de décalage non plus (cohérence générale)
+  return 0;
+}
+
+  
+  
 function findLeafAt(worldPos, stateMap){
   let best = null, smallest = Infinity;
   const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
   const gy = (contentGroup && contentGroup.position && contentGroup.position.y) || 0;
-  const px = worldPos.x - gx; const py = worldPos.y - gy;
+  const px = worldPos.x - gx;
+  const py = worldPos.y - gy;
   for (const sq of stateMap.values()){
     const half = sq.originalSize / 2;
     const inside = px >= sq.x - half && px <= sq.x + half && py >= sq.y - half && py <= sq.y + half;
@@ -2706,27 +3276,20 @@ function findLeafAt(worldPos, stateMap){
   return best;
 }
 
+
+  
+  
 function refineTargetStateAt(worldPos){
   const { contentTop } = getLayoutMetrics();
   if (isMobileBucket()) return false;
   if (worldPos.y >= contentTop) return false;
 
-  // Throttle + rafraîchissement seulement si “feuille changée”
-  const now = performance.now();
-  if (now < nextRefineAllowedAt) return false;
-
-  const hoveredLeaf = findLeafAt(worldPos, targetState);
-  const path = hoveredLeaf?.path || null;
-
-  if (!path) return false;
-  if (path === lastRefinedPath) return false; // déjà raffiné pour cette feuille
-
   let refined = false, it = 0;
   const maxIt = Math.max(1, refineBudgetPerFrame | 0);
+
   const sp = (scene.userData._hoverSpawn ||= new Set());
   const vn = (scene.userData._hoverVanish ||= new Set());
 
-  // une seule passe sur la feuille courante (économies)
   while (it < maxIt){
     it++;
     const leaf = findLeafAt(worldPos, targetState);
@@ -2747,19 +3310,14 @@ function refineTargetStateAt(worldPos){
       if (targetState.has(c1)) sp.add(c1);
       if (targetState.has(c2)) sp.add(c2);
       if (targetState.has(c3)) sp.add(c3);
-    } else { break; }
-    // on ne boucle pas ad vitam : throttle + path mémorisé
-    break;
+    } else {
+      break;
+    }
   }
-
-  lastRefinedPath = path;
-  nextRefineAllowedAt = now + REFINE_THROTTLE_MS;
   return refined;
 }
 
-/* ===========================================================
-   =====================  CURSOR & INPUT  ====================
-   =========================================================== */
+
 function computeDefaultGridCursorSize(){
   const { w, contentTop } = getLayoutMetrics();
   const offsetCols = contentOffsetColsForBucket();
@@ -2773,6 +3331,8 @@ function computeDefaultGridCursorSize(){
   return Math.max(0, cell - config.borderWidth);
 }
 
+
+  
 function updateMouseSquareTarget(worldPos){
   if (isMobileBucket()){
     mouseSquare.userData.anchor = null;
@@ -2782,6 +3342,7 @@ function updateMouseSquareTarget(worldPos){
     cursorBorder.userData.targetScale.set(0, 0, 1);
     return;
   }
+
   const { contentTop, w } = getLayoutMetrics();
   if (worldPos.y >= contentTop){
     mouseSquare.userData.anchor = null;
@@ -2825,65 +3386,77 @@ function updateMouseSquareTarget(worldPos){
   const ny = (leaf.y - leaf.originalSize / 2) + iy * cell + cell / 2;
 
   const fs = Math.max(0, cell - config.borderWidth);
+
   mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
-  const dx = nx + gx; const dy = ny + gy;
+
+  const dx = nx + gx;
+  const dy = ny + gy;
+
   mouseSquare.userData.targetPosition.set(dx, dy, 4);
   mouseSquare.userData.targetScale.set(fs, fs, 1);
   cursorBorder.userData.targetPosition.set(dx, dy, 3);
   cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+
   lastGridCursorSizeWorld = fs;
 }
 
-/* 🔸 mousemove : pas de raffinement direct ; on déclenche seulement si feuille change + throttle */
+
+
+
+
+
 function onMouseMove(e){
   lastMouseScreenPos.set(
     (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
     -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1
   );
+  needsRefineCheck = true;
 
   if (isMobileBucket()){
     if (domCursorEl) domCursorEl.style.opacity = '0';
-  } else {
-    const headerEl = document.getElementById('ui-header');
-    const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-    const inHeader = e.clientY <= headerPx;
+    return;
+  }
 
-    if (domCursorEl){
-      if (inHeader){
-        const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0) ? lastGridCursorSizeWorld : computeDefaultGridCursorSize();
-        const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-        const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
-        domCursorEl.style.opacity = '1';
-        domCursorEl.style.width  = sidePx + 'px';
-        domCursorEl.style.height = sidePx + 'px';
-        domCursorEl.style.left = e.clientX + 'px';
-        domCursorEl.style.top  = e.clientY + 'px';
-      } else {
-        domCursorEl.style.opacity = '0';
-      }
+  const headerEl = document.getElementById('ui-header');
+  const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
+  const inHeader = e.clientY <= headerPx;
+
+  if (domCursorEl){
+    if (inHeader){
+      const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0) ? lastGridCursorSizeWorld : computeDefaultGridCursorSize();
+      const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
+      const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
+      domCursorEl.style.opacity = '1';
+      domCursorEl.style.width  = sidePx + 'px';
+      domCursorEl.style.height = sidePx + 'px';
+      domCursorEl.style.left = e.clientX + 'px';
+      domCursorEl.style.top  = e.clientY + 'px';
+    } else {
+      domCursorEl.style.opacity = '0';
     }
+  }
 
-    const wp = new THREE.Vector3(
-      (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
-      -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1,
-      0
-    ).unproject(camera);
-    updateMouseSquareTarget(wp);
+  const wp = new THREE.Vector3(
+    (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
+    -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1,
+    0
+  ).unproject(camera);
 
-    // 👉 seulement si la feuille change ET throttle autorisé
-    const hoveredLeaf = findLeafAt(wp, targetState);
-    const path = hoveredLeaf?.path || null;
-    const now = performance.now();
-    if (path && path !== lastHoverLeafPath && now >= nextRefineAllowedAt){
-      lastHoverLeafPath = path;
-      needsRefineCheck = true; // animate() fera 1 passe
+  updateMouseSquareTarget(wp);
+
+  if (!inHeader){
+    const did = refineTargetStateAt(wp);
+    if (did){
+      cutOutUnderButtons();
+      dedupeTargetState();
+      syncStateToMeshes();
     }
   }
 }
 
-/* ===========================================================
-   ======================  CLICS / ACTIONS  ==================
-   =========================================================== */
+
+
+
 function onClick(e){
   if (e.altKey){
     const wp = new THREE.Vector3(lastMouseScreenPos.x,lastMouseScreenPos.y,0).unproject(camera);
@@ -2894,11 +3467,14 @@ function onClick(e){
   const wp = new THREE.Vector3(lastMouseScreenPos.x,lastMouseScreenPos.y,0).unproject(camera);
   const { contentTop } = getLayoutMetrics();
 
+  // ignore les clics dans le header
   if (wp.y >= contentTop) return;
 
+  // Navigation si on clique dans un bouton (📌 tenir compte du décalage du groupe)
   const gx = contentGroup?.position?.x || 0;
   const gy = contentGroup?.position?.y || 0;
-  const lx = wp.x - gx; const ly = wp.y - gy;
+  const lx = wp.x - gx;   // coords LOGIQUES
+  const ly = wp.y - gy;
 
   for (const [key, st] of Array.from(fractalState.entries())){
     if (!st.isButton) continue;
@@ -2913,12 +3489,16 @@ function onClick(e){
     }
   }
 
-  // Reform du fond (images conservées)
+  // Sinon : reform de la grille en conservant les images (via buildFreeOverlays())
   reformGridKeepImages();
-  needsRefineCheck = true; // sécurité
+
+  // sécurité : on s'assure d'un refresh input/cursor au prochain frame
+  needsRefineCheck = true;
 }
 
-/* ====== util debug ====== */
+
+
+// Outil de repérage
 function logD2At(wp){
   const { w, contentTop } = getLayoutMetrics();
   const col = Math.floor((wp.x - camera.left) / w);
@@ -2928,60 +3508,9 @@ function logD2At(wp){
   const quad = (wp.y > cy ? (wp.x < cx ? 2 : 3) : (wp.x < cx ? 0 : 1));
   console.log(`{ size:'D2', row:${row}, col:${col}, quad:${quad} }`);
 }
-
-/* ====== rebuild keep images ====== */
-function reformGridKeepImages(){
-  scene.userData = scene.userData || {};
-  scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
-  globalClickNonce = (globalClickNonce + 1) | 0;
-  forceRecreateLabelsOnce = true;
-  reseed(globalClickNonce);
-
-  for (const [key, st] of Array.from(fractalState.entries())){
-    if (st.isImage) continue;
-    contentGroup.remove(st.mesh); meshPool.push(st.mesh);
-    if (st.dotMesh){ contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
-    if (st.labelSprite){ scene.remove(st.labelSprite); }
-    if (st.domLabelEl){ st.domLabelEl.remove(); st.domLabelEl = null; }
-    if (st.baffles){ st.baffles.forEach(b=>b.stop()); st.baffles = null; }
-    if (st.occluderMesh){ contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-    fractalState.delete(key);
-  }
-
-  instantKill.clear();
-  targetState.clear(); buttonCells.clear(); buttonSlots.clear(); imageSlots.clear();
-
-  if (isMobileBucket()) mobileWorldContentHeight = 0;
-
-  updateFractalBase(false);
-  buildFreeOverlays();
-  syncStateToMeshes();
-  needsRefineCheck = true;
-  updateScrollDocHeight();
-  forceBrowserToLayoutForHScroll();
-
-  // reset hover memory pour éviter des raffinages non voulus
-  lastHoverLeafPath = null; lastRefinedPath = null; nextRefineAllowedAt = 0;
-}
-
-/* ===========================================================
-   =======================  HELPERS  =========================
-   =========================================================== */
-function isMobileBucket(){ return currentBucket === 'mobile-v' || currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16'; }
-function isMobileLandscapeHard(){ return window.innerWidth <= 640 && window.innerWidth > window.innerHeight; }
-function isShortPortrait(){ const H = STABLE_VP_H || window.innerHeight; const W = STABLE_VP_W || window.innerWidth; return (H > W) && (H < 1000); }
-function isTabletLandscapeStrict(){ const W = STABLE_VP_W || window.innerWidth; const H = STABLE_VP_H || window.innerHeight; return (W > H) && (W >= 641) && (W < 1025); }
-function computeSquareInnerWidthPx(sideWorld){
-  const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-  const marginWorld = Math.max(0, sideWorld * marginPctRight);
-  const innerWorld = Math.max(0, sideWorld - marginWorld * 2);
-  const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-  return innerWorld * pxPerWorldX;
-}
-function extraImageOffsetForPath(path){ return 0; }
-
 </script>
-
+  
 <div id="mobile-footer" aria-hidden="true"></div>
+  
 </body>
 </html>
