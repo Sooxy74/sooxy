@@ -1696,8 +1696,13 @@
 
 
 
+    let isScrolling = false;
+    let scrollTimeout = null;
+
     function onScroll() {
-      return;
+      isScrolling = true;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => { isScrolling = false; }, 100);
     }
 
 
@@ -1988,8 +1993,9 @@
 
 
     function updateFractalBase(forceFull = false) {
-      const carry = forceFull ? new Map() : new Map(targetState);
-      targetState = carry;
+      // Optimisation Zéro Copie : on travaille directement sur la Map existante.
+      // On ne la vide que si un reset complet est demandé.
+      if (forceFull) targetState.clear();
 
       const { w } = getLayoutMetrics();
       const preset = presetForBucket(currentBucket);
@@ -3064,7 +3070,8 @@
       const Bhard = camera.bottom - gy - hardY;
       const Thard = lm.contentTop - gy + hardY;
 
-      for (const [key, st] of Array.from(fractalState.entries())) {
+      // Optimized Loop: Iterate directly over the map to avoid Array.from allocation
+      for (const [key, st] of fractalState) {
         if (!newKeys.has(key)) {
           const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
           const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
@@ -3649,6 +3656,8 @@
 
 
     function refineTargetStateAt(worldPos) {
+      if (isScrolling) return false; // <--- NEW CHECK
+
       const { contentTop } = getLayoutMetrics();
       if (isMobileBucket()) return false;
       if (worldPos.y >= contentTop) return false;
