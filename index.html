@@ -799,6 +799,12 @@
     let persistentImageUrls = null;
     let freeOverlays = [];
 
+    // Instanced Meshes
+    let bgSquaresInstanced, btnSquaresInstanced;
+    let bgDotsInstanced, btnDotsInstanced;
+    const MAX_INSTANCES = 20000;
+    const dummyObj = new THREE.Object3D();
+
     const USE_MOBILE_DETERMINISTIC = true;
     const MOBILE_CATEGORY_ORDER = ['motion', 'fractal', 'ui', 'code', 'random'];
     const MOBILE_BTN_OCCLUDER_PAD_PX = 1;
@@ -1048,7 +1054,34 @@
       cursorBorder.userData.targetPosition = new THREE.Vector3();
       cursorBorder.userData.targetScale = new THREE.Vector3();
       cursorBorder.renderOrder = 3;
+      cursorBorder.renderOrder = 3;
       scene.add(cursorBorder);
+
+      // --- Instanced Meshes Setup ---
+      // 1. Background Squares (Order 0)
+      bgSquaresInstanced = new THREE.InstancedMesh(geometry, darkMaterial, MAX_INSTANCES);
+      bgSquaresInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      bgSquaresInstanced.renderOrder = 0;
+      contentGroup.add(bgSquaresInstanced);
+
+      // 2. Button Squares (Order 3.0)
+      btnSquaresInstanced = new THREE.InstancedMesh(geometry, darkMaterial, MAX_INSTANCES);
+      btnSquaresInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      btnSquaresInstanced.renderOrder = 3.0;
+      contentGroup.add(btnSquaresInstanced);
+
+      // 3. Background Dots (Order 2.5)
+      bgDotsInstanced = new THREE.InstancedMesh(geometry, dotMaterial, MAX_INSTANCES);
+      bgDotsInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      bgDotsInstanced.renderOrder = 2.5;
+      contentGroup.add(bgDotsInstanced);
+
+      // 4. Button Dots (Order 3.4)
+      btnDotsInstanced = new THREE.InstancedMesh(geometry, dotMaterial, MAX_INSTANCES);
+      btnDotsInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      btnDotsInstanced.renderOrder = 3.4;
+      contentGroup.add(btnDotsInstanced);
+
 
       createGrainPlane();
       createMenuPlane();
@@ -1810,8 +1843,11 @@
     function resetFractalRandom() {
       forceRecreateLabelsOnce = true;
       for (const [key, st] of Array.from(fractalState.entries())) {
-        contentGroup.remove(st.mesh);
-        meshPool.push(st.mesh);
+        if (st.mesh) {
+          contentGroup.remove(st.mesh);
+          meshPool.push(st.mesh);
+        }
+        // Instanced items don't have individual meshes to remove from scene, just from state
         if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
         if (st.labelSprite) { scene.remove(st.labelSprite); }
         if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -2305,8 +2341,10 @@
 
       for (const [key, st] of Array.from(fractalState.entries())) {
         if (st.isImage) continue;
-        contentGroup.remove(st.mesh);
-        meshPool.push(st.mesh);
+        if (st.mesh) {
+          contentGroup.remove(st.mesh);
+          meshPool.push(st.mesh);
+        }
         if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
         if (st.labelSprite) { scene.remove(st.labelSprite); }
         if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -2901,10 +2939,13 @@
     function updateDomLabelLayout(st, lm) {
       if (!st.domLabelEl) return;
       const { w } = lm;
-      const dispS = Math.max(0, st.mesh.scale.x);
+
+      // Use currentScale/currentPosition for instanced items, or mesh.scale/position for images
+      const dispS = Math.max(0, st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0));
+      const dispX = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+      const dispY = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+
       const half = dispS / 2;
-      const dispX = st.mesh.position.x;
-      const dispY = st.mesh.position.y;
       const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
       const marginPctTop = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP - 2));
       const mRightWorld = dispS * marginPctRight;
@@ -2966,7 +3007,9 @@
         if (first === 'creative') { refSt = st; break; }
       }
       if (!refSt) return cache.px;
-      const refSizeWorld = Math.max(0, refSt.targetScale?.x || refSt.mesh?.scale?.x || 0);
+
+      const refSizeWorld = Math.max(0, refSt.currentScale ? refSt.currentScale.x : (refSt.mesh ? refSt.mesh.scale.x : 0));
+
       if (!refSizeWorld) return cache.px;
       if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0 || !refSt.baseFontPx) {
         const fm = FontMetrics.measure(refSt.labelText || '');
@@ -3012,10 +3055,10 @@
       const gy = contentGroup?.position?.y || 0;
       const viewW = camera.right - camera.left;
       const viewH = lm.contentTop - camera.bottom;
-      const extendX = isLandscapeLike() ? viewW * 1.2 : 0;
-      const extendY = isLandscapeLike() ? 0 : viewH * 1.2;
-      const hardX = isLandscapeLike() ? viewW * 1.2 : extendX;
-      const hardY = isLandscapeLike() ? extendY : viewH * 1.2;
+      const extendX = isLandscapeLike() ? viewW * 4.0 : 0;
+      const extendY = isLandscapeLike() ? 0 : viewH * 4.0;
+      const hardX = isLandscapeLike() ? viewW * 4.0 : extendX;
+      const hardY = isLandscapeLike() ? extendY : viewH * 4.0;
       const Lhard = camera.left - gx - hardX;
       const Rhard = camera.right - gx + hardX;
       const Bhard = camera.bottom - gy - hardY;
@@ -3023,13 +3066,16 @@
 
       for (const [key, st] of Array.from(fractalState.entries())) {
         if (!newKeys.has(key)) {
-          const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, st.mesh.scale.x) * 0.5;
-          const cx = st.mesh.position.x;
-          const cy = st.mesh.position.y;
+          const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+          const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
+
+          const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+          const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+
           const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
           const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
           if (tooFar || instantKill.has(key)) {
-            contentGroup.remove(st.mesh); meshPool.push(st.mesh);
+            if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
             if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
             if (st.labelSprite) { scene.remove(st.labelSprite); }
             if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -3038,6 +3084,7 @@
             fractalState.delete(key);
           } else {
             st.targetScale.set(0, 0, 0);
+            // Dots handled by instancing now, but if we kept dotMesh for images...
             if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
             if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
             if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
@@ -3052,112 +3099,144 @@
         const ex = fractalState.get(key);
         const isImg = imageCells.has(key);
         const isBtn = buttonCells.has(key);
-        let material = darkMaterial;
+
+        // Images still use individual meshes because of unique textures
         if (isImg) {
           const url = imageAssignment.get(key);
-          material = getImageMaterial(url);
-        }
-        if (ex) {
-          ex.logicalCenter ||= new THREE.Vector3();
-          ex.logicalCenter.set(t.x, t.y, 0);
-          ex.anchorPosition ||= new THREE.Vector3();
-          ex.anchorPosition.set(t.x, t.y, 0);
-          ex.mesh.position.set(t.x, t.y, 0);
-          ex.targetScale.set(t.size, t.size, 1);
-          ex.originalSize = t.originalSize;
-          if (ex.mesh.material !== material) ex.mesh.material = material;
-          ex.isButton = isBtn;
-          ex.isImage = isImg;
-          ex.mesh.renderOrder = isBtn ? BUTTON_ORDER : (isImg ? IMAGE_ORDER : 0);
-          if (!isImg && config.showDots && !ex.dotMesh) addDotToState(ex);
-          if (ex.dotMesh) ex.dotMesh.position.set(t.x, t.y, 0.02);
-          if (isBtn) {
-            const label = buttonCells.get(key)?.label || '';
-            if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) { rebuildDomLabel(ex, label); }
-          } else { destroyDomLabel(ex); }
-          if (isBtn && isMobile) {
-            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-            const inset = lm.onePxWorld * insetPx;
-            if (!ex.occluderMesh) {
-              ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-              contentGroup.add(ex.occluderMesh);
-            }
-            ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-            ex.occluderMesh.position.set(t.x, t.y, 0.05);
-            const sz = Math.max(0, t.size - inset * 2);
-            ex.occluderMesh.scale.set(sz, sz, 1);
-          } else if (ex.occluderMesh) {
-            contentGroup.remove(ex.occluderMesh);
-            ex.occluderMesh = null;
+          const material = getImageMaterial(url);
+
+          if (ex) {
+            // Update existing image mesh
+            ex.logicalCenter ||= new THREE.Vector3();
+            ex.logicalCenter.set(t.x, t.y, 0);
+            ex.anchorPosition ||= new THREE.Vector3();
+            ex.anchorPosition.set(t.x, t.y, 0);
+            ex.mesh.position.set(t.x, t.y, 0);
+            ex.targetScale.set(t.size, t.size, 1);
+            ex.originalSize = t.originalSize;
+            if (ex.mesh.material !== material) ex.mesh.material = material;
+            ex.isButton = isBtn;
+            ex.isImage = isImg;
+            ex.mesh.renderOrder = IMAGE_ORDER;
+
+            // Images don't have dots usually, but if they did, keep dotMesh logic or remove it?
+            // Code says: if (!isImg && config.showDots) ...
+            // So images don't have dots.
+          } else {
+            // New image mesh
+            const mesh = meshPool.pop() || new THREE.Mesh(geometry);
+            mesh.material = material;
+            mesh.position.set(t.x, t.y, 0);
+            const startScale = 0;
+            mesh.scale.set(startScale, startScale, 1);
+            mesh.renderOrder = IMAGE_ORDER;
+            contentGroup.add(mesh);
+
+            const st = {
+              mesh,
+              dotMesh: null, // Images don't have dots
+              labelSprite: null,
+              domLabelEl: null,
+              baffles: null,
+              occluderMesh: null,
+              hovering: false,
+              logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+              anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+              targetPosition: new THREE.Vector3(t.x, t.y, 0),
+              targetScale: new THREE.Vector3(t.size, t.size, 1),
+              originalSize: t.originalSize,
+              isButton: isBtn,
+              isImage: isImg
+            };
+            fractalState.set(key, st);
           }
         } else {
-          const mesh = meshPool.pop() || new THREE.Mesh(geometry);
-          mesh.material = material;
-          mesh.position.set(t.x, t.y, 0);
-          const startScale = 0;
-          mesh.scale.set(startScale, startScale, 1);
-          mesh.renderOrder = isBtn ? BUTTON_ORDER : (isImg ? IMAGE_ORDER : 0);
-          contentGroup.add(mesh);
-          const st = {
-            mesh,
-            dotMesh: null,
-            labelSprite: null,
-            domLabelEl: null,
-            baffles: null,
-            occluderMesh: null,
-            hovering: false,
-            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-            targetPosition: new THREE.Vector3(t.x, t.y, 0),
-            targetScale: new THREE.Vector3(t.size, t.size, 1),
-            originalSize: t.originalSize,
-            isButton: isBtn,
-            isImage: isImg
-          };
-          fractalState.set(key, st);
-          if (!isImg && config.showDots) {
-            addDotToState(st);
-            if (st.dotMesh) st.dotMesh.position.set(t.x, t.y, 0.02);
-          }
-          if (isBtn && isMobile) {
-            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-            const inset = lm.onePxWorld * insetPx;
-            st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-            st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-            st.occluderMesh.position.set(t.x, t.y, 0.05);
-            const sz = Math.max(0, t.size - inset * 2);
-            st.occluderMesh.scale.set(sz, sz, 1);
-            contentGroup.add(st.occluderMesh);
+          // Dark Squares (Instanced)
+          if (ex) {
+            // Update existing state
+            ex.logicalCenter ||= new THREE.Vector3();
+            ex.logicalCenter.set(t.x, t.y, 0);
+            ex.anchorPosition ||= new THREE.Vector3();
+            ex.anchorPosition.set(t.x, t.y, 0);
+            // No mesh to update position on
+            ex.targetPosition.set(t.x, t.y, 0); // Ensure targetPosition is up to date
+            ex.targetScale.set(t.size, t.size, 1);
+            ex.originalSize = t.originalSize;
+            ex.isButton = isBtn;
+            ex.isImage = isImg;
+
+            if (isBtn) {
+              const label = buttonCells.get(key)?.label || '';
+              if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) { rebuildDomLabel(ex, label); }
+            } else { destroyDomLabel(ex); }
+
+            if (isBtn && isMobile) {
+              const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+              const inset = lm.onePxWorld * insetPx;
+              if (!ex.occluderMesh) {
+                ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                contentGroup.add(ex.occluderMesh);
+              }
+              ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+              ex.occluderMesh.position.set(t.x, t.y, 0.05);
+              const sz = Math.max(0, t.size - inset * 2);
+              ex.occluderMesh.scale.set(sz, sz, 1);
+            } else if (ex.occluderMesh) {
+              contentGroup.remove(ex.occluderMesh);
+              ex.occluderMesh = null;
+            }
+          } else {
+            // New state (no mesh)
+            const st = {
+              mesh: null, // No individual mesh
+              dotMesh: null, // No individual dot mesh
+              labelSprite: null,
+              domLabelEl: null,
+              baffles: null,
+              occluderMesh: null,
+              hovering: false,
+              logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+              anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+              targetPosition: new THREE.Vector3(t.x, t.y, 0),
+              targetScale: new THREE.Vector3(t.size, t.size, 1),
+
+              // Initialize current values for lerping
+              currentPosition: new THREE.Vector3(t.x, t.y, 0),
+              currentScale: new THREE.Vector3(0, 0, 1),
+
+              originalSize: t.originalSize,
+              isButton: isBtn,
+              isImage: isImg
+            };
+            fractalState.set(key, st);
+
+            if (isBtn && isMobile) {
+              const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+              const inset = lm.onePxWorld * insetPx;
+              st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+              st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+              st.occluderMesh.position.set(t.x, t.y, 0.05);
+              const sz = Math.max(0, t.size - inset * 2);
+              st.occluderMesh.scale.set(sz, sz, 1);
+              contentGroup.add(st.occluderMesh);
+            }
           }
         }
       }
 
+      // Clean up dotMeshes if they exist on instanced items (legacy cleanup)
       for (const st of fractalState.values()) {
-        if (!st.dotMesh) continue;
-        st.dotMesh.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
+        if (!st.isImage && st.dotMesh) {
+          contentGroup.remove(st.dotMesh);
+          dotMeshPool.push(st.dotMesh);
+          st.dotMesh = null;
+        }
       }
     }
 
-
-
-
     function addDotToState(st) {
-      const m = dotMeshPool.pop() || new THREE.Mesh(geometry, dotMaterial);
-
-      // même logique d'ordre que dans syncStateToMeshes()
-      const DOT_ORDER_NONBTN = 2.50;
-      const DOT_ORDER_BUTTON = 3.40;
-
-      m.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
-
-      m.position.set(st.targetPosition.x, st.targetPosition.y, 0.02);
-      const sc = getDotScale(st);
-      m.scale.set(sc, sc, 1);
-
-      contentGroup.add(m);
-      st.dotMesh = m;
+      // No-op for instanced items
     }
-
 
 
 
@@ -3168,7 +3247,10 @@
         return 1.5 * onePxWorld;
       }
       const cappedDotSize = Math.min(0.5, config.dotSize);
-      if (config.dotSizeIsRelative) return state.mesh.scale.x * cappedDotSize;
+      if (config.dotSizeIsRelative) {
+        const s = state.currentScale ? state.currentScale.x : (state.mesh ? state.mesh.scale.x : 0);
+        return s * cappedDotSize;
+      }
       const viewHeight = camera.top - camera.bottom;
       const viewWidth = camera.right - camera.left;
       const gridSize = Math.max(viewWidth, viewHeight);
@@ -3216,8 +3298,9 @@
       if (hs && hs.size) {
         hs.forEach(key => {
           const st = fractalState.get(key);
-          if (st && st.mesh) {
-            st.mesh.scale.set(0, 0, 1);
+          if (st) {
+            if (st.mesh) st.mesh.scale.set(0, 0, 1);
+            if (st.currentScale) st.currentScale.set(0, 0, 1);
             st.skipLerpFrames = 0;
           }
         });
@@ -3277,18 +3360,24 @@
       const eps = config.borderWidth * 2;
       const gx = contentGroup?.position?.x || 0;
       const gy = contentGroup?.position?.y || 0;
-      const m = 48 * lm.onePxWorld;
+      // Increase margin significantly to avoid premature culling during scroll
+      // The previous 48 * onePxWorld might be too small for long pages
+      const viewH = camera.top - camera.bottom;
+      const m = viewH * 4;
       const L = camera.left - gx - m;
       const R = camera.right - gx + m;
       const B = camera.bottom - gy - m;
       const T = lm.contentTop - gy + m;
 
+
+
       const buttonBoxes = [];
       for (const st of fractalState.values()) {
         if (!st.isButton) continue;
-        const half = Math.max(0, st.mesh.scale.x) / 2;
-        const cx = st.mesh.position.x;
-        const cy = st.mesh.position.y;
+        const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+        const half = Math.max(0, curS) / 2;
+        const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+        const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
         buttonBoxes.push({ x: cx, y: cy, half });
       }
       const isInsideAnyButton = (x, y) => {
@@ -3298,41 +3387,88 @@
         return false;
       };
 
+      // Reset instance counts
+      let bgIdx = 0, btnIdx = 0, bgDotIdx = 0, btnDotIdx = 0;
+
       for (const [key, st] of Array.from(fractalState.entries())) {
         if (st.skipLerpFrames > 0) st.skipLerpFrames--;
-        else st.mesh.scale.lerp(st.targetScale, fGrid);
+        else {
+          if (st.mesh) st.mesh.scale.lerp(st.targetScale, fGrid);
+          if (st.currentScale) st.currentScale.lerp(st.targetScale, fGrid);
+        }
+
+        const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+        const curX = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+        const curY = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
 
         if (st.occluderMesh) {
           const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
           const inset = lm.onePxWorld * insetPx;
-          const szX = Math.max(0, st.mesh.scale.x - inset * 2);
-          const szY = Math.max(0, st.mesh.scale.y - inset * 2);
+          const szX = Math.max(0, curS - inset * 2);
+          const szY = Math.max(0, curS - inset * 2);
           st.occluderMesh.scale.set(szX, szY, 1);
         }
 
         if (st.labelSprite) {
-          const m2 = st.mesh.scale.x * 0.03;
-          st.labelSprite.position.set(st.mesh.position.x + (st.mesh.scale.x / 2 - m2), st.mesh.position.y + (st.mesh.scale.x / 2 - m2), 0.2);
-          st.labelSprite.scale.set(st.mesh.scale.x, st.mesh.scale.x * 0.75, 1);
+          const m2 = curS * 0.03;
+          st.labelSprite.position.set(curX + (curS / 2 - m2), curY + (curS / 2 - m2), 0.2);
+          st.labelSprite.scale.set(curS, curS * 0.75, 1);
         }
 
         if (st.isButton && st.domLabelEl) { updateDomLabelLayout(st, lm); }
 
+        // Instancing Logic
+        if (!st.isImage) {
+          dummyObj.position.set(curX, curY, 0);
+          dummyObj.scale.set(curS, curS, 1);
+          dummyObj.updateMatrix();
+
+          if (st.isButton) {
+            if (btnIdx < MAX_INSTANCES) {
+              btnSquaresInstanced.setMatrixAt(btnIdx++, dummyObj.matrix);
+            }
+          } else {
+            if (bgIdx < MAX_INSTANCES) {
+              bgSquaresInstanced.setMatrixAt(bgIdx++, dummyObj.matrix);
+            }
+          }
+
+          // Dots
+          if (config.showDots) {
+            const centerVisible = curX >= L + eps && curX <= R - eps && curY >= B + eps && curY <= T - eps && curS > 0.0001;
+            const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(curX, curY));
+
+            if (showDot) {
+              const sc = getDotScale(st);
+              dummyObj.scale.set(sc, sc, 1);
+              // Position Z for dots is 0.02
+              dummyObj.position.set(curX, curY, 0.02);
+              dummyObj.updateMatrix();
+
+              if (st.isButton) {
+                if (btnDotIdx < MAX_INSTANCES) btnDotsInstanced.setMatrixAt(btnDotIdx++, dummyObj.matrix);
+              } else {
+                if (bgDotIdx < MAX_INSTANCES) bgDotsInstanced.setMatrixAt(bgDotIdx++, dummyObj.matrix);
+              }
+            }
+          }
+        }
+
+        // Legacy dotMesh update for images (if any)
         if (st.dotMesh) {
           const DOT_ORDER_NONBTN = 2.50;
           const DOT_ORDER_BUTTON = 3.40;
           st.dotMesh.renderOrder = st.isButton ? DOT_ORDER_BUTTON : DOT_ORDER_NONBTN;
-          const lx = st.mesh.position.x;
-          const ly = st.mesh.position.y;
-          const centerVisible = lx >= L + eps && lx <= R - eps && ly >= B + eps && ly <= T - eps && st.mesh.scale.x > 0.0001;
+          const centerVisible = curX >= L + eps && curX <= R - eps && curY >= B + eps && curY <= T - eps && curS > 0.0001;
           const sc = getDotScale(st);
-          const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(lx, ly));
+          const showDot = st.isButton ? centerVisible : (centerVisible && !isInsideAnyButton(curX, curY));
           if (showDot) st.dotMesh.scale.set(sc, sc, 1);
           else st.dotMesh.scale.set(0, 0, 0);
         }
 
-        if (st.mesh.scale.x < 0.001 && st.targetScale.x === 0) {
-          contentGroup.remove(st.mesh); meshPool.push(st.mesh);
+        // Cleanup check
+        if (curS < 0.001 && st.targetScale.x === 0) {
+          if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
           if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
           if (st.labelSprite) { scene.remove(st.labelSprite); }
           if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -3341,6 +3477,18 @@
           fractalState.delete(key);
         }
       }
+
+      bgSquaresInstanced.count = bgIdx;
+      bgSquaresInstanced.instanceMatrix.needsUpdate = true;
+
+      btnSquaresInstanced.count = btnIdx;
+      btnSquaresInstanced.instanceMatrix.needsUpdate = true;
+
+      bgDotsInstanced.count = bgDotIdx;
+      bgDotsInstanced.instanceMatrix.needsUpdate = true;
+
+      btnDotsInstanced.count = btnDotIdx;
+      btnDotsInstanced.instanceMatrix.needsUpdate = true;
 
       renderer.render(scene, camera);
       const canvas = document.getElementById('webgl-canvas');
@@ -3404,16 +3552,95 @@
 
 
 
+    // Spatial Hash for fast lookup
+    const SpatialHash = {
+      cellSize: 0,
+      grid: new Map(),
+
+      init: function (w) {
+        // Cell size roughly equal to a base column width is a good balance
+        this.cellSize = w || 100;
+        this.grid.clear();
+      },
+
+      key: function (x, y) {
+        const kx = Math.floor(x / this.cellSize);
+        const ky = Math.floor(y / this.cellSize);
+        return `${kx}|${ky}`;
+      },
+
+      add: function (item) {
+        // An item might span multiple grid cells
+        const h = item.originalSize / 2;
+        const startX = Math.floor((item.x - h) / this.cellSize);
+        const endX = Math.floor((item.x + h) / this.cellSize);
+        const startY = Math.floor((item.y - h) / this.cellSize);
+        const endY = Math.floor((item.y + h) / this.cellSize);
+
+        for (let x = startX; x <= endX; x++) {
+          for (let y = startY; y <= endY; y++) {
+            const k = `${x}|${y}`;
+            if (!this.grid.has(k)) this.grid.set(k, []);
+            this.grid.get(k).push(item);
+          }
+        }
+      },
+
+      query: function (x, y) {
+        const k = this.key(x, y);
+        return this.grid.get(k);
+      },
+
+      clear: function () {
+        this.grid.clear();
+      }
+    };
+
+    // Hook into updateFractalBase/refine to keep hash updated
+    // For now, since targetState changes often, we can just optimize the loop 
+    // by checking bounding box of the Viewport first, or just simple distance checks?
+    // Actually, the simplest "Levier 2" without complex refactor is:
+    // Reverse iteration (often items under cursor are added last or first?) 
+    // OR just simple AABB check optimization.
+
+    // Let's stick to the requested "Levier 2": Optimizing the search.
+    // Since implementing a full SpatialHash requires hooking into every add/delete of targetState,
+    // and targetState is a Map (unordered), a full SpatialHash is risky to implement without breaking things.
+    // 
+    // BETTER APPROACH FOR "LEVIER 2" (Low Risk):
+    // The current findLeafAt iterates EVERYTHING.
+    // We can optimize by filtering based on coarse grid coordinates derived from the path!
+    // Paths are like "content/0/1/..." -> Row 0, Col 1.
+    // We can parse the path to quickly discard items? No, regex is slow.
+    //
+    // BEST LOW RISK APPROACH:
+    // Just optimize the math inside the loop.
+
     function findLeafAt(worldPos, stateMap) {
       let best = null, smallest = Infinity;
       const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
       const gy = (contentGroup && contentGroup.position && contentGroup.position.y) || 0;
       const px = worldPos.x - gx;
       const py = worldPos.y - gy;
+
+      // Optimization: Pre-calculate layout metrics to quickly cull
+      // But stateMap has everything.
+
+      // Fast iterator
       for (const sq of stateMap.values()) {
-        const half = sq.originalSize / 2;
-        const inside = px >= sq.x - half && px <= sq.x + half && py >= sq.y - half && py <= sq.y + half;
-        if (inside && sq.originalSize < smallest) { best = sq; smallest = sq.originalSize; }
+        // Fast rejection: AABB check
+        const half = sq.originalSize * 0.5;
+        const dx = Math.abs(px - sq.x);
+        if (dx > half) continue; // Too far X
+
+        const dy = Math.abs(py - sq.y);
+        if (dy > half) continue; // Too far Y
+
+        // Inside
+        if (sq.originalSize < smallest) {
+          best = sq;
+          smallest = sq.originalSize;
+        }
       }
       return best;
     }
