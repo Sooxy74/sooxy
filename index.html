@@ -1892,7 +1892,8 @@
       const salt = ((scene?.userData?._randSalt | 0) >>> 0);
       const n = (noise2D(x * config.noiseScale, y * config.noiseScale) + 1) / 2;
       const baseRegional = (maxDepthOverride !== -1) ? maxDepthOverride : (config.minDepth + Math.floor(n * config.maxDepthVariation));
-      const hardCap = (typeof TARGET_DEPTH === 'number' && TARGET_DEPTH > 0) ? TARGET_DEPTH : baseRegional;
+      let hardCap = (typeof TARGET_DEPTH === 'number' && TARGET_DEPTH > 0) ? TARGET_DEPTH : baseRegional;
+      if (maxDepthOverride !== -1) hardCap = Math.max(hardCap, maxDepthOverride);
       const regionalMaxDepth = Math.min(baseRegional, hardCap);
       const currentProbability = config.initialProbabilityToSubdivide - depth * config.depthDecayFactor;
       const ix = (Math.fround(x * 8192) | 0) >>> 0;
@@ -2009,7 +2010,7 @@
 
       const FORCE_D1 = new Set();
       (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
-      (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
+      // (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); }); // Disabled for uniformity
       (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
       let totalRows;
@@ -2059,7 +2060,7 @@
         const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
         const protectedD1Paths = new Set();
         (preset?.buttons || []).forEach(b => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
-        (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); });
+        // (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); }); // Disabled for uniformity
 
         ensureMinDepth2Cells(requiredD2, 0, protectedD1Paths);
       }
@@ -2074,6 +2075,16 @@
 
       sprinkleRefinements(isMobileBucket() ? 24 : 24);
 
+      // Enforce D2 adjacency constraint in horizontal mode
+      if (!isMobileBucket() && isLandscapeLike()) {
+        enforceD2AdjacencyConstraint();
+      }
+
+      // Enforce depth 6 adjacency constraint (max 2 adjacent depth 6 squares)
+      if (!isMobileBucket()) {
+        enforceDepth6AdjacencyConstraint();
+      }
+
       if (!isMobileBucket()) {
         enforceNoD1InColumns(NO_D1_CONTENT_COLS);
       }
@@ -2082,7 +2093,147 @@
     }
 
 
+    function enforceD2AdjacencyConstraint() {
+      const { w } = getLayoutMetrics();
+      const d2Size = w / 2;
+      const eps = 1e-6;
 
+      // Collect all D2 squares (size w/2)
+      const d2Squares = [];
+      for (const [path, sq] of targetState.entries()) {
+        if (Math.abs(sq.originalSize - d2Size) < eps) {
+          d2Squares.push({ path, sq });
+        }
+      }
+
+      if (d2Squares.length === 0) return;
+
+      // Helper to check if two squares are adjacent (share an edge)
+      const areAdjacent = (sq1, sq2) => {
+        const h1 = sq1.originalSize / 2;
+        const h2 = sq2.originalSize / 2;
+        const dx = Math.abs(sq1.x - sq2.x);
+        const dy = Math.abs(sq1.y - sq2.y);
+
+        // Adjacent horizontally: same y, x distance = sum of half sizes
+        const adjH = Math.abs(dy) < eps && Math.abs(dx - (h1 + h2)) < eps;
+        // Adjacent vertically: same x, y distance = sum of half sizes
+        const adjV = Math.abs(dx) < eps && Math.abs(dy - (h1 + h2)) < eps;
+
+        return adjH || adjV;
+      };
+
+      // For each D2 square, count adjacent D2 squares
+      const toSubdivide = new Set();
+      for (const item1 of d2Squares) {
+        let adjacentCount = 0;
+        const adjacentItems = [];
+
+        for (const item2 of d2Squares) {
+          if (item1.path === item2.path) continue;
+          if (areAdjacent(item1.sq, item2.sq)) {
+            adjacentCount++;
+            adjacentItems.push(item2);
+          }
+        }
+
+        // If more than 1 adjacent D2, mark excess for subdivision
+        if (adjacentCount > 1) {
+          // Keep the first adjacent, subdivide the rest
+          for (let i = 1; i < adjacentItems.length; i++) {
+            toSubdivide.add(adjacentItems[i].path);
+          }
+        }
+      }
+
+      // Subdivide marked D2 squares
+      for (const path of toSubdivide) {
+        const sq = targetState.get(path);
+        if (!sq) continue;
+        if (imageCells.has(path) || buttonCells.has(path)) continue;
+
+        targetState.delete(path);
+        const { x, y, originalSize: os, depth: d } = sq;
+        const ns = os / 2, nd = d + 1, o = os / 4;
+        createQuadTree(x - o, y + o, ns, nd, path + '/0', -1);
+        createQuadTree(x + o, y + o, ns, nd, path + '/1', -1);
+        createQuadTree(x - o, y - o, ns, nd, path + '/2', -1);
+        createQuadTree(x + o, y - o, ns, nd, path + '/3', -1);
+      }
+    }
+
+
+    function enforceDepth6AdjacencyConstraint() {
+      const eps = 1e-6;
+      // Target depth 5 instead of 6, because subdividing depth 6 would create depth 7
+      // which is reserved for mouse hover only
+      const targetDepth = 5;
+
+      // Collect all depth 5 squares
+      const depth5Squares = [];
+      for (const [path, sq] of targetState.entries()) {
+        if (sq.depth === targetDepth) {
+          depth5Squares.push({ path, sq });
+        }
+      }
+
+      if (depth5Squares.length === 0) return;
+
+      // Helper to check if two squares are adjacent (share an edge)
+      const areAdjacent = (sq1, sq2) => {
+        const h1 = sq1.originalSize / 2;
+        const h2 = sq2.originalSize / 2;
+        const dx = Math.abs(sq1.x - sq2.x);
+        const dy = Math.abs(sq1.y - sq2.y);
+
+        // Adjacent horizontally: same y, x distance = sum of half sizes
+        const adjH = Math.abs(dy) < eps && Math.abs(dx - (h1 + h2)) < eps;
+        // Adjacent vertically: same x, y distance = sum of half sizes
+        const adjV = Math.abs(dx) < eps && Math.abs(dy - (h1 + h2)) < eps;
+
+        return adjH || adjV;
+      };
+
+      // For each depth 5 square, count adjacent depth 5 squares
+      const toSubdivide = new Set();
+      for (const item1 of depth5Squares) {
+        let adjacentCount = 0;
+        const adjacentItems = [];
+
+        for (const item2 of depth5Squares) {
+          if (item1.path === item2.path) continue;
+          if (areAdjacent(item1.sq, item2.sq)) {
+            adjacentCount++;
+            adjacentItems.push(item2);
+          }
+        }
+
+        // If more than 2 adjacent depth 5 squares, mark excess for subdivision
+        // This will create depth 6 squares, which is OK (depth 7 is reserved for mouse hover)
+        if (adjacentCount > 2) {
+          // Keep the first 2 adjacent, subdivide the rest
+          for (let i = 2; i < adjacentItems.length; i++) {
+            toSubdivide.add(adjacentItems[i].path);
+          }
+        }
+      }
+
+      // Subdivide marked depth 5 squares (will create depth 6)
+      // This prevents too many depth 6 squares from being adjacent
+      for (const path of toSubdivide) {
+        const sq = targetState.get(path);
+        if (!sq) continue;
+        if (imageCells.has(path) || buttonCells.has(path)) continue;
+
+        targetState.delete(path);
+        const { x, y, originalSize: os, depth: d } = sq;
+        const ns = os / 2, nd = d + 1, o = os / 4;
+        createQuadTree(x - o, y + o, ns, nd, path + '/0', -1);
+        createQuadTree(x + o, y + o, ns, nd, path + '/1', -1);
+        createQuadTree(x - o, y - o, ns, nd, path + '/2', -1);
+        createQuadTree(x + o, y - o, ns, nd, path + '/3', -1);
+      }
+    }
 
 
     function forceMobilePattern() {
@@ -2538,37 +2689,9 @@
 
       let ops = 0;
 
-      if (!isMobileLike) {
-        const front = [];
-        for (const [path, s] of targetState.entries()) {
-          if (!path.startsWith('content/')) continue;
-          if (imageCells.has(path) || buttonCells.has(path)) continue;
-          if (Math.abs(s.originalSize - w / 2) < 1e-6 &&
-            isVisibleEnough(s.x, s.y, s.originalSize, contentTop, 0.05) &&
-            s.depth < TARGET_DEPTH) {
-            front.push({ path, s });
-          }
-        }
-        front.sort((a, b) => saltedKey(a.path, saltFront) - saltedKey(b.path, saltFront));
-
-        for (const it of front) {
-          if (ops >= maxOps) break;
-          if (rngFn() < (config.refineChanceD2 ?? 0.5)) {
-            refineOnce(it); ops++;
-            if (ops < maxOps && rngFn() < (config.extraChildChanceAfterD2 ?? 0.0)) {
-              const childIdx = Math.floor(rngFn() * 4);
-              const childPath = it.path + '/' + childIdx;
-              const child = targetState.get(childPath);
-              if (child && child.depth < TARGET_DEPTH && !imageCells.has(childPath) && !buttonCells.has(childPath)) {
-                refineOnce({ path: childPath, s: child }); ops++;
-              }
-            }
-          }
-        }
-      }
-
       const candidates = [];
       for (const [path, s] of targetState.entries()) {
+        // Unified logic: treat content and filler exactly the same
         if (!isMobileLike && !(path.startsWith('content/') || path.startsWith('filler/'))) continue;
         if (imageCells.has(path) || buttonCells.has(path)) continue;
         if (s.depth >= TARGET_DEPTH) continue;
@@ -2589,6 +2712,8 @@
 
 
     function refineHaloAroundFixed(maxOps = 56) {
+      return 0; // Disabled for uniformity
+      /*
       const { w, contentTop } = getLayoutMetrics();
       const d2Size = w / 2;
 
@@ -2642,6 +2767,7 @@
         ops++;
       }
       return ops;
+      */
     }
 
 
@@ -3668,21 +3794,24 @@
       const sp = (scene.userData._hoverSpawn ||= new Set());
       const vn = (scene.userData._hoverVanish ||= new Set());
 
+      const isLand = isLandscapeLike();
+      const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+
       while (it < maxIt) {
         it++;
         const leaf = findLeafAt(worldPos, targetState);
         if (!leaf) break;
         if (imageCells.has(leaf.path) || buttonCells.has(leaf.path)) break;
-        if (leaf.depth < TARGET_DEPTH) {
+        if (leaf.depth < limit) {
           refined = true;
           targetState.delete(leaf.path);
           vn.add(leaf.path);
           const x = leaf.x, y = leaf.y, os = leaf.originalSize, d = leaf.depth, p = leaf.path;
           const ns = os / 2, nd = d + 1, o = os / 4;
-          createQuadTree(x - o, y + o, ns, nd, p + '/0', -1);
-          createQuadTree(x + o, y + o, ns, nd, p + '/1', -1);
-          createQuadTree(x - o, y - o, ns, nd, p + '/2', -1);
-          createQuadTree(x + o, y - o, ns, nd, p + '/3', -1);
+          createQuadTree(x - o, y + o, ns, nd, p + '/0', nd);
+          createQuadTree(x + o, y + o, ns, nd, p + '/1', nd);
+          createQuadTree(x - o, y - o, ns, nd, p + '/2', nd);
+          createQuadTree(x + o, y - o, ns, nd, p + '/3', nd);
           const c0 = p + '/0', c1 = p + '/1', c2 = p + '/2', c3 = p + '/3';
           if (targetState.has(c0)) sp.add(c0);
           if (targetState.has(c1)) sp.add(c1);
@@ -3704,7 +3833,9 @@
       const wp = new THREE.Vector3(sampleX, sampleY, 0);
       const leaf = findLeafAt(wp, targetState);
       if (!leaf) return Math.max(0, (w / 2) - config.borderWidth);
-      const dd = Math.max(0, TARGET_DEPTH - leaf.depth);
+      const isLand = isLandscapeLike();
+      const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+      const dd = Math.max(0, limit - leaf.depth);
       const cell = leaf.originalSize / Math.pow(2, dd);
       return Math.max(0, cell - config.borderWidth);
     }
@@ -3748,7 +3879,9 @@
         return;
       }
 
-      const dd = Math.max(0, TARGET_DEPTH - leaf.depth);
+      const isLand = isLandscapeLike();
+      const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+      const dd = Math.max(0, limit - leaf.depth);
       const cell = leaf.originalSize / Math.pow(2, dd);
 
       const pxLocalX = worldPos.x - gx;
