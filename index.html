@@ -1240,9 +1240,9 @@
 
       const portraitMobileLike = isPhonePortrait || isTabletPortrait;
 
-      // plafond par défaut (inchangé)
+      // plafond par défaut (modifié pour perf horizontale : 7 -> 6)
       TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
-        : (prefersReducedMotion ? 5 : 7);
+        : (prefersReducedMotion ? 4 : 6);
 
       // en formats verticaux uniquement → on enlève 1 niveau au max
       if (portraitMobileLike) {
