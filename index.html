@@ -2073,7 +2073,7 @@
       dedupeTargetState();
       forceNoD1GlobalExceptFixed();
 
-      sprinkleRefinements(isMobileBucket() ? 24 : 24);
+      sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
       // Enforce D2 adjacency constraint in horizontal mode
       if (!isMobileBucket() && isLandscapeLike()) {
@@ -2134,6 +2134,8 @@
           if (areAdjacent(item1.sq, item2.sq)) {
             adjacentCount++;
             adjacentItems.push(item2);
+            // Early exit: no need to count beyond what we need
+            if (adjacentCount > 3) break;
           }
         }
 
@@ -2205,6 +2207,8 @@
           if (areAdjacent(item1.sq, item2.sq)) {
             adjacentCount++;
             adjacentItems.push(item2);
+            // Early exit: no need to count beyond what we'll subdivide
+            if (adjacentCount > 4) break;
           }
         }
 
@@ -3170,6 +3174,10 @@
 
 
     function syncStateToMeshes() {
+      // Rebuild spatial hash for optimized findLeafAt
+      spatialHashCache = buildSpatialHash();
+      spatialHashCacheVersion++;
+
       const getOccluderMaterial = () => {
         if (!scene.userData.occluderMaterial) {
           scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({ color: config.darkColor, depthTest: false, depthWrite: false });
@@ -3749,6 +3757,40 @@
     // BEST LOW RISK APPROACH:
     // Just optimize the math inside the loop.
 
+    // Spatial hash cache for faster findLeafAt
+    let spatialHashCache = null;
+    let spatialHashCacheVersion = 0;
+    const SPATIAL_CELL_SIZE = 2.0; // Grid cell size in world units
+
+    function buildSpatialHash() {
+      const hash = new Map();
+      const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
+      const gy = (contentGroup && contentGroup.position && contentGroup.position.y) || 0;
+
+      for (const sq of targetState.values()) {
+        // Adjust for content group offset
+        const worldX = sq.x - gx;
+        const worldY = sq.y - gy;
+
+        // Determine which cells this square overlaps
+        const half = sq.originalSize * 0.5;
+        const minCellX = Math.floor((worldX - half) / SPATIAL_CELL_SIZE);
+        const maxCellX = Math.floor((worldX + half) / SPATIAL_CELL_SIZE);
+        const minCellY = Math.floor((worldY - half) / SPATIAL_CELL_SIZE);
+        const maxCellY = Math.floor((worldY + half) / SPATIAL_CELL_SIZE);
+
+        for (let cx = minCellX; cx <= maxCellX; cx++) {
+          for (let cy = minCellY; cy <= maxCellY; cy++) {
+            const key = `${cx},${cy}`;
+            if (!hash.has(key)) hash.set(key, []);
+            hash.get(key).push(sq);
+          }
+        }
+      }
+
+      return hash;
+    }
+
     function findLeafAt(worldPos, stateMap) {
       let best = null, smallest = Infinity;
       const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
@@ -3756,20 +3798,40 @@
       const px = worldPos.x - gx;
       const py = worldPos.y - gy;
 
-      // Optimization: Pre-calculate layout metrics to quickly cull
-      // But stateMap has everything.
+      // Try to use spatial hash for faster lookup
+      if (spatialHashCache) {
+        const cellX = Math.floor(px / SPATIAL_CELL_SIZE);
+        const cellY = Math.floor(py / SPATIAL_CELL_SIZE);
+        const key = `${cellX},${cellY}`;
+        const candidates = spatialHashCache.get(key);
 
-      // Fast iterator
+        if (candidates) {
+          for (const sq of candidates) {
+            const half = sq.originalSize * 0.5;
+            const dx = Math.abs(px - sq.x);
+            if (dx > half) continue;
+
+            const dy = Math.abs(py - sq.y);
+            if (dy > half) continue;
+
+            if (sq.originalSize < smallest) {
+              best = sq;
+              smallest = sq.originalSize;
+            }
+          }
+          return best;
+        }
+      }
+
+      // Fallback to full iteration if spatial hash not available
       for (const sq of stateMap.values()) {
-        // Fast rejection: AABB check
         const half = sq.originalSize * 0.5;
         const dx = Math.abs(px - sq.x);
-        if (dx > half) continue; // Too far X
+        if (dx > half) continue;
 
         const dy = Math.abs(py - sq.y);
-        if (dy > half) continue; // Too far Y
+        if (dy > half) continue;
 
-        // Inside
         if (sq.originalSize < smallest) {
           best = sq;
           smallest = sq.originalSize;
