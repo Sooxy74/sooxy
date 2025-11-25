@@ -1452,7 +1452,7 @@
     const stableW = STABLE_VP_W || window.innerWidth;
     const stableH = STABLE_VP_H || window.innerHeight;
 
-    // Nombre d’images disponibles (dans img/fractal-art_img)
+    // Nombre d’images trouvées dans img/fractal-art_img
     const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
 
     // --- SCROLL VERTICAL (portrait / mobile-like) ---
@@ -1460,15 +1460,20 @@
         const { viewHeight, w, menuHeight } = getLayoutMetrics();
         const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
 
-        // Une "ligne" par image si on en a, sinon on garde un fallback à 10
+        // 1 “ligne” par image (sinon fallback 10)
         V.patternRows = imgCount > 0 ? imgCount : 10;
         V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
         const gapYWorld = Math.max(0, V.gapRows) * w;
         const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
 
-        const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
-        const visibleWorld = (rowsVisible * w) + Math.max(0, rowsVisible - 1) * gapYWorld;
+        const totalWorld =
+            (V.patternRows * w) +
+            Math.max(0, V.patternRows - 1) * gapYWorld;
+
+        const visibleWorld =
+            (rowsVisible * w) +
+            Math.max(0, rowsVisible - 1) * gapYWorld;
 
         V.maxWorld = Math.max(0, totalWorld - visibleWorld);
         mobileWorldContentHeight = totalWorld;
@@ -1492,23 +1497,30 @@
 
     const contentCols = contentColsForBucket();
 
+    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+
     if (imgCount > 0) {
-        // 2 lignes d’images -> chaque "slot" horizontal contient 2 images (ligne 0 et 1)
-        const slots = Math.ceil(imgCount / 2);    // nombre de "paquets" de 2 images
-        // Chaque slot occupe 2 colonnes (col 0/1, 2/3, 4/5, …)
-        H.patternCols = Math.max(contentCols, 2 * slots);
+        const slots = Math.ceil(imgCount / 2);
+        const minPatternCols = 2 * slots;
+
+        const extraCols = imgCount > 3 ? 1 : 0;
+
+        H.patternCols = Math.max(contentCols, minPatternCols + extraCols);
     } else {
-        // Pas d’images -> on se limite à la largeur visible
         H.patternCols = contentCols;
     }
-
-    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
     const patternCols = H.patternCols;
     const gapXWorld = Math.max(0, H.gapCols) * w;
 
-    const totalWorld = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
-    const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
+    const totalWorld =
+        (patternCols * w) +
+        Math.max(0, patternCols - 1) * gapXWorld;
+
+    const visibleWorld =
+        (contentCols * w) +
+        Math.max(0, contentCols - 1) * gapXWorld;
+
     const extraWorld = Math.max(0, totalWorld - visibleWorld);
     H.maxWorld = extraWorld;
 
@@ -1523,7 +1535,6 @@
 
     H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
 }
-
 
 
 
