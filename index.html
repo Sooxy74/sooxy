@@ -848,7 +848,7 @@
 
 
         let imageTextures = [];
-        const LOCAL_IMG_DIR = 'img/BY-pics/';
+        const LOCAL_IMG_DIR = 'img/fractal-art_img/';
         const IMG_EXT = '.png';
         const IMG_PAD = 2;
         const MAX_INDEX = 200;
@@ -1179,6 +1179,8 @@
 
 
         async function bootstrap() {
+            await document.fonts.ready;
+
             const onProgress = (current, total) => {
                 if (loaderOverlay) {
                     const percent = Math.min(100, Math.floor((current / total) * 100));
@@ -1200,7 +1202,6 @@
 
             syncStateToMeshes();
 
-            // 5) entrées/sorties & scroll
             installDragSwipeScroll();
             forceBrowserToLayoutForHScroll();
 
@@ -1265,11 +1266,9 @@
 
             const portraitMobileLike = isPhonePortrait || isTabletPortrait;
 
-            // plafond par défaut (modifié pour perf horizontale : 7 -> 6)
             TARGET_DEPTH = portraitMobileLike ? (prefersReducedMotion ? 3 : 6)
                 : (prefersReducedMotion ? 4 : 6);
 
-            // en formats verticaux uniquement → on enlève 1 niveau au max
             if (portraitMobileLike) {
                 TARGET_DEPTH = Math.max(config.minDepth, (TARGET_DEPTH | 0) - 1);
             }
@@ -1447,59 +1446,84 @@
 
 
         function updateScrollDocHeight() {
-            const spacer = document.getElementById('scroll-spacer');
-            if (!spacer) return;
-            const stableW = STABLE_VP_W || window.innerWidth;
-            const stableH = STABLE_VP_H || window.innerHeight;
+    const spacer = document.getElementById('scroll-spacer');
+    if (!spacer) return;
 
-            if (!isLandscapeLike()) {
-                const { viewHeight, w, menuHeight } = getLayoutMetrics();
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
-                V.patternRows = 10;
-                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-                const gapYWorld = Math.max(0, V.gapRows) * w;
-                const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
-                const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
-                const visibleWorld = (rowsVisible * w) + Math.max(0, rowsVisible - 1) * gapYWorld;
-                V.maxWorld = Math.max(0, totalWorld - visibleWorld);
-                mobileWorldContentHeight = totalWorld;
+    const stableW = STABLE_VP_W || window.innerWidth;
+    const stableH = STABLE_VP_H || window.innerHeight;
 
-                spacer.style.height = stableH + 'px';
-                spacer.style.width = '1px';
-                spacer.style.display = 'block';
+    // Nombre d’images disponibles (dans img/fractal-art_img)
+    const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
 
-                const root = rootScroller();
-                root.style.overflowX = 'hidden';
-                root.style.overflowY = 'hidden';
-                root.style.webkitOverflowScrolling = 'auto';
+    // --- SCROLL VERTICAL (portrait / mobile-like) ---
+    if (!isLandscapeLike()) {
+        const { viewHeight, w, menuHeight } = getLayoutMetrics();
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
 
-                V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
-                return;
-            }
+        // Une "ligne" par image si on en a, sinon on garde un fallback à 10
+        V.patternRows = imgCount > 0 ? imgCount : 10;
+        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
-            const { w } = getLayoutMetrics();
-            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-            H.patternCols = 10;
-            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-            const patternCols = H.patternCols || 10;
-            const gapXWorld = Math.max(0, H.gapCols) * w;
-            const contentCols = contentColsForBucket();
-            const totalWorld = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
-            const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
-            const extraWorld = Math.max(0, totalWorld - visibleWorld);
-            H.maxWorld = extraWorld;
+        const gapYWorld = Math.max(0, V.gapRows) * w;
+        const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
 
-            spacer.style.height = stableH + 'px';
-            spacer.style.width = '1px';
-            spacer.style.display = 'block';
+        const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
+        const visibleWorld = (rowsVisible * w) + Math.max(0, rowsVisible - 1) * gapYWorld;
 
-            const root = rootScroller();
-            root.style.overflowX = 'hidden';
-            root.style.overflowY = 'hidden';
-            root.style.webkitOverflowScrolling = 'auto';
+        V.maxWorld = Math.max(0, totalWorld - visibleWorld);
+        mobileWorldContentHeight = totalWorld;
 
-            H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
-        }
+        spacer.style.height = stableH + 'px';
+        spacer.style.width = '1px';
+        spacer.style.display = 'block';
+
+        const root = rootScroller();
+        root.style.overflowX = 'hidden';
+        root.style.overflowY = 'hidden';
+        root.style.webkitOverflowScrolling = 'auto';
+
+        V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
+        return;
+    }
+
+    // --- SCROLL HORIZONTAL (paysage / desktop) ---
+    const { w } = getLayoutMetrics();
+    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 0, gapCols: 0 });
+
+    const contentCols = contentColsForBucket();
+
+    if (imgCount > 0) {
+        // 2 lignes d’images -> chaque "slot" horizontal contient 2 images (ligne 0 et 1)
+        const slots = Math.ceil(imgCount / 2);    // nombre de "paquets" de 2 images
+        // Chaque slot occupe 2 colonnes (col 0/1, 2/3, 4/5, …)
+        H.patternCols = Math.max(contentCols, 2 * slots);
+    } else {
+        // Pas d’images -> on se limite à la largeur visible
+        H.patternCols = contentCols;
+    }
+
+    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+
+    const patternCols = H.patternCols;
+    const gapXWorld = Math.max(0, H.gapCols) * w;
+
+    const totalWorld = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
+    const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
+    const extraWorld = Math.max(0, totalWorld - visibleWorld);
+    H.maxWorld = extraWorld;
+
+    spacer.style.height = stableH + 'px';
+    spacer.style.width = '1px';
+    spacer.style.display = 'block';
+
+    const root = rootScroller();
+    root.style.overflowX = 'hidden';
+    root.style.overflowY = 'hidden';
+    root.style.webkitOverflowScrolling = 'auto';
+
+    H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
+}
+
 
 
 
@@ -1546,23 +1570,6 @@
                     ot: Math.round(window.visualViewport?.offsetTop || 0),
                 };
             }
-
-            /*(function enableHorizontalWheelScroll(){
-              function onWheel(e){
-                if (!isLandscapeLike()) return;
-                const H = (scene.userData._hscroll ||= { xWorld:0, maxWorld:0, patternCols:10, gapCols:0 });
-                const absY = Math.abs(e.deltaY);
-                const absX = Math.abs(e.deltaX);
-                const delta = (absX > absY ? e.deltaX : e.deltaY);
-                const pxW = STABLE_VP_W || window.innerWidth;
-                const worldW = (camera.right - camera.left) || 1;
-                const pxPerWorldX = pxW / worldW;
-                H.xWorld = Math.max(0, Math.min((H.xWorld || 0) + delta / pxPerWorldX, H.maxWorld || 0));
-                setContentTransformFromScroll();
-                e.preventDefault();
-              }
-              window.addEventListener('wheel', onWheel, { passive:false });
-            })(); */
 
             (function enableArrowKeyScroll() {
                 window.addEventListener('keydown', (e) => {
@@ -1877,7 +1884,6 @@
                     contentGroup.remove(st.mesh);
                     meshPool.push(st.mesh);
                 }
-                // Instanced items don't have individual meshes to remove from scene, just from state
                 if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
                 if (st.labelSprite) { scene.remove(st.labelSprite); }
                 if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
@@ -2019,8 +2025,6 @@
 
 
         function updateFractalBase(forceFull = false) {
-            // Optimisation Zéro Copie : on travaille directement sur la Map existante.
-            // On ne la vide que si un reset complet est demandé.
             if (forceFull) targetState.clear();
 
             const { w } = getLayoutMetrics();
@@ -2035,7 +2039,6 @@
 
             const FORCE_D1 = new Set();
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
-            // (preset?.imagesD1 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); }); // Disabled for uniformity
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
             let totalRows;
@@ -2044,7 +2047,6 @@
             } else {
                 const { contentTop } = getLayoutMetrics();
                 const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
-                // Only generate visible rows, no extra hidden rows below
                 totalRows = Math.max(baseRowsPrimary, visibleRows);
             }
 
@@ -2086,7 +2088,6 @@
                 const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
                 const protectedD1Paths = new Set();
                 (preset?.buttons || []).forEach(b => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
-                // (preset?.imagesD1 || []).forEach(im => { protectedD1Paths.add(`content/${im.row}/${im.col}`); }); // Disabled for uniformity
 
                 ensureMinDepth2Cells(requiredD2, 0, protectedD1Paths);
             }
@@ -2101,12 +2102,10 @@
 
             sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
-            // Enforce D2 adjacency constraint in horizontal mode
             if (!isMobileBucket() && isLandscapeLike()) {
                 enforceD2AdjacencyConstraint();
             }
 
-            // Enforce depth 6 adjacency constraint (max 2 adjacent depth 6 squares)
             if (!isMobileBucket()) {
                 enforceDepth6AdjacencyConstraint();
             }
@@ -2134,38 +2133,31 @@
 
             if (d2Squares.length === 0) return;
 
-            // Helper to check if two squares are adjacent (share an edge)
             const areAdjacent = (sq1, sq2) => {
                 const h1 = sq1.originalSize / 2;
                 const h2 = sq2.originalSize / 2;
                 const dx = Math.abs(sq1.x - sq2.x);
                 const dy = Math.abs(sq1.y - sq2.y);
 
-                // Adjacent horizontally: same y, x distance = sum of half sizes
                 const adjH = Math.abs(dy) < eps && Math.abs(dx - (h1 + h2)) < eps;
-                // Adjacent vertically: same x, y distance = sum of half sizes
                 const adjV = Math.abs(dx) < eps && Math.abs(dy - (h1 + h2)) < eps;
 
                 return adjH || adjV;
             };
 
-            // New rule: Two D2 squares of SAME size can NEVER be adjacent
             const toSubdivide = new Set();
             for (let i = 0; i < d2Squares.length; i++) {
                 for (let j = i + 1; j < d2Squares.length; j++) {
                     const item1 = d2Squares[i];
                     const item2 = d2Squares[j];
 
-                    // Check if both have same size (w/2) and are adjacent
                     const sameSize = Math.abs(item1.sq.originalSize - item2.sq.originalSize) < eps;
                     if (sameSize && areAdjacent(item1.sq, item2.sq)) {
-                        // Subdivide one of them (the second one)
                         toSubdivide.add(item2.path);
                     }
                 }
             }
 
-            // Subdivide marked D2 squares
             for (const path of toSubdivide) {
                 const sq = targetState.get(path);
                 if (!sq) continue;
@@ -2184,11 +2176,8 @@
 
         function enforceDepth6AdjacencyConstraint() {
             const eps = 1e-6;
-            // Target depth 5 instead of 6, because subdividing depth 6 would create depth 7
-            // which is reserved for mouse hover only
             const targetDepth = 5;
 
-            // Collect all depth 5 squares
             const depth5Squares = [];
             for (const [path, sq] of targetState.entries()) {
                 if (sq.depth === targetDepth) {
@@ -2198,22 +2187,18 @@
 
             if (depth5Squares.length === 0) return;
 
-            // Helper to check if two squares are adjacent (share an edge)
             const areAdjacent = (sq1, sq2) => {
                 const h1 = sq1.originalSize / 2;
                 const h2 = sq2.originalSize / 2;
                 const dx = Math.abs(sq1.x - sq2.x);
                 const dy = Math.abs(sq1.y - sq2.y);
 
-                // Adjacent horizontally: same y, x distance = sum of half sizes
                 const adjH = Math.abs(dy) < eps && Math.abs(dx - (h1 + h2)) < eps;
-                // Adjacent vertically: same x, y distance = sum of half sizes
                 const adjV = Math.abs(dx) < eps && Math.abs(dy - (h1 + h2)) < eps;
 
                 return adjH || adjV;
             };
 
-            // For each depth 5 square, count adjacent depth 5 squares
             const toSubdivide = new Set();
             for (const item1 of depth5Squares) {
                 let adjacentCount = 0;
@@ -2224,23 +2209,17 @@
                     if (areAdjacent(item1.sq, item2.sq)) {
                         adjacentCount++;
                         adjacentItems.push(item2);
-                        // Early exit: no need to count beyond what we'll subdivide
                         if (adjacentCount > 4) break;
                     }
                 }
 
-                // If more than 2 adjacent depth 5 squares, mark excess for subdivision
-                // This will create depth 6 squares, which is OK (depth 7 is reserved for mouse hover)
                 if (adjacentCount > 2) {
-                    // Keep the first 2 adjacent, subdivide the rest
                     for (let i = 2; i < adjacentItems.length; i++) {
                         toSubdivide.add(adjacentItems[i].path);
                     }
                 }
             }
 
-            // Subdivide marked depth 5 squares (will create depth 6)
-            // This prevents too many depth 6 squares from being adjacent
             for (const path of toSubdivide) {
                 const sq = targetState.get(path);
                 if (!sq) continue;
@@ -2550,11 +2529,10 @@
 
 
         function simplifyGrid() {
-            // Group by parent path
             const groups = new Map();
             for (const [path, s] of targetState.entries()) {
                 if (imageCells.has(path) || buttonCells.has(path)) continue;
-                if (s.depth <= 2) continue; // Don't merge base grid
+                if (s.depth <= 2) continue;
 
                 const lastSlash = path.lastIndexOf('/');
                 const parentPath = path.substring(0, lastSlash);
@@ -2566,32 +2544,19 @@
             for (const [parentPath, children] of groups.entries()) {
                 if (children.length !== 4) continue;
 
-                // Check if all children have same depth and are mergeable
                 const depth = children[0].s.depth;
                 if (!children.every(c => c.s.depth === depth)) continue;
 
-                // Probabilities to merge based on depth
-                // Depth 6 -> 5: High chance (reduce clutter)
-                // Depth 5 -> 4: Medium chance
-                // Depth 4 -> 3: Low chance
                 let chance = 0;
                 if (depth === 6) chance = 0.85;
                 else if (depth === 5) chance = 0.5;
                 else if (depth === 4) chance = 0.2;
 
                 if (rngFn() < chance) {
-                    // Merge!
-                    // 1. Remove children
                     for (const c of children) targetState.delete(c.path);
 
-                    // 2. Create parent
-                    // Calculate parent props from first child
                     const c0 = children[0].s;
                     const size = c0.originalSize * 2;
-                    // Parent position is average of children? No, simpler:
-                    // Child 0 is usually top-left or similar. 
-                    // Let's re-derive parent center from child center.
-                    // Actually, we can just take the min/max of children to find center.
                     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
                     for (const c of children) {
                         minX = Math.min(minX, c.s.x - c.s.originalSize / 2);
@@ -2989,195 +2954,266 @@
 
 
         function buildFreeOverlays() {
-            if (!imageTextures || imageTextures.length === 0) {
-                updateScrollDocHeight();
-                forceBrowserToLayoutForHScroll();
-                return;
-            }
+    if (!imageTextures || imageTextures.length === 0) {
+        updateScrollDocHeight();
+        forceBrowserToLayoutForHScroll();
+        return;
+    }
 
-            const lm = getLayoutMetrics();
-            const { w, contentTop } = lm;
-            const stableTop = contentTop;
+    const lm = getLayoutMetrics();
+    const { w, contentTop } = lm;
+    const stableTop = contentTop;
 
-            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-            const gapXWorld = Math.max(0, H.gapCols) * w;
+    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+    const gapXWorld = Math.max(0, H.gapCols) * w;
 
-            const bucketOffset = contentOffsetColsForBucket();
-            const baseX = camera.left + (bucketOffset + 0.5) * w;
+    const bucketOffset = contentOffsetColsForBucket();
+    const baseX = camera.left + (bucketOffset + 0.5) * w;
 
-            const isPortrait = !isLandscapeLike();
-            const expectedCount = 10;
-            const desired = new Set();
-            const slots = [];
+    const isPortrait = !isLandscapeLike();
 
-            if (isPortrait) {
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
-                V.patternRows = 10;
-                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-                const gapYWorld = Math.max(0, V.gapRows) * w;
+    // 🔢 Désormais : 1 image = 1 slot, dans l’ordre alphanumérique
+    const expectedCount = imageTextures.length;
 
-                for (let i = 0; i < expectedCount; i++) {
-                    const col = (i % 2 === 0) ? 0 : 1;
-                    const cx = camera.left + (bucketOffset + col + 0.5) * w;
-                    const cy = stableTop - (i * (w + gapYWorld) + w / 2);
-                    const path = `rib/${i}`;
-                    desired.add(path);
-                    slots.push({ index: i, path, x: cx, y: cy, os: w, sz: Math.max(0, w - config.borderWidth) });
-                }
-                const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
-                mobileWorldContentHeight = totalWorld;
-            } else {
-                for (let i = 0; i < expectedCount; i++) {
-                    const row = (i % 2 === 0) ? 0 : 1;
-                    const slot = Math.floor(i / 2);
-                    const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
-                    const cx = baseX + col * (w + gapXWorld);
-                    const cy = stableTop - (row + 0.5) * w;
-                    const path = `rib/${i}`;
-                    desired.add(path);
-                    slots.push({ index: i, path, x: cx, y: cy, os: w, sz: Math.max(0, w - config.borderWidth) });
-                }
-            }
+    const desired = new Set();
+    const slots = [];
 
-            for (const s of slots) {
-                const existing = targetState.get(s.path);
-                if (!existing) {
-                    targetState.set(s.path, { x: s.x, y: s.y, size: s.sz, depth: 1, path: s.path, originalSize: s.os });
-                } else {
-                    existing.x = s.x;
-                    existing.y = s.y;
-                    existing.originalSize = s.os;
-                    existing.size = s.sz;
-                    existing.depth = 1;
-                }
-                imageCells.add(s.path);
-                const url = imageTextures[s.index % imageTextures.length] || 'img/logo-sooxy-art.png';
-                imageAssignment.set(s.path, url);
-            }
+    if (isPortrait) {
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+        V.patternRows = expectedCount;
+        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+        const gapYWorld = Math.max(0, V.gapRows) * w;
 
-            for (const key of Array.from(targetState.keys())) {
-                if (key.startsWith('rib/') && !desired.has(key)) {
-                    targetState.delete(key);
-                    imageCells.delete(key);
-                }
-            }
-
-            cutOutUnderButtons();
-            dedupeTargetState();
-            createBlackNeighborImages(); // Create black neighbor images
-            cutOutUnderButtons(); // Remove fractals under black squares
-            syncStateToMeshes();
-            updateScrollDocHeight();
-            forceBrowserToLayoutForHScroll();
+        for (let i = 0; i < expectedCount; i++) {
+            const col = (i % 2 === 0) ? 0 : 1;
+            const cx = camera.left + (bucketOffset + col + 0.5) * w;
+            const cy = stableTop - (i * (w + gapYWorld) + w / 2);
+            const path = `rib/${i}`;
+            desired.add(path);
+            slots.push({
+                index: i,
+                path,
+                x: cx,
+                y: cy,
+                os: w,
+                sz: Math.max(0, w - config.borderWidth)
+            });
         }
+
+        const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
+        mobileWorldContentHeight = totalWorld;
+    } else {
+        // Paysage : 2 lignes, on remplit de gauche à droite
+        for (let i = 0; i < expectedCount; i++) {
+            const row = (i % 2 === 0) ? 0 : 1;
+            const slot = Math.floor(i / 2);
+            const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
+            const cx = baseX + col * (w + gapXWorld);
+            const cy = stableTop - (row + 0.5) * w;
+            const path = `rib/${i}`;
+            desired.add(path);
+            slots.push({
+                index: i,
+                path,
+                x: cx,
+                y: cy,
+                os: w,
+                sz: Math.max(0, w - config.borderWidth)
+            });
+        }
+    }
+
+    // Création / MAJ des carrés d’images
+    for (const s of slots) {
+        const existing = targetState.get(s.path);
+        if (!existing) {
+            targetState.set(s.path, {
+                x: s.x,
+                y: s.y,
+                size: s.sz,
+                depth: 1,
+                path: s.path,
+                originalSize: s.os
+            });
+        } else {
+            existing.x = s.x;
+            existing.y = s.y;
+            existing.originalSize = s.os;
+            existing.size = s.sz;
+            existing.depth = 1;
+        }
+
+        imageCells.add(s.path);
+
+        // 🔁 plus de modulo : on prend l’image i telle quelle
+        const url = imageTextures[s.index] || 'img/logo-sooxy-art.png';
+        imageAssignment.set(s.path, url);
+    }
+
+    // Nettoyage des anciens rib/* qui ne sont plus utilisés
+    for (const key of Array.from(targetState.keys())) {
+        if (key.startsWith('rib/') && !desired.has(key)) {
+            targetState.delete(key);
+            imageCells.delete(key);
+        }
+    }
+
+    // Carrés noirs voisins + nettoyage fractales sous les images / textes
+    cutOutUnderButtons();
+    dedupeTargetState();
+    createBlackNeighborImages();
+    cutOutUnderButtons();
+    syncStateToMeshes();
+
+    updateScrollDocHeight();
+    forceBrowserToLayoutForHScroll();
+}
+
 
 
 
         function updateFreeOverlays() {
-            if (!imageTextures || imageTextures.length === 0) return;
+    if (!imageTextures || imageTextures.length === 0) return;
 
-            const lm = getLayoutMetrics();
-            const { w, contentTop } = lm;
-            const stableTop = contentTop;
+    const lm = getLayoutMetrics();
+    const { w, contentTop } = lm;
+    const stableTop = contentTop;
 
-            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-            const gapXWorld = Math.max(0, H.gapCols) * w;
+    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+    const gapXWorld = Math.max(0, H.gapCols) * w;
 
-            const bucketOffset = contentOffsetColsForBucket();
-            const baseX = camera.left + (bucketOffset + 0.5) * w;
+    const bucketOffset = contentOffsetColsForBucket();
+    const baseX = camera.left + (bucketOffset + 0.5) * w;
 
-            const isPortrait = !isLandscapeLike();
-            const expectedCount = 10;
-            const desired = new Set();
-            let changed = false;
+    const isPortrait = !isLandscapeLike();
 
-            if (isPortrait) {
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
-                V.patternRows = 10;
-                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-                const gapYWorld = Math.max(0, V.gapRows) * w;
+    // 🔢 nombre réel d’images
+    const expectedCount = imageTextures.length;
 
-                for (let i = 0; i < expectedCount; i++) {
-                    const col = (i % 2 === 0) ? 0 : 1;
-                    const cx = camera.left + (bucketOffset + col + 0.5) * w;
-                    const cy = stableTop - (i * (w + gapYWorld) + w / 2);
-                    const path = `rib/${i}`;
-                    desired.add(path);
-                    const s = targetState.get(path);
-                    const os = w;
-                    const sz = Math.max(0, os - config.borderWidth);
-                    if (!s) {
-                        targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
-                        changed = true;
-                    } else {
-                        if (Math.abs(s.x - cx) > 1e-6 || Math.abs(s.y - cy) > 1e-6 ||
-                            Math.abs(s.originalSize - os) > 1e-6 || Math.abs(s.size - sz) > 1e-6 || s.depth !== 1) {
-                            s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1;
-                            changed = true;
-                        }
-                    }
-                    imageCells.add(path);
-                    const url = imageTextures[i % imageTextures.length] || 'img/logo-sooxy-art.png';
-                    if (imageAssignment.get(path) !== url) { imageAssignment.set(path, url); changed = true; }
-                }
+    const desired = new Set();
+    let changed = false;
 
-                const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
-                if (totalWorld > (mobileWorldContentHeight || 0)) {
-                    mobileWorldContentHeight = totalWorld;
-                    updateScrollDocHeight();
-                }
+    if (isPortrait) {
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+        V.patternRows = expectedCount;
+        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+        const gapYWorld = Math.max(0, V.gapRows) * w;
+
+        for (let i = 0; i < expectedCount; i++) {
+            const col = (i % 2 === 0) ? 0 : 1;
+            const cx = camera.left + (bucketOffset + col + 0.5) * w;
+            const cy = stableTop - (i * (w + gapYWorld) + w / 2);
+            const path = `rib/${i}`;
+            desired.add(path);
+
+            const s = targetState.get(path);
+            const os = w;
+            const sz = Math.max(0, os - config.borderWidth);
+
+            if (!s) {
+                targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
+                changed = true;
             } else {
-                for (let i = 0; i < expectedCount; i++) {
-                    const row = (i % 2 === 0) ? 0 : 1;
-                    const slot = Math.floor(i / 2);
-                    const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
-                    const cx = baseX + col * (w + gapXWorld);
-                    const cy = stableTop - (row + 0.5) * w;
-                    const path = `rib/${i}`;
-                    desired.add(path);
-                    const s = targetState.get(path);
-                    const os = w;
-                    const sz = Math.max(0, os - config.borderWidth);
-                    if (!s) {
-                        targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
-                        changed = true;
-                    } else {
-                        if (Math.abs(s.x - cx) > 1e-6 || Math.abs(s.y - cy) > 1e-6 ||
-                            Math.abs(s.originalSize - os) > 1e-6 || Math.abs(s.size - sz) > 1e-6 || s.depth !== 1) {
-                            s.x = cx; s.y = cy; s.originalSize = os; s.size = sz; s.depth = 1;
-                            changed = true;
-                        }
-                    }
-                    imageCells.add(path);
-                    const url = imageTextures[i % imageTextures.length] || 'img/logo-sooxy-art.png';
-                    if (imageAssignment.get(path) !== url) { imageAssignment.set(path, url); changed = true; }
-                }
-            }
-
-            for (const key of Array.from(targetState.keys())) {
-                if (key.startsWith('rib/') && !desired.has(key)) {
-                    targetState.delete(key);
-                    imageCells.delete(key);
+                if (
+                    Math.abs(s.x - cx) > 1e-6 ||
+                    Math.abs(s.y - cy) > 1e-6 ||
+                    Math.abs(s.originalSize - os) > 1e-6 ||
+                    Math.abs(s.size - sz) > 1e-6 ||
+                    s.depth !== 1
+                ) {
+                    s.x = cx;
+                    s.y = cy;
+                    s.originalSize = os;
+                    s.size = sz;
+                    s.depth = 1;
                     changed = true;
                 }
             }
 
-            if (changed) {
-                cutOutUnderButtons();
-                dedupeTargetState();
-            }
+            imageCells.add(path);
 
-            // Always create black neighbor images after overlays are set
-            createBlackNeighborImages();
-            cutOutUnderButtons(); // Remove fractals under black squares
-
-            // Always sync if we had changes or created black images
-            if (changed || buttonCells.size > 0) {
-                syncStateToMeshes();
+            const url = imageTextures[i] || 'img/logo-sooxy-art.png';
+            if (imageAssignment.get(path) !== url) {
+                imageAssignment.set(path, url);
+                changed = true;
             }
         }
+
+        const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
+        if (totalWorld > (mobileWorldContentHeight || 0)) {
+            mobileWorldContentHeight = totalWorld;
+            updateScrollDocHeight();
+        }
+    } else {
+        // Paysage
+        for (let i = 0; i < expectedCount; i++) {
+            const row = (i % 2 === 0) ? 0 : 1;
+            const slot = Math.floor(i / 2);
+            const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
+            const cx = baseX + col * (w + gapXWorld);
+            const cy = stableTop - (row + 0.5) * w;
+            const path = `rib/${i}`;
+            desired.add(path);
+
+            const s = targetState.get(path);
+            const os = w;
+            const sz = Math.max(0, os - config.borderWidth);
+
+            if (!s) {
+                targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
+                changed = true;
+            } else {
+                if (
+                    Math.abs(s.x - cx) > 1e-6 ||
+                    Math.abs(s.y - cy) > 1e-6 ||
+                    Math.abs(s.originalSize - os) > 1e-6 ||
+                    Math.abs(s.size - sz) > 1e-6 ||
+                    s.depth !== 1
+                ) {
+                    s.x = cx;
+                    s.y = cy;
+                    s.originalSize = os;
+                    s.size = sz;
+                    s.depth = 1;
+                    changed = true;
+                }
+            }
+
+            imageCells.add(path);
+
+            const url = imageTextures[i] || 'img/logo-sooxy-art.png';
+            if (imageAssignment.get(path) !== url) {
+                imageAssignment.set(path, url);
+                changed = true;
+            }
+        }
+    }
+
+    // Supprimer les anciens rib/* en trop
+    for (const key of Array.from(targetState.keys())) {
+        if (key.startsWith('rib/') && !desired.has(key)) {
+            targetState.delete(key);
+            imageCells.delete(key);
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        cutOutUnderButtons();
+        dedupeTargetState();
+    }
+
+    // Toujours recréer les carrés noirs à côté des images + nettoyage
+    createBlackNeighborImages();
+    cutOutUnderButtons();
+
+    if (changed || buttonCells.size > 0) {
+        syncStateToMeshes();
+    }
+}
+
 
 
 
