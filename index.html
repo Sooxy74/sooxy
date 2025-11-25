@@ -3326,60 +3326,108 @@ function onScroll() {
 
 
         function updateDomLabelLayout(st, lm) {
-            if (!st.domLabelEl) return;
-            const { w } = lm;
+    if (!st.domLabelEl) return;
+    const { w } = lm;
 
-            // Use currentScale/currentPosition for instanced items, or mesh.scale/position for images
-            const dispS = Math.max(0, st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0));
-            const dispX = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
-            const dispY = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+    // Taille affichée (instanced ou mesh image)
+    const dispS = Math.max(
+        0,
+        st.currentScale ? st.currentScale.x :
+        (st.mesh ? st.mesh.scale.x : 0)
+    );
 
-            const half = dispS / 2;
-            const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-            const marginPctTop = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP - 2));
-            const mRightWorld = dispS * marginPctRight;
-            const mTopWorld = dispS * marginPctTop;
-            const tx = dispX + half - mRightWorld;
-            const ty = dispY + half - mTopWorld;
-            if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl) {
-                const fm = FontMetrics.measure(st.labelText || '');
-                st.baseFontPx = fm.fontSize;
-                st.labelBaseWidthPx = fm.width;
-                const firstLine = String(st.labelText || '').split('\n')[0];
-                st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
-            }
-            const targetS = Math.max(0, st.targetScale?.x || dispS);
-            const availablePxFinal = computeSquareInnerWidthPx(targetS);
-            const uniformFontPx = ensureGlobalLabelFontPx(lm);
-            const perPx = (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
-                ? (st.labelBaseWidthPx / st.baseFontPx)
-                : 0;
-            let finalFontPx = perPx > 0
-                ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
-                : (uniformFontPx || st.baseFontPx);
-            finalFontPx = Math.round(finalFontPx * 2) / 2;
-            finalFontPx = Math.max(10, Math.min(96, finalFontPx));
-            st.domLabelEl.style.fontSize = finalFontPx + 'px';
-            if (!isMobileBucket()) {
-                const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-                const inside =
-                    wp.x >= dispX - half && wp.x <= dispX + half &&
-                    wp.y >= dispY - half && wp.y <= dispY + half;
-                st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
-                if (inside && st.baffles && !st.hovering) {
-                    st.hovering = true;
-                    st.baffles.forEach(b => { b.start(); b.reveal(600); });
-                }
-                if (!inside) { st.hovering = false; }
-            } else {
-                st.domLabelEl.style.color = '#f3f1ee';
-            }
-            const p = worldToClientXY(new THREE.Vector3(tx, ty, 0));
-            const isBlackSquare = st.path && st.path.startsWith('black/');
-            const translateX = isBlackSquare ? 'translateX(0%)' : 'translateX(-100%)';
-            st.domLabelEl.style.transform =
-                `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
+    // Centre en coordonnées LOCALES (dans contentGroup)
+    const localX = st.currentPosition ? st.currentPosition.x :
+        (st.mesh ? st.mesh.position.x : 0);
+    const localY = st.currentPosition ? st.currentPosition.y :
+        (st.mesh ? st.mesh.position.y : 0);
+
+    // Décalage du groupe (scroll logique)
+    const gx = contentGroup?.position?.x || 0;
+    const gy = contentGroup?.position?.y || 0;
+
+    // Centre en coordonnées MONDE (ce que voit la caméra)
+    const worldX = localX + gx;
+    const worldY = localY + gy;
+
+    const half = dispS / 2;
+    const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
+    const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
+
+    const mRightWorld = dispS * marginPctRight;
+    const mTopWorld   = dispS * marginPctTop;
+
+    // Position de la typo en MONDE (coin haut droit du carré, avec marge)
+    const txWorld = worldX + half - mRightWorld;
+    const tyWorld = worldY + half - mTopWorld;
+
+    // (Re)calcul des métriques de texte si nécessaire
+    if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl) {
+        const fm = FontMetrics.measure(st.labelText || '');
+        st.baseFontPx = fm.fontSize;
+        st.labelBaseWidthPx = fm.width;
+
+        const firstLine = String(st.labelText || '').split('\n')[0];
+        st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
+    }
+
+    // Calcul de la taille de typo cible en fonction de la taille du carré
+    const targetS = Math.max(0, st.targetScale?.x || dispS);
+    const availablePxFinal = computeSquareInnerWidthPx(targetS);
+    const uniformFontPx = ensureGlobalLabelFontPx(lm);
+
+    const perPx =
+        (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
+            ? (st.labelBaseWidthPx / st.baseFontPx)
+            : 0;
+
+    let finalFontPx =
+        perPx > 0
+            ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
+            : (uniformFontPx || st.baseFontPx);
+
+    finalFontPx = Math.round(finalFontPx * 2) / 2;
+    finalFontPx = Math.max(10, Math.min(96, finalFontPx));
+    st.domLabelEl.style.fontSize = finalFontPx + 'px';
+
+    // Couleur / baffle en fonction du survol — comparaison en MONDE
+    if (!isMobileBucket()) {
+        const wp = new THREE.Vector3(
+            lastMouseScreenPos.x,
+            lastMouseScreenPos.y,
+            0
+        ).unproject(camera);
+
+        const inside =
+            wp.x >= worldX - half && wp.x <= worldX + half &&
+            wp.y >= worldY - half && wp.y <= worldY + half;
+
+        st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
+
+        if (inside && st.baffles && !st.hovering) {
+            st.hovering = true;
+            st.baffles.forEach(b => {
+                b.start();
+                b.reveal(600);
+            });
         }
+        if (!inside) {
+            st.hovering = false;
+        }
+    } else {
+        st.domLabelEl.style.color = '#f3f1ee';
+    }
+
+    // Projection MONDE → pixels, puis placement dans le layer DOM
+    const p = worldToClientXY(new THREE.Vector3(txWorld, tyWorld, 0));
+
+    const isBlackSquare = st.path && st.path.startsWith('black/');
+    const translateX = isBlackSquare ? 'translateX(0%)' : 'translateX(-100%)';
+
+    st.domLabelEl.style.transform =
+        `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
+}
+
 
 
         function ensureGlobalLabelFontPx(lm) {
