@@ -1418,29 +1418,38 @@
 
 
         function setContentTransformFromScroll() {
-            if (!contentGroup) return;
-            const { w } = getLayoutMetrics();
-            if (isLandscapeLike()) {
-                const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-                contentGroup.position.set(-(H.xWorld || 0), 0, 0);
-                const last = scene.userData._lastBuildX || 0;
-                if (Math.abs((H.xWorld || 0) - last) > w * 0.5) {
-                    needsBaseUpdate = true;
-                    scene.userData._lastBuildX = H.xWorld || 0;
-                }
-            } else {
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
-                const v = (Math.max(0, Math.min(V.yWorld || 0, V.maxWorld || 0)) - mobileBuildScrollAt);
-                contentGroup.position.set(0, v, 0);
-                const last = scene.userData._lastBuildY || 0;
-                if (Math.abs((V.yWorld || 0) - last) > w * 0.5) {
-                    needsBaseUpdate = true;
-                    scene.userData._lastBuildY = V.yWorld || 0;
-                }
-            }
-            const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-            updateMouseSquareTarget(wp);
+    if (!contentGroup) return;
+    const { w } = getLayoutMetrics();
+
+    if (isLandscapeLike()) {
+        const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+        const xWorld = Math.max(0, Math.min(H.xWorld || 0, H.maxWorld || 0));
+
+        // déplacement simple, sans recalculs intempestifs
+        contentGroup.position.set(-xWorld, 0, 0);
+
+        const last = scene.userData._lastBuildX || 0;
+        if (Math.abs(xWorld - last) > w) {
+            needsBaseUpdate = true;
+            scene.userData._lastBuildX = xWorld;
         }
+    } else {
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
+        const yWorld = Math.max(0, Math.min(V.yWorld || 0, V.maxWorld || 0));
+
+        contentGroup.position.set(0, yWorld, 0);
+
+        const last = scene.userData._lastBuildY || 0;
+        if (Math.abs(yWorld - last) > w) {
+            needsBaseUpdate = true;
+            scene.userData._lastBuildY = yWorld;
+        }
+    }
+
+    const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+    updateMouseSquareTarget(wp);
+}
+
 
 
 
@@ -1740,13 +1749,16 @@
 
 
         let isScrolling = false;
-        let scrollTimeout = null;
+let scrollTimeout = null;
 
-        function onScroll() {
-            isScrolling = true;
-            if (scrollTimeout) clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => { isScrolling = false; }, 100);
-        }
+function onScroll() {
+    // On ne fait plus de logique de scroll logique ici,
+    // juste un petit flag si tu veux t’en servir plus tard.
+    isScrolling = true;
+    if (scrollTimeout) clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => { isScrolling = false; }, 100);
+}
+
 
 
 
@@ -4139,73 +4151,82 @@
 
 
         function updateMouseSquareTarget(worldPos) {
-            if (isMobileBucket()) {
-                mouseSquare.userData.anchor = null;
-                mouseSquare.userData.targetPosition.set(0, 0, 4);
-                mouseSquare.userData.targetScale.set(0, 0, 1);
-                cursorBorder.userData.targetPosition.set(0, 0, 3);
-                cursorBorder.userData.targetScale.set(0, 0, 1);
-                return;
-            }
+    if (isMobileBucket()) {
+        mouseSquare.userData.anchor = null;
+        mouseSquare.userData.targetPosition.set(0, 0, 4);
+        mouseSquare.userData.targetScale.set(0, 0, 1);
+        cursorBorder.userData.targetPosition.set(0, 0, 3);
+        cursorBorder.userData.targetScale.set(0, 0, 1);
+        return;
+    }
 
-            const { contentTop, w } = getLayoutMetrics();
-            if (worldPos.y >= contentTop) {
-                mouseSquare.userData.anchor = null;
-                mouseSquare.userData.targetPosition.set(0, 0, 4);
-                mouseSquare.userData.targetScale.set(0, 0, 1);
-                cursorBorder.userData.targetPosition.set(0, 0, 3);
-                cursorBorder.userData.targetScale.set(0, 0, 1);
-                return;
-            }
+    const { contentTop, w } = getLayoutMetrics();
 
-            const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
-            const gy = (contentGroup && contentGroup.position && contentGroup.position.y) || 0;
+    // Si la souris est dans le header : on garde la dernière taille connue,
+    // mais on ne recalcule plus la grille (sinon “saut” de position)
+    if (worldPos.y >= contentTop) {
+        let fs = lastGridCursorSizeWorld;
+        if (!(fs > 0)) fs = computeDefaultGridCursorSize();
+        if (!(fs > 0)) fs = Math.max(0, (w / 2) - config.borderWidth);
 
-            const leaf = findLeafAt(worldPos, targetState);
-            if (!leaf) {
-                let fs = lastGridCursorSizeWorld;
-                if (!(fs > 0)) fs = computeDefaultGridCursorSize();
-                if (!(fs > 0)) fs = Math.max(0, (w / 2) - config.borderWidth);
-                mouseSquare.userData.anchor = null;
-                mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 4);
-                mouseSquare.userData.targetScale.set(fs, fs, 1);
-                cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 3);
-                cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
-                lastGridCursorSizeWorld = fs;
-                return;
-            }
+        mouseSquare.userData.anchor = null;
+        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 4);
+        mouseSquare.userData.targetScale.set(fs, fs, 1);
+        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 3);
+        cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+        return;
+    }
 
-            const isLand = isLandscapeLike();
-            const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
-            const dd = Math.max(0, limit - leaf.depth);
-            const cell = leaf.originalSize / Math.pow(2, dd);
+    const gx = (contentGroup && contentGroup.position && contentGroup.position.x) || 0;
+    const gy = (contentGroup && contentGroup.position && contentGroup.position.y) || 0;
 
-            const pxLocalX = worldPos.x - gx;
-            const pxLocalY = worldPos.y - gy;
+    const leaf = findLeafAt(worldPos, targetState);
+    if (!leaf) {
+        let fs = lastGridCursorSizeWorld;
+        if (!(fs > 0)) fs = computeDefaultGridCursorSize();
+        if (!(fs > 0)) fs = Math.max(0, (w / 2) - config.borderWidth);
 
-            const lx = pxLocalX - (leaf.x - leaf.originalSize / 2);
-            const ly = pxLocalY - (leaf.y - leaf.originalSize / 2);
-            const n = Math.pow(2, dd);
-            const ix = Math.max(0, Math.min(Math.floor(lx / cell), n - 1));
-            const iy = Math.max(0, Math.min(Math.floor(ly / cell), n - 1));
+        mouseSquare.userData.anchor = null;
+        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 4);
+        mouseSquare.userData.targetScale.set(fs, fs, 1);
+        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 3);
+        cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+        lastGridCursorSizeWorld = fs;
+        return;
+    }
 
-            const nx = (leaf.x - leaf.originalSize / 2) + ix * cell + cell / 2;
-            const ny = (leaf.y - leaf.originalSize / 2) + iy * cell + cell / 2;
+    const isLand = isLandscapeLike();
+    const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+    const dd = Math.max(0, limit - leaf.depth);
+    const cell = leaf.originalSize / Math.pow(2, dd);
 
-            const fs = Math.max(0, cell - config.borderWidth);
+    const pxLocalX = worldPos.x - gx;
+    const pxLocalY = worldPos.y - gy;
 
-            mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
+    const lx = pxLocalX - (leaf.x - leaf.originalSize / 2);
+    const ly = pxLocalY - (leaf.y - leaf.originalSize / 2);
+    const n = Math.pow(2, dd);
+    const ix = Math.max(0, Math.min(Math.floor(lx / cell), n - 1));
+    const iy = Math.max(0, Math.min(Math.floor(ly / cell), n - 1));
 
-            const dx = nx + gx;
-            const dy = ny + gy;
+    const nx = (leaf.x - leaf.originalSize / 2) + ix * cell + cell / 2;
+    const ny = (leaf.y - leaf.originalSize / 2) + iy * cell + cell / 2;
 
-            mouseSquare.userData.targetPosition.set(dx, dy, 4);
-            mouseSquare.userData.targetScale.set(fs, fs, 1);
-            cursorBorder.userData.targetPosition.set(dx, dy, 3);
-            cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+    const fs = Math.max(0, cell - config.borderWidth);
 
-            lastGridCursorSizeWorld = fs;
-        }
+    mouseSquare.userData.anchor = { x: nx, y: ny, size: fs };
+
+    const dx = nx + gx;
+    const dy = ny + gy;
+
+    mouseSquare.userData.targetPosition.set(dx, dy, 4);
+    mouseSquare.userData.targetScale.set(fs, fs, 1);
+    cursorBorder.userData.targetPosition.set(dx, dy, 3);
+    cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
+
+    lastGridCursorSizeWorld = fs;
+}
+
 
 
 
@@ -4213,53 +4234,64 @@
 
 
         function onMouseMove(e) {
-            lastMouseScreenPos.set(
-                (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
-                -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1
-            );
-            needsRefineCheck = true;
+    const vpW = STABLE_VP_W || window.innerWidth;
+    const vpH = STABLE_VP_H || window.innerHeight;
 
-            if (isMobileBucket()) {
-                if (domCursorEl) domCursorEl.style.opacity = '0';
-                return;
-            }
+    // coords normalisées NDC
+    const nx = (e.clientX / vpW) * 2 - 1;
+    const ny = -(e.clientY / vpH) * 2 + 1;
 
-            const headerEl = document.getElementById('ui-header');
-            const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-            const inHeader = e.clientY <= headerPx;
+    lastMouseScreenPos.set(nx, ny);
+    needsRefineCheck = true;
 
-            if (domCursorEl) {
-                if (inHeader) {
-                    const fsWorld = (lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0) ? lastGridCursorSizeWorld : computeDefaultGridCursorSize();
-                    const pxPerWorldX = (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-                    const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
-                    domCursorEl.style.opacity = '1';
-                    domCursorEl.style.width = sidePx + 'px';
-                    domCursorEl.style.height = sidePx + 'px';
-                    domCursorEl.style.left = e.clientX + 'px';
-                    domCursorEl.style.top = e.clientY + 'px';
-                } else {
-                    domCursorEl.style.opacity = '0';
-                }
-            }
+    const headerEl = document.getElementById('ui-header');
+    const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
+    const inHeader = e.clientY <= headerPx;
 
-            const wp = new THREE.Vector3(
-                (e.clientX / (STABLE_VP_W || window.innerWidth)) * 2 - 1,
-                -(e.clientY / (STABLE_VP_H || window.innerHeight)) * 2 + 1,
-                0
-            ).unproject(camera);
+    // Position du curseur DOM (toujours en pixels)
+    if (domCursorEl) {
+        if (inHeader) {
+            // On garde la taille utilisée dans le contenu pour éviter le “snap”
+            let fsWorld = lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0
+                ? lastGridCursorSizeWorld
+                : computeDefaultGridCursorSize();
 
-            updateMouseSquareTarget(wp);
+            const worldW = camera.right - camera.left;
+            const pxPerWorldX = vpW / worldW;
+            const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
 
-            if (!inHeader) {
-                const did = refineTargetStateAt(wp);
-                if (did) {
-                    cutOutUnderButtons();
-                    dedupeTargetState();
-                    syncStateToMeshes();
-                }
-            }
+            domCursorEl.style.opacity = '1';
+            domCursorEl.style.width = sidePx + 'px';
+            domCursorEl.style.height = sidePx + 'px';
+            domCursorEl.style.left = e.clientX + 'px';
+            domCursorEl.style.top = e.clientY + 'px';
+        } else {
+            // On fade au lieu de couper brutalement
+            domCursorEl.style.opacity = '0';
         }
+    }
+
+    // Coordonnées monde de la souris
+    const wp = new THREE.Vector3(
+        (e.clientX / vpW) * 2 - 1,
+        -(e.clientY / vpH) * 2 + 1,
+        0
+    ).unproject(camera);
+
+    updateMouseSquareTarget(wp);
+
+    // seulement si on est dans le contenu (sous le header)
+    const { contentTop } = getLayoutMetrics();
+    if (!inHeader && wp.y < contentTop) {
+        const did = refineTargetStateAt(wp);
+        if (did) {
+            cutOutUnderButtons();
+            dedupeTargetState();
+            syncStateToMeshes();
+        }
+    }
+}
+
 
 
 
