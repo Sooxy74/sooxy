@@ -1469,24 +1469,25 @@
         const { viewHeight, w, menuHeight } = getLayoutMetrics();
         const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
 
-        // 1 “ligne” par image (sinon fallback 10)
-        V.patternRows = imgCount > 0 ? imgCount : 10;
+        // une "ligne" par image
+        V.patternRows = imgCount > 0 ? imgCount : 1;
         V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
         const gapYWorld = Math.max(0, V.gapRows) * w;
-        const rowsVisible = Math.max(1, Math.ceil((viewHeight - menuHeight) / w));
 
+        // 🔥 hauteur totale du contenu en world units
         const totalWorld =
             (V.patternRows * w) +
             Math.max(0, V.patternRows - 1) * gapYWorld;
 
-        const visibleWorld =
-            (rowsVisible * w) +
-            Math.max(0, rowsVisible - 1) * gapYWorld;
+        // 🔥 zone visible (viewport - header)
+        const visibleWorld = Math.max(0, (viewHeight - menuHeight));
 
+        // 🔥 on veut pouvoir scroller jusqu’en bas : maxWorld = total - visible
         V.maxWorld = Math.max(0, totalWorld - visibleWorld);
         mobileWorldContentHeight = totalWorld;
 
+        // On garde le spacer à la taille de la viewport
         spacer.style.height = stableH + 'px';
         spacer.style.width = '1px';
         spacer.style.display = 'block';
@@ -1496,6 +1497,7 @@
         root.style.overflowY = 'hidden';
         root.style.webkitOverflowScrolling = 'auto';
 
+        // Clamp du scroll courant
         V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
         return;
     }
@@ -1511,9 +1513,7 @@
     if (imgCount > 0) {
         const slots = Math.ceil(imgCount / 2);
         const minPatternCols = 2 * slots;
-
         const extraCols = imgCount > 3 ? 1 : 0;
-
         H.patternCols = Math.max(contentCols, minPatternCols + extraCols);
     } else {
         H.patternCols = contentCols;
@@ -1544,6 +1544,7 @@
 
     H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
 }
+
 
 
 
@@ -2996,7 +2997,6 @@ function onScroll() {
 
     const isPortrait = !isLandscapeLike();
 
-    // 🔢 Désormais : 1 image = 1 slot, dans l’ordre alphanumérique
     const expectedCount = imageTextures.length;
 
     const desired = new Set();
@@ -3024,10 +3024,13 @@ function onScroll() {
             });
         }
 
-        const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
+        const totalWorld =
+            (expectedCount * w) +
+            Math.max(0, expectedCount - 1) * gapYWorld;
+
         mobileWorldContentHeight = totalWorld;
+        V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
     } else {
-        // Paysage : 2 lignes, on remplit de gauche à droite
         for (let i = 0; i < expectedCount; i++) {
             const row = (i % 2 === 0) ? 0 : 1;
             const slot = Math.floor(i / 2);
@@ -3047,7 +3050,6 @@ function onScroll() {
         }
     }
 
-    // Création / MAJ des carrés d’images
     for (const s of slots) {
         const existing = targetState.get(s.path);
         if (!existing) {
@@ -3068,13 +3070,10 @@ function onScroll() {
         }
 
         imageCells.add(s.path);
-
-        // 🔁 plus de modulo : on prend l’image i telle quelle
         const url = imageTextures[s.index] || 'img/logo-sooxy-art.png';
         imageAssignment.set(s.path, url);
     }
 
-    // Nettoyage des anciens rib/* qui ne sont plus utilisés
     for (const key of Array.from(targetState.keys())) {
         if (key.startsWith('rib/') && !desired.has(key)) {
             targetState.delete(key);
@@ -3082,7 +3081,6 @@ function onScroll() {
         }
     }
 
-    // Carrés noirs voisins + nettoyage fractales sous les images / textes
     cutOutUnderButtons();
     dedupeTargetState();
     createBlackNeighborImages();
@@ -3092,6 +3090,7 @@ function onScroll() {
     updateScrollDocHeight();
     forceBrowserToLayoutForHScroll();
 }
+
 
 
 
@@ -3112,7 +3111,6 @@ function onScroll() {
 
     const isPortrait = !isLandscapeLike();
 
-    // 🔢 nombre réel d’images
     const expectedCount = imageTextures.length;
 
     const desired = new Set();
@@ -3156,7 +3154,6 @@ function onScroll() {
             }
 
             imageCells.add(path);
-
             const url = imageTextures[i] || 'img/logo-sooxy-art.png';
             if (imageAssignment.get(path) !== url) {
                 imageAssignment.set(path, url);
@@ -3164,13 +3161,13 @@ function onScroll() {
             }
         }
 
-        const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
-        if (totalWorld > (mobileWorldContentHeight || 0)) {
-            mobileWorldContentHeight = totalWorld;
-            updateScrollDocHeight();
-        }
+        const totalWorld =
+            (expectedCount * w) +
+            Math.max(0, expectedCount - 1) * gapYWorld;
+
+        mobileWorldContentHeight = totalWorld;
+        V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
     } else {
-        // Paysage
         for (let i = 0; i < expectedCount; i++) {
             const row = (i % 2 === 0) ? 0 : 1;
             const slot = Math.floor(i / 2);
@@ -3205,7 +3202,6 @@ function onScroll() {
             }
 
             imageCells.add(path);
-
             const url = imageTextures[i] || 'img/logo-sooxy-art.png';
             if (imageAssignment.get(path) !== url) {
                 imageAssignment.set(path, url);
@@ -3214,7 +3210,6 @@ function onScroll() {
         }
     }
 
-    // Supprimer les anciens rib/* en trop
     for (const key of Array.from(targetState.keys())) {
         if (key.startsWith('rib/') && !desired.has(key)) {
             targetState.delete(key);
@@ -3228,14 +3223,16 @@ function onScroll() {
         dedupeTargetState();
     }
 
-    // Toujours recréer les carrés noirs à côté des images + nettoyage
     createBlackNeighborImages();
     cutOutUnderButtons();
 
     if (changed || buttonCells.size > 0) {
         syncStateToMeshes();
     }
+
+    updateScrollDocHeight();
 }
+
 
 
 
