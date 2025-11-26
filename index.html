@@ -72,7 +72,7 @@
         #ui-header * {
             cursor: none !important;
         }
-
+        
         #cursor-overlay {
             position: fixed;
             left: 0;
@@ -311,29 +311,38 @@
         }
 
         .hover-label {
-            position: absolute;
-            font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-            font-weight: 700;
-            font-size: 18px;
-            color: #f3f1ee;
-            line-height: 1;
-            transform-origin: 100% 0%;
-            will-change: transform;
-            pointer-events: none;
-            white-space: normal;
-        }
+    position: absolute;
+    font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-weight: 400;              /* texte par défaut = normal */
+    font-size: 18px;
+    color: #f3f1ee;
+    line-height: 1;
+    transform-origin: 100% 0%;
+    will-change: transform;
+    pointer-events: none;
+    white-space: normal;
+}
 
-        .hover-label .line {
-            display: block;
-            white-space: nowrap;
-        }
+/* Titre = première ligne, en gras */
+.hover-label .line:first-child {
+    font-weight: 700;
+}
 
-        .hover-label .line.sub {
-            font-style: italic;
-            font-weight: 400;
-            font-size: .6em;
-            line-height: 1.6667;
-            white-space: nowrap;
+/* Les autres lignes sont normales (héritent du 400 de .hover-label) */
+.hover-label .line {
+    display: block;
+    white-space: nowrap;
+}
+
+/* Variante “sub” si tu l’utilises encore (petit texte secondaire) */
+.hover-label .line.sub {
+    font-style: italic;
+    font-weight: 400;
+    font-size: .6em;
+    line-height: 1.6667;
+    white-space: nowrap;
+}
+
         }
 
         #mobile-footer {
@@ -407,18 +416,17 @@
         }
 
         .hover-label.black-text .line:first-child {
-            font-size: 1.3em !important;
-            /* Titre plus grand */
+            font-size: 1.6em !important; /* Titre nettement plus gros */
             font-weight: 700;
-            margin-bottom: 0.3em;
+            margin-bottom: 0.35em;
         }
 
         .hover-label.black-text .line:not(:first-child) {
-            font-size: 0.85em !important;
-            /* Paragraphe plus petit */
-            line-height: 1.4;
+            font-size: 1em !important;   /* Paragraphe un poil plus gros */
+            line-height: 1.5;
             font-weight: 400;
         }
+
 
         .dom-ol {
             position: absolute;
@@ -526,28 +534,30 @@
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js';
         import { createNoise2D } from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/esm/simplex-noise.js';
 
+        const LABEL_DESKTOP_PX = 14; // taille de base desktop / paysage
+        const LABEL_MOBILE_PX  = 12; // taille de base mobile / tablette
 
 
         const FontMetrics = {
-            charWidth: 0,
-            baseFontSize: 18,
-            initialized: false,
-            init: function () {
-                if (this.initialized) return;
-                const el = document.createElement('span');
-                el.style.fontFamily = '"Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace';
-                el.style.fontSize = '18px';
-                el.style.fontWeight = '700';
-                el.style.position = 'absolute';
-                el.style.visibility = 'hidden';
-                el.style.whiteSpace = 'nowrap';
-                el.textContent = 'X';
-                document.body.appendChild(el);
-                const rect = el.getBoundingClientRect();
-                this.charWidth = rect.width;
-                this.baseFontSize = 18;
-                document.body.removeChild(el);
-                this.initialized = true;
+    charWidth: 0,
+    baseFontSize: LABEL_DESKTOP_PX,
+    initialized: false,
+    init: function () {
+        if (this.initialized) return;
+        const el = document.createElement('span');
+        el.style.fontFamily = '"Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace';
+        el.style.fontSize = LABEL_DESKTOP_PX + 'px';
+        el.style.fontWeight = '700';
+        el.style.position = 'absolute';
+        el.style.visibility = 'hidden';
+        el.style.whiteSpace = 'nowrap';
+        el.textContent = 'X';
+        document.body.appendChild(el);
+        const rect = el.getBoundingClientRect();
+        this.charWidth = rect.width;
+        this.baseFontSize = LABEL_DESKTOP_PX;
+        document.body.removeChild(el);
+        this.initialized = true;
             },
             measure: function (text) {
                 if (!this.initialized) this.init();
@@ -2895,86 +2905,81 @@ function onScroll() {
 
 
         function createBlackNeighborImages() {
-            const { w } = getLayoutMetrics();
-            const isPortrait = !isLandscapeLike();
+    const { w } = getLayoutMetrics();
+    const isPortrait = !isLandscapeLike();
 
-            // Find all D1 images in rib area (size w)
-            for (const imgPath of imageCells) {
-                if (!imgPath.startsWith('rib/')) continue; // Only rib/ images
+    // Parcourt toutes les images "rib/*" pour créer un carré noir voisin
+    for (const imgPath of imageCells) {
+        if (!imgPath.startsWith('rib/')) continue;
 
-                const img = targetState.get(imgPath);
-                if (!img || Math.abs(img.originalSize - w) > 1e-6) continue;
+        const img = targetState.get(imgPath);
+        if (!img || Math.abs(img.originalSize - w) > 1e-6) continue;
 
-                // Parse index from path (rib/index)
-                const match = imgPath.match(/^rib\/(\d+)$/);
-                if (!match) continue;
+        const match = imgPath.match(/^rib\/(\d+)$/);
+        if (!match) continue;
 
-                const index = parseInt(match[1], 10);
+        const index = parseInt(match[1], 10);
 
-                // Calculate black square position directly adjacent to image
-                let blackX, blackY, blackPath;
+        let blackX, blackY, blackPath;
 
-                if (isPortrait) {
-                    // Portrait: images alternate col 0/1
-                    const col = (index % 2 === 0) ? 0 : 1;
+        if (isPortrait) {
+            // En mode portrait : alternance colonne 0 / 1
+            const col = (index % 2 === 0) ? 0 : 1;
 
-                    if (col === 0) {
-                        // Image on left (col 0) → black on right
-                        blackX = img.x + w;
-                        blackY = img.y;
-                        blackPath = `black/${index}_right`;
-                    } else {
-                        // Image on right (col 1) → black on left
-                        blackX = img.x - w;
-                        blackY = img.y;
-                        blackPath = `black/${index}_left`;
-                    }
-                } else {
-                    // Horizontal: images alternate row 0/1
-                    const row = (index % 2 === 0) ? 0 : 1;
-
-                    if (row === 0) {
-                        // Image on top row (row 0) → black below
-                        blackX = img.x;
-                        blackY = img.y - w; // Y decreases going down
-                        blackPath = `black/${index}_below`;
-                    } else {
-                        // Image on bottom row (row 1) → black above
-                        blackX = img.x;
-                        blackY = img.y + w; // Y increases going up
-                        blackPath = `black/${index}_above`;
-                    }
-                }
-
-                // Create black square in grid
-                const size = w - config.borderWidth;
-                targetState.set(blackPath, {
-                    x: blackX,
-                    y: blackY,
-                    size: size,
-                    depth: 1,
-                    path: blackPath,
-                    originalSize: w
-                });
-
-                // DON'T add to imageCells - only buttonCells for text display
-                // imageCells.add(blackPath); // REMOVED
-                // imageAssignment.set(blackPath, 'BLACK_IMAGE'); // REMOVED
-
-                // Add text label to black square as a button
-                const title = `Title ${index + 1}`;
-                const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit.`;
-                const labelText = `${title}\n${paragraph}`;
-                buttonCells.set(blackPath, {
-                    category: 'black_text',
-                    label: labelText,
-                    url: '#' // No navigation
-                });
-
-                console.log('Created black square:', blackPath, 'at', blackX, blackY, 'with text');
+            if (col === 0) {
+                // Image à gauche → texte à droite
+                blackX = img.x + w;
+                blackY = img.y;
+                blackPath = `black/${index}_right`;
+            } else {
+                // Image à droite → texte à gauche
+                blackX = img.x - w;
+                blackY = img.y;
+                blackPath = `black/${index}_left`;
             }
-            console.log('Total black squares created:', Array.from(buttonCells).filter(([p]) => p.startsWith('black/')).length);
+        } else {
+            // En mode paysage : alternance ligne 0 / 1
+            const row = (index % 2 === 0) ? 0 : 1;
+
+            if (row === 0) {
+                // Image en haut → texte en dessous
+                blackX = img.x;
+                blackY = img.y - w;
+                blackPath = `black/${index}_below`;
+            } else {
+                // Image en bas → texte au-dessus
+                blackX = img.x;
+                blackY = img.y + w;
+                blackPath = `black/${index}_above`;
+            }
         }
+
+        const size = w - config.borderWidth;
+
+        targetState.set(blackPath, {
+            x: blackX,
+            y: blackY,
+            size: size,
+            depth: 1,
+            path: blackPath,
+            originalSize: w
+        });
+
+        // --- Texte : titre + lorem ipsum plus long ---
+        const title = `Title ${index + 1}`;
+        const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`;
+
+        const labelText = `${title}\n${paragraph}`;
+
+        // Bouton "texte" sur carré noir (pas de navigation réelle)
+        buttonCells.set(blackPath, {
+            category: 'black_text',
+            label: labelText,
+            url: '#'
+        });
+    }
+}
+
 
 
         function buildFreeOverlays() {
@@ -3266,210 +3271,248 @@ function onScroll() {
         }
 
         function rebuildDomLabel(st, label) {
-            if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-            if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
+    // Nettoyage ancien label / baffle
+    if (st.baffles) {
+        st.baffles.forEach(b => b.stop());
+        st.baffles = null;
+    }
+    if (st.domLabelEl) {
+        st.domLabelEl.remove();
+        st.domLabelEl = null;
+    }
 
-            const layer = document.getElementById('labels-layer');
-            if (layer) layer.style.zIndex = '3';
+    const layer = document.getElementById('labels-layer');
+    if (layer) layer.style.zIndex = '3';
 
-            const el = makeDomLabelEl(label);
+    const el = makeDomLabelEl(label);
 
-            // Check if this is a black square based on path
-            const isBlackSquare = st.path && st.path.startsWith('black/');
+    // Carré noir = paragraphe sous les images (détecté au Lorem ipsum)
+    const isBlackSquare = String(label).toLowerCase().includes('lorem ipsum');
 
-            if (isBlackSquare) {
-                el.classList.add('black-text');
-                el.style.transformOrigin = '0% 0%'; // Left top for black squares
-                el.style.textAlign = 'left';
-            } else {
-                el.style.transformOrigin = '100% 0%'; // Right top for buttons
-                el.style.textAlign = 'right';
-            }
+    if (isBlackSquare) {
+        el.classList.add('black-text');
+        el.style.transformOrigin = '0% 0%';   // coin haut-gauche
+        el.style.textAlign = 'left';
+    } else {
+        el.style.transformOrigin = '100% 0%'; // coin haut-droit (boutons)
+        el.style.textAlign = 'right';
+    }
 
-            el.style.position = 'absolute';
-            el.style.left = '0px';
-            el.style.top = '0px';
-            el.style.textRendering = 'optimizeLegibility';
-            el.style.webkitFontSmoothing = 'antialiased';
-            el.style.direction = 'ltr';
-            el.querySelectorAll('.line').forEach(line => {
-                line.style.textAlign = 'right';
-            });
+    el.style.position = 'absolute';
+    el.style.left = '0px';
+    el.style.top = '0px';
+    el.style.textRendering = 'optimizeLegibility';
+    el.style.webkitFontSmoothing = 'antialiased';
+    el.style.direction = 'ltr';
 
-            layer?.appendChild(el);
-            st.domLabelEl = el;
-            st.labelText = label;
+    // invisible au départ
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0s linear';
 
-            const prev = el.style.transform;
-            el.style.transform = 'translate(-10000px,-10000px)';
+    const lines = Array.from(el.querySelectorAll('.line'));
+    st.lines = lines;
+    st.labelText = label;
 
-            const fm = FontMetrics.measure(label);
-            st.baseFontPx = fm.fontSize;
-            st.labelBaseWidthPx = fm.width;
-            const firstLine = String(label).split('\n')[0];
-            st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
+    // Mise en forme de base des lignes
+    lines.forEach(line => {
+        line.style.display = 'block';
+        line.style.whiteSpace = isBlackSquare ? 'normal' : 'nowrap';
+        line.style.textAlign = isBlackSquare ? 'left' : 'right';
+    });
 
-            el.style.transform = prev || '';
+    layer?.appendChild(el);
+    st.domLabelEl = el;
 
-            if (!isMobileBucket() && window.baffle) {
-                const lines = Array.from(el.querySelectorAll('.line'));
-                st.baffles = lines.map(line =>
-                    window.baffle(line).set({ characters: '!/|~#.^+*$#%sooxy', speed: 100 })
-                );
-            } else {
-                st.baffles = null;
-            }
-        }
+    // Mesure "offscreen"
+    const prev = el.style.transform;
+    el.style.transform = 'translate(-10000px,-10000px)';
+
+    const fm = FontMetrics.measure(label);
+    st.baseFontPx = fm.fontSize;
+    st.labelBaseWidthPx = fm.width;
+
+    const firstLine = String(label).split('\n')[0];
+    st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
+
+    el.style.transform = prev || '';
+
+    // Flag : est-ce que ce label a DÉJÀ été animé une fois ?
+    const alreadyAnimated = !!st.hasAnimatedBaffle;
+
+    if (!isMobileBucket() && window.baffle && !alreadyAnimated) {
+        st.baffles = lines.map(line =>
+            window.baffle(line).set({
+                characters: '!/|~#.^+*$#%sooxy',
+                speed: 100
+            })
+        );
+    } else {
+        st.baffles = null;
+    }
+
+    st.hovering = false;
+    st.appearTriggered = false;
+}
 
 
-        function updateDomLabelLayout(st, lm) {
+    function ensureGlobalLabelFontPx(lm) {
+    // lm est le retour de getLayoutMetrics(), mais ici on n'en a pas
+    // strictement besoin, il est juste passé pour cohérence.
+    const isMobileLike = isMobileBucket();
+
+    // Taille de base selon le device
+    const base = isMobileLike ? LABEL_MOBILE_PX : LABEL_DESKTOP_PX;
+
+    // On scale un peu selon la taille de viewport
+    const scale = viewportLabelScaleFactor();
+
+    // Taille finale utilisée par les labels
+    return base * scale;
+}
+
+
+
+   function updateDomLabelLayout(st, lm) {
     if (!st.domLabelEl) return;
+    const el = st.domLabelEl;
     const { w } = lm;
 
-    // Taille affichée (instanced ou mesh image)
-    const dispS = Math.max(
-        0,
-        st.currentScale ? st.currentScale.x :
-        (st.mesh ? st.mesh.scale.x : 0)
-    );
+    // --- ratio d’agrandissement du carré (0 → 1) ---
+    const targetSize = (st.targetScale && st.targetScale.x) || st.originalSize || w;
+    const currentSize = (st.currentScale && st.currentScale.x) ||
+        (st.mesh ? st.mesh.scale.x : targetSize);
 
-    // Centre en coordonnées LOCALES (dans contentGroup)
+    const ratio = targetSize > 0 ? (currentSize / targetSize) : 1;
+
+    // Taille affichée du carré
+    const dispS = Math.max(0, currentSize);
+
+    // Centre en coordonnées locales (contentGroup)
     const localX = st.currentPosition ? st.currentPosition.x :
         (st.mesh ? st.mesh.position.x : 0);
     const localY = st.currentPosition ? st.currentPosition.y :
         (st.mesh ? st.mesh.position.y : 0);
 
-    // Décalage du groupe (scroll logique)
+    // Décalage du groupe (scroll)
     const gx = contentGroup?.position?.x || 0;
     const gy = contentGroup?.position?.y || 0;
 
-    // Centre en coordonnées MONDE (ce que voit la caméra)
+    // Coordonnées monde
     const worldX = localX + gx;
     const worldY = localY + gy;
 
     const half = dispS / 2;
+
+    // Carrés noirs "paragraphe" (ceux sous les images)
+    const isBlackSquare =
+        st.labelText &&
+        st.labelText.toLowerCase().includes('lorem ipsum');
+
     const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
     const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
 
-    const mRightWorld = dispS * marginPctRight;
-    const mTopWorld   = dispS * marginPctTop;
+    let mRightWorld = dispS * marginPctRight;
+    const mTopWorld = dispS * marginPctTop;
+    let mLeftWorld = 0;
 
-    // Position de la typo en MONDE (coin haut droit du carré, avec marge)
-    const txWorld = worldX + half - mRightWorld;
-    const tyWorld = worldY + half - mTopWorld;
+    let txWorld, tyWorld;
 
-    // (Re)calcul des métriques de texte si nécessaire
+    if (isBlackSquare) {
+        // Même marge à gauche que celle au-dessus du texte
+        mLeftWorld  = dispS * marginPctTop;
+        mRightWorld = mLeftWorld;
+
+        // Texte ancré en haut-gauche du carré, avec marges
+        txWorld = worldX - half + mLeftWorld;
+        tyWorld = worldY + half - mTopWorld;
+    } else {
+        // Boutons "normaux" : ancrage haut-droit
+        txWorld = worldX + half - mRightWorld;
+        tyWorld = worldY + half - mTopWorld;
+    }
+
+    // Re-mesure au besoin
     if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl) {
         const fm = FontMetrics.measure(st.labelText || '');
         st.baseFontPx = fm.fontSize;
         st.labelBaseWidthPx = fm.width;
-
         const firstLine = String(st.labelText || '').split('\n')[0];
         st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
     }
 
-    // Calcul de la taille de typo cible en fonction de la taille du carré
     const targetS = Math.max(0, st.targetScale?.x || dispS);
-    const availablePxFinal = computeSquareInnerWidthPx(targetS);
-    const uniformFontPx = ensureGlobalLabelFontPx(lm);
+
+    const pxPerWorldX =
+        (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
+
+    // Largeur dispo en px
+    let availablePxFinal;
+    if (isBlackSquare) {
+        const innerWorld = Math.max(0, dispS - (mLeftWorld + mRightWorld));
+        availablePxFinal = innerWorld * pxPerWorldX;
+        el.style.maxWidth = `${availablePxFinal}px`;
+    } else {
+        availablePxFinal = computeSquareInnerWidthPx(targetS);
+        el.style.maxWidth = '';
+    }
+
+    const baseFontPx = ensureGlobalLabelFontPx(lm);
+    const isDesktopBucket =
+        currentBucket === 'desktop-16:9' ||
+        currentBucket === 'desktop-21:9' ||
+        currentBucket === 'desktop-32:9';
 
     const perPx =
         (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
             ? (st.labelBaseWidthPx / st.baseFontPx)
             : 0;
 
-    let finalFontPx =
-        perPx > 0
-            ? Math.min(uniformFontPx || st.baseFontPx, availablePxFinal / perPx)
-            : (uniformFontPx || st.baseFontPx);
+    // Taille max permise par la place dispo
+    let maxByWidth = perPx > 0
+        ? (availablePxFinal / perPx)
+        : (st.baseFontPx || baseFontPx);
+
+    let finalFontPx;
+
+    if (isBlackSquare && isDesktopBucket) {
+        finalFontPx = Math.min(maxByWidth, baseFontPx * 1.05);
+        finalFontPx = Math.max(finalFontPx, 15);
+    } else {
+        finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
+        finalFontPx = Math.max(finalFontPx, 13);
+    }
 
     finalFontPx = Math.round(finalFontPx * 2) / 2;
     finalFontPx = Math.max(10, Math.min(96, finalFontPx));
-    st.domLabelEl.style.fontSize = finalFontPx + 'px';
+    el.style.fontSize = finalFontPx + 'px';
+    el.style.color = '#f3f1ee';
 
-    // Couleur / baffle en fonction du survol — comparaison en MONDE
-    if (!isMobileBucket()) {
-        const wp = new THREE.Vector3(
-            lastMouseScreenPos.x,
-            lastMouseScreenPos.y,
-            0
-        ).unproject(camera);
+    // 🔥 SEUIL 80% : apparition du texte + ANIMATION UNE SEULE FOIS
+    if (!st.appearTriggered && ratio >= 0.8) {
+        st.appearTriggered = true;
 
-        const inside =
-            wp.x >= worldX - half && wp.x <= worldX + half &&
-            wp.y >= worldY - half && wp.y <= worldY + half;
+        // Apparition brutale du texte (sans fade fancy)
+        el.style.opacity = '1';
 
-        st.domLabelEl.style.color = inside ? '#f3ff00' : '#f3f1ee';
-
-        if (inside && st.baffles && !st.hovering) {
-            st.hovering = true;
+        // Si baffle existe ET que ce label n’a jamais été animé,
+        // on joue l’animation une seule fois et on marque le flag.
+        if (st.baffles && !st.hasAnimatedBaffle) {
+            st.hasAnimatedBaffle = true;
             st.baffles.forEach(b => {
                 b.start();
                 b.reveal(600);
             });
         }
-        if (!inside) {
-            st.hovering = false;
-        }
-    } else {
-        st.domLabelEl.style.color = '#f3f1ee';
     }
 
-    // Projection MONDE → pixels, puis placement dans le layer DOM
+    // Projection monde → pixels
     const p = worldToClientXY(new THREE.Vector3(txWorld, tyWorld, 0));
-
-    const isBlackSquare = st.path && st.path.startsWith('black/');
     const translateX = isBlackSquare ? 'translateX(0%)' : 'translateX(-100%)';
 
-    st.domLabelEl.style.transform =
+    el.style.transform =
         `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
 }
 
-
-
-        function ensureGlobalLabelFontPx(lm) {
-            const cache = scene.userData._labelFontCache || (scene.userData._labelFontCache = { px: null, refSize: 0 });
-            const isDesktopBucket =
-                currentBucket === 'desktop-16:9' ||
-                currentBucket === 'desktop-21:9' ||
-                currentBucket === 'desktop-32:9';
-            const DESKTOP_RATIO = 0.52;
-            const OTHER_RATIO = 0.60;
-            const TARGET_RATIO = isDesktopBucket ? DESKTOP_RATIO : OTHER_RATIO;
-            let refSt = null;
-            for (const st of fractalState.values()) {
-                if (!st || !st.isButton || !st.domLabelEl || !st.labelText) continue;
-                const first = String(st.labelText).split('\n')[0].trim().toLowerCase();
-                if (first === 'creative') { refSt = st; break; }
-            }
-            if (!refSt) return cache.px;
-
-            const refSizeWorld = Math.max(0, refSt.currentScale ? refSt.currentScale.x : (refSt.mesh ? refSt.mesh.scale.x : 0));
-
-            if (!refSizeWorld) return cache.px;
-            if (!refSt.firstLineBaseWidthPx || refSt.firstLineBaseWidthPx <= 0 || !refSt.baseFontPx) {
-                const fm = FontMetrics.measure(refSt.labelText || '');
-                refSt.baseFontPx = fm.fontSize;
-                const firstLine = String(refSt.labelText || '').split('\n')[0];
-                refSt.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
-            }
-            if (!refSt.firstLineBaseWidthPx || !refSt.baseFontPx) return cache.px;
-            const needRecalc =
-                !cache.px ||
-                Math.abs((cache.refSize || 0) - refSizeWorld) > 1e-3;
-            if (needRecalc) {
-                const innerPx = computeSquareInnerWidthPx(refSizeWorld);
-                if (innerPx > 0) {
-                    const perPx = refSt.firstLineBaseWidthPx / refSt.baseFontPx;
-                    let fontPx = (TARGET_RATIO * innerPx) / perPx;
-                    fontPx = Math.round(fontPx * 2) / 2;
-                    fontPx = Math.max(10, Math.min(96, fontPx));
-                    cache.px = fontPx;
-                    cache.refSize = refSizeWorld;
-                }
-            }
-            return cache.px;
-        }
 
 
 
