@@ -1585,131 +1585,123 @@
         function updateGrainPlaneSize() { if (!grainPlane) return; const h = camera.top - camera.bottom; const w = camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
 
         (function installStableResizeHandlers() {
-            let lastW = Math.round(window.visualViewport?.width || window.innerWidth);
-            let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
-            let lastOT = Math.round(window.visualViewport?.offsetTop || 0);
-            let raf = 0;
+    let lastW = Math.round(window.visualViewport?.width || window.innerWidth);
+    let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
+    let lastOT = Math.round(window.visualViewport?.offsetTop || 0);
+    let raf = 0;
 
-            const WIDTH_JIGGLE = 32;
-            const HEIGHT_JIGGLE = 260;
-            const OFFSET_JIGGLE = 260;
+    const WIDTH_JIGGLE = 32;
+    const HEIGHT_JIGGLE = 260;
+    const OFFSET_JIGGLE = 260;
 
-            function snapshotVV() {
-                return {
-                    w: Math.round(window.visualViewport?.width || window.innerWidth),
-                    h: Math.round(window.visualViewport?.height || window.innerHeight),
-                    ot: Math.round(window.visualViewport?.offsetTop || 0),
-                };
+    function snapshotVV() {
+        return {
+            w: Math.round(window.visualViewport?.width || window.innerWidth),
+            h: Math.round(window.visualViewport?.height || window.innerHeight),
+            ot: Math.round(window.visualViewport?.offsetTop || 0),
+        };
+    }
+
+    // ⚠️ plus de handler flèches ici : les flèches sont gérées par installDragSwipeScroll()
+
+    function orientationFlip(pw, ph, w, h) {
+        const prevPortrait = ph >= pw;
+        const nowPortrait = h >= w;
+        return prevPortrait !== nowPortrait;
+    }
+
+    function applyFooterTick() {
+        if (typeof window.__mobileFooterTick === 'function') {
+            window.__mobileFooterTick();
+        }
+    }
+
+    function handleResizeNow() {
+        raf = 0;
+        const { w, h, ot } = snapshotVV();
+        const dw = Math.abs(w - lastW);
+        const dh = Math.abs(h - lastH);
+        const dot = Math.abs(ot - lastOT);
+
+        const flip = orientationFlip(lastW, lastH, w, h);
+        const jiggle = !flip && dw <= WIDTH_JIGGLE && (dh <= HEIGHT_JIGGLE || dot <= OFFSET_JIGGLE);
+
+        if (jiggle) {
+            syncCssHeaderHeight();
+            updateMenuGeometry();
+            updateScrollDocHeight();
+            updateFreeOverlays();
+
+            const prevWorld = scrollOffsetWorld;
+            const nextWorld = computeScrollOffsetWorldFromScrollY();
+            scrollOffsetWorld = nextWorld;
+
+            if (mouseSquare?.userData?.anchor) {
+                mobileBuildScrollAt += (nextWorld - prevWorld);
             }
 
-            (function enableArrowKeyScroll() {
-                window.addEventListener('keydown', (e) => {
-                    if (!isLandscapeLike()) return;
-                    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-                    const pxW = STABLE_VP_W || window.innerWidth;
-                    const worldW = (camera.right - camera.left) || 1;
-                    const pxPerWorldX = pxW / worldW;
-                    const step = Math.round(pxW * 0.25) / pxPerWorldX;
-                    if (e.key === 'ArrowRight') { H.xWorld = Math.min((H.xWorld || 0) + step, H.maxWorld || 0); setContentTransformFromScroll(); e.preventDefault(); }
-                    if (e.key === 'ArrowLeft') { H.xWorld = Math.max((H.xWorld || 0) - step, 0); setContentTransformFromScroll(); e.preventDefault(); }
-                });
-            })();
+            applyFooterTick();
+            needsRefineCheck = true;
 
-            function orientationFlip(pw, ph, w, h) {
-                const prevPortrait = ph >= pw;
-                const nowPortrait = h >= w;
-                return prevPortrait !== nowPortrait;
-            }
+            lastW = w; lastH = h; lastOT = ot;
+            return;
+        }
 
-            function applyFooterTick() {
-                if (typeof window.__mobileFooterTick === 'function') {
-                    window.__mobileFooterTick();
-                }
-            }
+        const aspect = (w || 1) / (h || 1);
+        const height = 10;
+        const width = height * aspect;
 
-            function handleResizeNow() {
-                raf = 0;
-                const { w, h, ot } = snapshotVV();
-                const dw = Math.abs(w - lastW);
-                const dh = Math.abs(h - lastH);
-                const dot = Math.abs(ot - lastOT);
+        camera.left   = -width / 2;
+        camera.right  =  width / 2;
+        camera.top    =  height / 2;
+        camera.bottom = -height / 2;
+        camera.updateProjectionMatrix();
 
-                const flip = orientationFlip(lastW, lastH, w, h);
-                const jiggle = !flip && dw <= WIDTH_JIGGLE && (dh <= HEIGHT_JIGGLE || dot <= OFFSET_JIGGLE);
+        renderer.setSize(w, h);
 
-                if (jiggle) {
-                    syncCssHeaderHeight();
-                    updateMenuGeometry();
-                    updateScrollDocHeight();
-                    updateFreeOverlays();
+        STABLE_VP_W = w;
+        STABLE_VP_H = h;
 
-                    const prevWorld = scrollOffsetWorld;
-                    const nextWorld = computeScrollOffsetWorldFromScrollY();
-                    scrollOffsetWorld = nextWorld;
+        updateGrainPlaneSize();
+        syncCssHeaderHeight();
+        updateMenuGeometry();
+        applyFooterTick();
 
-                    if (mouseSquare?.userData?.anchor) {
-                        mobileBuildScrollAt += (nextWorld - prevWorld);
-                    }
+        const newBucket = pickBucket(w, h);
+        if (newBucket !== currentBucket) {
+            currentBucket = newBucket;
+            applyBucket();
+            reformGridKeepImages();
+            buildFreeOverlays();
+            lastGridCursorSizeWorld = computeDefaultGridCursorSize();
+            needsRefineCheck = true;
+            updateScrollDocHeight();
+            installDragSwipeScroll();
+        } else {
+            updateScrollDocHeight();
+            updateFreeOverlays();
+            needsRefineCheck = true;
+            installDragSwipeScroll();
+        }
 
-                    applyFooterTick();
-                    needsRefineCheck = true;
+        lastW = w;
+        lastH = h;
+        lastOT = ot;
+    }
 
-                    lastW = w; lastH = h; lastOT = ot;
-                    return;
-                }
+    function onResize() {
+        if (raf) return;
+        raf = requestAnimationFrame(handleResizeNow);
+    }
 
-                const aspect = (w || 1) / (h || 1);
-                const height = 10;
-                const width = height * aspect;
+    window.addEventListener('resize', onResize, { passive: true });
+    window.addEventListener('orientationchange', onResize, { passive: true });
+    if (window.visualViewport) {
+        visualViewport.addEventListener('resize', onResize, { passive: true });
+        visualViewport.addEventListener('scroll', onResize, { passive: true });
+    }
+})();
 
-                camera.left = -width / 2;
-                camera.right = width / 2;
-                camera.top = height / 2;
-                camera.bottom = -height / 2;
-                camera.updateProjectionMatrix();
-
-                renderer.setSize(w, h);
-
-                STABLE_VP_W = w;
-                STABLE_VP_H = h;
-
-                updateGrainPlaneSize();
-                syncCssHeaderHeight();
-                updateMenuGeometry();
-                applyFooterTick();
-
-                const newBucket = pickBucket(w, h);
-                if (newBucket !== currentBucket) {
-                    currentBucket = newBucket;
-                    applyBucket();
-                    reformGridKeepImages();
-                    buildFreeOverlays();
-                    lastGridCursorSizeWorld = computeDefaultGridCursorSize();
-                    needsRefineCheck = true;
-                    updateScrollDocHeight();
-                    installDragSwipeScroll();
-                } else {
-                    updateScrollDocHeight();
-                    updateFreeOverlays();
-                    needsRefineCheck = true;
-                    installDragSwipeScroll();
-                }
-
-                lastW = w; lastH = h; lastOT = ot;
-            }
-
-            function onResize() {
-                if (raf) return;
-                raf = requestAnimationFrame(handleResizeNow);
-            }
-
-            window.addEventListener('resize', onResize, { passive: true });
-            window.addEventListener('orientationchange', onResize, { passive: true });
-            if (window.visualViewport) {
-                visualViewport.addEventListener('resize', onResize, { passive: true });
-                visualViewport.addEventListener('scroll', onResize, { passive: true });
-            }
-        })();
 
 
 
