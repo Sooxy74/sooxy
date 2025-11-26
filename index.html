@@ -3356,19 +3356,31 @@ function onScroll() {
 
 
     function ensureGlobalLabelFontPx(lm) {
-    // lm est le retour de getLayoutMetrics(), mais ici on n'en a pas
-    // strictement besoin, il est juste passé pour cohérence.
-    const isMobileLike = isMobileBucket();
+    // On différencie un peu mieux :
+    // - desktop (tous formats paysage "larges")
+    // - tablette portrait
+    // - mobile portrait
+    const isMobilePortrait  = currentBucket === 'mobile-v';
+    const isTabletPortrait  = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
 
-    // Taille de base selon le device
-    const base = isMobileLike ? LABEL_MOBILE_PX : LABEL_DESKTOP_PX;
+    // Bases plus petites qu'avant
+    const baseDesktop = 13;  // avant ~14–15 visuellement
+    const baseTablet  = 12;  // un poil plus petit
+    const baseMobile  = 11;  // nettement plus raisonnable en mobile
 
-    // On scale un peu selon la taille de viewport
-    const scale = viewportLabelScaleFactor();
+    let base;
+    if (isMobilePortrait) {
+        base = baseMobile;
+    } else if (isTabletPortrait) {
+        base = baseTablet;
+    } else {
+        base = baseDesktop;
+    }
 
-    // Taille finale utilisée par les labels
+    const scale = viewportLabelScaleFactor(); // garde ta logique de scale existante
     return base * scale;
 }
+
 
 
 
@@ -3456,11 +3468,17 @@ function onScroll() {
         el.style.maxWidth = '';
     }
 
+    // Taille de base calculée en fonction du viewport + bucket
     const baseFontPx = ensureGlobalLabelFontPx(lm);
+
     const isDesktopBucket =
         currentBucket === 'desktop-16:9' ||
         currentBucket === 'desktop-21:9' ||
         currentBucket === 'desktop-32:9';
+
+    const isMobilePortrait  = currentBucket === 'mobile-v';
+    const isTabletPortrait  = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+    const isCompact         = isMobilePortrait || isTabletPortrait;
 
     const perPx =
         (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
@@ -3474,16 +3492,37 @@ function onScroll() {
 
     let finalFontPx;
 
-    if (isBlackSquare && isDesktopBucket) {
-        finalFontPx = Math.min(maxByWidth, baseFontPx * 1.05);
-        finalFontPx = Math.max(finalFontPx, 15);
+    if (isBlackSquare) {
+        // Paragraphes sous images
+        if (isCompact) {
+            // Mobile / tablette portrait → plus petit
+            finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
+            finalFontPx = Math.max(
+                finalFontPx,
+                isMobilePortrait ? 11 : 12    // mobile un peu + petit que tablette
+            );
+        } else {
+            // Desktop / paysage
+            finalFontPx = Math.min(maxByWidth, baseFontPx); // pas de boost > 100%
+            finalFontPx = Math.max(finalFontPx, 13);
+        }
     } else {
-        finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
-        finalFontPx = Math.max(finalFontPx, 13);
+        // Labels de boutons
+        if (isCompact) {
+            finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
+            finalFontPx = Math.max(
+                finalFontPx,
+                isMobilePortrait ? 10 : 11
+            );
+        } else {
+            finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
+            finalFontPx = Math.max(finalFontPx, 12);
+        }
     }
 
+    // Arrondi et bornes globales
     finalFontPx = Math.round(finalFontPx * 2) / 2;
-    finalFontPx = Math.max(10, Math.min(96, finalFontPx));
+    finalFontPx = Math.max(9, Math.min(64, finalFontPx)); // bornes un peu + serrées qu'avant
     el.style.fontSize = finalFontPx + 'px';
     el.style.color = '#f3f1ee';
 
@@ -3512,6 +3551,7 @@ function onScroll() {
     el.style.transform =
         `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
 }
+
 
 
 
