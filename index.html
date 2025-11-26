@@ -2967,7 +2967,7 @@ function onScroll() {
 
         // --- Texte : titre + lorem ipsum plus long ---
         const title = `Title ${index + 1}`;
-        const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco.`;
+        const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`;
 
         const labelText = `${title}\n${paragraph}`;
 
@@ -3288,15 +3288,16 @@ function onScroll() {
 
     // Carré noir = paragraphe sous les images (détecté au Lorem ipsum)
     const isBlackSquare = String(label).toLowerCase().includes('lorem ipsum');
+    st.isBlackSquare = isBlackSquare;   // on mémorise sur le state
 
     if (isBlackSquare) {
         el.classList.add('black-text');
-        el.style.transformOrigin = '0% 0%';   // coin haut-gauche
-        el.style.textAlign = 'left';
-    } else {
-        el.style.transformOrigin = '100% 0%'; // coin haut-droit (boutons)
-        el.style.textAlign = 'right';
     }
+
+    // on laisse une valeur par défaut, la vraie origine / alignement
+    // sera recalculée dans updateDomLabelLayout()
+    el.style.transformOrigin = '100% 0%';
+    el.style.textAlign = 'right';
 
     el.style.position = 'absolute';
     el.style.left = '0px';
@@ -3317,6 +3318,7 @@ function onScroll() {
     lines.forEach(line => {
         line.style.display = 'block';
         line.style.whiteSpace = isBlackSquare ? 'normal' : 'nowrap';
+        // l’alignement sera forcé dans updateDomLabelLayout()
         line.style.textAlign = isBlackSquare ? 'left' : 'right';
     });
 
@@ -3353,6 +3355,7 @@ function onScroll() {
     st.hovering = false;
     st.appearTriggered = false;
 }
+
 
 
     function ensureGlobalLabelFontPx(lm) {
@@ -3417,8 +3420,52 @@ function onScroll() {
 
     // Carrés noirs "paragraphe" (ceux sous les images)
     const isBlackSquare =
-        st.labelText &&
-        st.labelText.toLowerCase().includes('lorem ipsum');
+        !!st.isBlackSquare ||
+        (st.labelText && st.labelText.toLowerCase().includes('lorem ipsum'));
+
+    // Sommes-nous dans un format vertical ?
+    const isPortraitBucket =
+        currentBucket === 'mobile-v' ||
+        currentBucket === 'tablet-3:4' ||
+        currentBucket === 'tablet-9:16';
+
+    // Est-ce que ce carré noir est à gauche de l’image la plus proche ?
+    let isLeftOfImage = false;
+    if (isBlackSquare && isPortraitBucket) {
+        const cx = localX;
+        const cy = localY;
+
+        let bestD2 = Infinity;
+        let bestImageX = null;
+
+        for (const other of fractalState.values()) {
+            if (!other.isImage) continue;
+            const ox = other.currentPosition
+                ? other.currentPosition.x
+                : (other.mesh ? other.mesh.position.x : 0);
+            const oy = other.currentPosition
+                ? other.currentPosition.y
+                : (other.mesh ? other.mesh.position.y : 0);
+
+            const dx = ox - cx;
+            const dy = oy - cy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                bestImageX = ox;
+            }
+        }
+
+        if (bestImageX != null) {
+            // si l'image est à droite du texte → texte à gauche de l'image
+            if (bestImageX > cx + 1e-4) {
+                isLeftOfImage = true;
+            }
+        }
+    }
+
+    // Ici on décide si le texte doit être ferré à droite dans le carré
+    const alignRightInside = isBlackSquare && isPortraitBucket && isLeftOfImage;
 
     const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
     const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
@@ -3430,12 +3477,18 @@ function onScroll() {
     let txWorld, tyWorld;
 
     if (isBlackSquare) {
-        // Même marge à gauche que celle au-dessus du texte
+        // Même marge à gauche et à droite
         mLeftWorld  = dispS * marginPctTop;
         mRightWorld = mLeftWorld;
 
-        // Texte ancré en haut-gauche du carré, avec marges
-        txWorld = worldX - half + mLeftWorld;
+        if (alignRightInside) {
+            // Texte ferré à droite dans le carré
+            txWorld = worldX + half - mRightWorld;
+        } else {
+            // Texte ferré à gauche comme avant
+            txWorld = worldX - half + mLeftWorld;
+        }
+
         tyWorld = worldY + half - mTopWorld;
     } else {
         // Boutons "normaux" : ancrage haut-droit
@@ -3495,15 +3548,13 @@ function onScroll() {
     if (isBlackSquare) {
         // Paragraphes sous images
         if (isCompact) {
-            // Mobile / tablette portrait → plus petit
             finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
             finalFontPx = Math.max(
                 finalFontPx,
-                isMobilePortrait ? 11 : 12    // mobile un peu + petit que tablette
+                isMobilePortrait ? 11 : 12
             );
         } else {
-            // Desktop / paysage
-            finalFontPx = Math.min(maxByWidth, baseFontPx); // pas de boost > 100%
+            finalFontPx = Math.min(maxByWidth, baseFontPx);
             finalFontPx = Math.max(finalFontPx, 13);
         }
     } else {
@@ -3522,7 +3573,7 @@ function onScroll() {
 
     // Arrondi et bornes globales
     finalFontPx = Math.round(finalFontPx * 2) / 2;
-    finalFontPx = Math.max(9, Math.min(64, finalFontPx)); // bornes un peu + serrées qu'avant
+    finalFontPx = Math.max(9, Math.min(64, finalFontPx));
     el.style.fontSize = finalFontPx + 'px';
     el.style.color = '#f3f1ee';
 
@@ -3530,11 +3581,9 @@ function onScroll() {
     if (!st.appearTriggered && ratio >= 0.8) {
         st.appearTriggered = true;
 
-        // Apparition brutale du texte (sans fade fancy)
+        // Apparition brutale du texte
         el.style.opacity = '1';
 
-        // Si baffle existe ET que ce label n’a jamais été animé,
-        // on joue l’animation une seule fois et on marque le flag.
         if (st.baffles && !st.hasAnimatedBaffle) {
             st.hasAnimatedBaffle = true;
             st.baffles.forEach(b => {
@@ -3544,13 +3593,32 @@ function onScroll() {
         }
     }
 
+    // Alignement final (en tenant compte des CSS !important)
+    const desiredAlign = isBlackSquare
+        ? (alignRightInside ? 'right' : 'left')
+        : 'right';
+
+    el.style.setProperty('text-align', desiredAlign, 'important');
+    if (st.lines) {
+        st.lines.forEach(line => {
+            line.style.setProperty('text-align', desiredAlign, 'important');
+        });
+    }
+
+    // Origine de transform pour coller à l’alignement
+    const originX = (isBlackSquare && !alignRightInside) ? '0%' : '100%';
+    el.style.transformOrigin = `${originX} 0%`;
+
     // Projection monde → pixels
     const p = worldToClientXY(new THREE.Vector3(txWorld, tyWorld, 0));
-    const translateX = isBlackSquare ? 'translateX(0%)' : 'translateX(-100%)';
+    const translateX = (isBlackSquare && !alignRightInside)
+        ? 'translateX(0%)'
+        : 'translateX(-100%)';
 
     el.style.transform =
         `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
 }
+
 
 
 
