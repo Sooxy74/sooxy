@@ -1775,138 +1775,201 @@ function onScroll() {
 
 
         function installDragSwipeScroll() {
-            const dragTarget = document.getElementById('webgl-canvas') || window;
-            const html = document.documentElement;
-            const body = document.body;
+    const dragTarget = document.getElementById('webgl-canvas') || window;
+    const html = document.documentElement;
+    const body = document.body;
 
-            if (window.__pointerDrag) { dragTarget.removeEventListener('pointerdown', window.__pointerDrag); window.__pointerDrag = null; }
-            if (window.__pointerMove) { window.removeEventListener('pointermove', window.__pointerMove); window.__pointerMove = null; }
-            if (window.__pointerUp) { window.removeEventListener('pointerup', window.__pointerUp); window.__pointerUp = null; }
-            if (window.__pointerCancel) { window.removeEventListener('pointercancel', window.__pointerCancel); window.__pointerCancel = null; }
-            if (window.__wheelScroll) { window.removeEventListener('wheel', window.__wheelScroll); window.__wheelScroll = null; }
-            if (window.__arrowScroll) { window.removeEventListener('keydown', window.__arrowScroll); window.__arrowScroll = null; }
+    // Nettoyage des anciens handlers (comme avant)
+    if (window.__pointerDrag)   { dragTarget.removeEventListener('pointerdown', window.__pointerDrag);   window.__pointerDrag = null; }
+    if (window.__pointerMove)   { window.removeEventListener('pointermove', window.__pointerMove);       window.__pointerMove = null; }
+    if (window.__pointerUp)     { window.removeEventListener('pointerup', window.__pointerUp);           window.__pointerUp = null; }
+    if (window.__pointerCancel) { window.removeEventListener('pointercancel', window.__pointerCancel);   window.__pointerCancel = null; }
+    if (window.__wheelScroll)   { window.removeEventListener('wheel', window.__wheelScroll);             window.__wheelScroll = null; }
+    if (window.__arrowScroll)   { window.removeEventListener('keydown', window.__arrowScroll);           window.__arrowScroll = null; }
 
-            const isLand = isLandscapeLike();
-            html.style.setProperty('overscroll-behavior-x', 'none', 'important');
-            html.style.setProperty('overscroll-behavior-y', 'none', 'important');
-            html.style.setProperty('touch-action', 'none', 'important');
-            html.style.setProperty('overflow', 'hidden', 'important');
-            body.style.setProperty('touch-action', 'none', 'important');
-            body.style.setProperty('overflow', 'hidden', 'important');
-            body.style.setProperty('position', 'fixed', 'important');
-            body.style.setProperty('width', '100%', 'important');
-            body.style.setProperty('top', '0', 'important');
-            body.style.setProperty('left', '0', 'important');
-            if (dragTarget && dragTarget.style) dragTarget.style.setProperty('touch-action', 'none', 'important');
+    const isLand = isLandscapeLike();
 
-            const pxPerWorldX = () => {
-                const pxW = STABLE_VP_W || window.innerWidth;
-                const worldW = (camera.right - camera.left) || 1;
-                return pxW / worldW;
-            };
-            const pxPerWorldY = () => {
-                const pxH = STABLE_VP_H || window.innerHeight;
-                const worldH = (camera.top - camera.bottom) || 1;
-                return pxH / worldH;
-            };
+    // On verrouille le scroll natif comme avant
+    html.style.setProperty('overscroll-behavior-x', 'none', 'important');
+    html.style.setProperty('overscroll-behavior-y', 'none', 'important');
+    html.style.setProperty('touch-action', 'none', 'important');
+    html.style.setProperty('overflow', 'hidden', 'important');
 
-            const setXWorld = (v) => {
-                const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-                const maxW = Math.max(0, H.maxWorld || 0);
-                H.xWorld = Math.max(0, Math.min(v, maxW));
-                setContentTransformFromScroll();
-            };
-            const setYWorld = (v) => {
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
-                const maxH = Math.max(0, V.maxWorld || 0);
-                V.yWorld = Math.max(0, Math.min(v, maxH));
-                setContentTransformFromScroll();
-            };
+    body.style.setProperty('touch-action', 'none', 'important');
+    body.style.setProperty('overflow', 'hidden', 'important');
+    body.style.setProperty('position', 'fixed', 'important');
+    body.style.setProperty('width', '100%', 'important');
+    body.style.setProperty('top', '0', 'important');
+    body.style.setProperty('left', '0', 'important');
 
-            const updateMouseFromClient = (ev) => {
-                const W = STABLE_VP_W || window.innerWidth;
-                const H = STABLE_VP_H || window.innerHeight;
-                const nx = (ev.clientX / W) * 2 - 1;
-                const ny = -(ev.clientY / H) * 2 + 1;
-                lastMouseScreenPos.set(nx, ny);
-                needsRefineCheck = true;
-            };
+    if (dragTarget && dragTarget.style) {
+        dragTarget.style.setProperty('touch-action', 'none', 'important');
+    }
 
-            let dragId = null, startX = 0, startY = 0, startWorld = 0, dragging = false;
+    const pxPerWorldX = () => {
+        const pxW = STABLE_VP_W || window.innerWidth;
+        const worldW = (camera.right - camera.left) || 1;
+        return pxW / worldW;
+    };
 
-            window.__pointerDrag = (ev) => {
-                updateMouseFromClient(ev);
-                dragging = true;
-                dragId = ev.pointerId;
-                startX = ev.clientX;
-                startY = ev.clientY;
-                startWorld = isLand ? ((scene.userData._hscroll || {}).xWorld || 0) : ((scene.userData._vscroll || {}).yWorld || 0);
-                dragTarget.setPointerCapture?.(dragId);
-                ev.preventDefault();
-            };
+    const pxPerWorldY = () => {
+        const pxH = STABLE_VP_H || window.innerHeight;
+        const worldH = (camera.top - camera.bottom) || 1;
+        return pxH / worldH;
+    };
 
-            window.__pointerMove = (ev) => {
-                if (!dragging || ev.pointerId !== dragId) return;
-                updateMouseFromClient(ev);
-                if (isLand) {
-                    const dx = ev.clientX - startX;
-                    setXWorld(startWorld - dx / pxPerWorldX());
-                } else {
-                    const dy = ev.clientY - startY;
-                    setYWorld(startWorld - dy / pxPerWorldY());
-                }
-                ev.preventDefault();
-            };
+    // 🔥 Helper : marque qu’on est en train de "scroller logiquement"
+    const markLogicalScroll = () => {
+        isScrolling = true;
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            isScrolling = false;
+        }, 120); // fenêtre courte après le dernier mouvement
+    };
 
-            window.__pointerUp = (ev) => {
-                if (ev.pointerId === dragId) {
-                    updateMouseFromClient(ev);
-                    dragging = false; dragId = null;
-                    dragTarget.releasePointerCapture?.(ev.pointerId);
-                    ev.preventDefault();
-                }
-            };
+    const setXWorld = (v) => {
+        const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+        const maxW = Math.max(0, H.maxWorld || 0);
+        const next = Math.max(0, Math.min(v, maxW));
 
-            window.__pointerCancel = window.__pointerUp;
-
-            dragTarget.addEventListener('pointerdown', window.__pointerDrag, { passive: false });
-            window.addEventListener('pointermove', window.__pointerMove, { passive: false });
-            window.addEventListener('pointerup', window.__pointerUp, { passive: false });
-            window.addEventListener('pointercancel', window.__pointerCancel, { passive: false });
-
-            const WHEEL_SENS = 1;
-
-            window.__wheelScroll = (e) => {
-                if (isLand) {
-                    const absY = Math.abs(e.deltaY), absX = Math.abs(e.deltaX);
-                    const delta = (absX > absY ? e.deltaX : e.deltaY) * WHEEL_SENS;
-                    setXWorld(((scene.userData._hscroll || {}).xWorld || 0) + delta / pxPerWorldX());
-                } else {
-                    const absY = Math.abs(e.deltaY), absX = Math.abs(e.deltaX);
-                    const delta = (absY >= absX ? e.deltaY : e.deltaX) * WHEEL_SENS;
-                    setYWorld(((scene.userData._vscroll || {}).yWorld || 0) + delta / pxPerWorldY());
-                }
-                e.preventDefault();
-            };
-            window.addEventListener('wheel', window.__wheelScroll, { passive: false });
-
-            window.__arrowScroll = (e) => {
-                if (isLand) {
-                    const stepPx = Math.round((STABLE_VP_W || window.innerWidth) * 0.25);
-                    const worldW = (camera.right - camera.left) || 1;
-                    const stepW = stepPx / ((STABLE_VP_W || window.innerWidth) / worldW);
-                    if (e.key === 'ArrowRight') { setXWorld(((scene.userData._hscroll || {}).xWorld || 0) + stepW); e.preventDefault(); }
-                    if (e.key === 'ArrowLeft') { setXWorld(((scene.userData._hscroll || {}).xWorld || 0) - stepW); e.preventDefault(); }
-                } else {
-                    const stepPx = Math.round((STABLE_VP_H || window.innerHeight) * 0.25);
-                    const worldH = (camera.top - camera.bottom) || 1;
-                    const stepH = stepPx / ((STABLE_VP_H || window.innerHeight) / worldH);
-                    if (e.key === 'ArrowDown') { setYWorld(((scene.userData._vscroll || {}).yWorld || 0) + stepH); e.preventDefault(); }
-                    if (e.key === 'ArrowUp') { setYWorld(((scene.userData._vscroll || {}).yWorld || 0) - stepH); e.preventDefault(); }
-                }
-            };
-            window.addEventListener('keydown', window.__arrowScroll);
+        if (next !== H.xWorld) {
+            H.xWorld = next;
+            markLogicalScroll();          // ⬅️ on note le scroll
         }
+
+        setContentTransformFromScroll();
+    };
+
+    const setYWorld = (v) => {
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 10, gapRows: 0 });
+        const maxH = Math.max(0, V.maxWorld || 0);
+        const next = Math.max(0, Math.min(v, maxH));
+
+        if (next !== V.yWorld) {
+            V.yWorld = next;
+            markLogicalScroll();          // ⬅️ on note le scroll
+        }
+
+        setContentTransformFromScroll();
+    };
+
+    const updateMouseFromClient = (ev) => {
+        const W = STABLE_VP_W || window.innerWidth;
+        const H = STABLE_VP_H || window.innerHeight;
+        const nx = (ev.clientX / W) * 2 - 1;
+        const ny = -(ev.clientY / H) * 2 + 1;
+        lastMouseScreenPos.set(nx, ny);
+        needsRefineCheck = true;
+    };
+
+    let dragId = null;
+    let startX = 0;
+    let startY = 0;
+    let startWorld = 0;
+    let dragging = false;
+
+    window.__pointerDrag = (ev) => {
+        updateMouseFromClient(ev);
+        dragging = true;
+        dragId = ev.pointerId;
+        startX = ev.clientX;
+        startY = ev.clientY;
+        startWorld = isLand
+            ? ((scene.userData._hscroll || {}).xWorld || 0)
+            : ((scene.userData._vscroll || {}).yWorld || 0);
+
+        dragTarget.setPointerCapture?.(dragId);
+        ev.preventDefault();
+    };
+
+    window.__pointerMove = (ev) => {
+        if (!dragging || ev.pointerId !== dragId) return;
+        updateMouseFromClient(ev);
+
+        if (isLand) {
+            const dx = ev.clientX - startX;
+            setXWorld(startWorld - dx / pxPerWorldX());
+        } else {
+            const dy = ev.clientY - startY;
+            setYWorld(startWorld - dy / pxPerWorldY());
+        }
+
+        ev.preventDefault();
+    };
+
+    window.__pointerUp = (ev) => {
+        if (ev.pointerId === dragId) {
+            updateMouseFromClient(ev);
+            dragging = false;
+            dragId = null;
+            dragTarget.releasePointerCapture?.(ev.pointerId);
+            ev.preventDefault();
+        }
+    };
+
+    window.__pointerCancel = window.__pointerUp;
+
+    dragTarget.addEventListener('pointerdown', window.__pointerDrag, { passive: false });
+    window.addEventListener('pointermove', window.__pointerMove, { passive: false });
+    window.addEventListener('pointerup', window.__pointerUp, { passive: false });
+    window.addEventListener('pointercancel', window.__pointerCancel, { passive: false });
+
+    const WHEEL_SENS = 1;
+
+    window.__wheelScroll = (e) => {
+        if (isLand) {
+            const absY = Math.abs(e.deltaY);
+            const absX = Math.abs(e.deltaX);
+            const delta = (absX > absY ? e.deltaX : e.deltaY) * WHEEL_SENS;
+            const current = ((scene.userData._hscroll || {}).xWorld || 0);
+            setXWorld(current + delta / pxPerWorldX());
+        } else {
+            const absY = Math.abs(e.deltaY);
+            const absX = Math.abs(e.deltaX);
+            const delta = (absY >= absX ? e.deltaY : e.deltaX) * WHEEL_SENS;
+            const current = ((scene.userData._vscroll || {}).yWorld || 0);
+            setYWorld(current + delta / pxPerWorldY());
+        }
+        e.preventDefault();
+    };
+    window.addEventListener('wheel', window.__wheelScroll, { passive: false });
+
+    window.__arrowScroll = (e) => {
+        if (isLand) {
+            const stepPx = Math.round((STABLE_VP_W || window.innerWidth) * 0.25);
+            const worldW = (camera.right - camera.left) || 1;
+            const stepW = stepPx / ((STABLE_VP_W || window.innerWidth) / worldW);
+
+            if (e.key === 'ArrowRight') {
+                const current = ((scene.userData._hscroll || {}).xWorld || 0);
+                setXWorld(current + stepW);
+                e.preventDefault();
+            }
+            if (e.key === 'ArrowLeft') {
+                const current = ((scene.userData._hscroll || {}).xWorld || 0);
+                setXWorld(current - stepW);
+                e.preventDefault();
+            }
+        } else {
+            const stepPx = Math.round((STABLE_VP_H || window.innerHeight) * 0.25);
+            const worldH = (camera.top - camera.bottom) || 1;
+            const stepH = stepPx / ((STABLE_VP_H || window.innerHeight) / worldH);
+
+            if (e.key === 'ArrowDown') {
+                const current = ((scene.userData._vscroll || {}).yWorld || 0);
+                setYWorld(current + stepH);
+                e.preventDefault();
+            }
+            if (e.key === 'ArrowUp') {
+                const current = ((scene.userData._vscroll || {}).yWorld || 0);
+                setYWorld(current - stepH);
+                e.preventDefault();
+            }
+        }
+    };
+    window.addEventListener('keydown', window.__arrowScroll);
+}
+
 
 
 
@@ -4288,45 +4351,66 @@ function onScroll() {
 
 
         function refineTargetStateAt(worldPos) {
-            const { contentTop } = getLayoutMetrics();
-            if (isMobileBucket()) return false;
-            if (worldPos.y >= contentTop) return false;
+    const { contentTop } = getLayoutMetrics();
 
-            let refined = false, it = 0;
-            const maxIt = Math.max(1, refineBudgetPerFrame | 0);
+    // 🚫 Tant qu’on est en train de scroller (drag / wheel / flèches),
+    // on ne subdivise pas la grille.
+    if (isScrolling) return false;
 
-            const sp = (scene.userData._hoverSpawn ||= new Set());
-            const vn = (scene.userData._hoverVanish ||= new Set());
+    if (isMobileBucket()) return false;
+    if (worldPos.y >= contentTop) return false;
 
-            const isLand = isLandscapeLike();
-            const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+    let refined = false, it = 0;
+    const maxIt = Math.max(1, refineBudgetPerFrame | 0);
 
-            while (it < maxIt) {
-                it++;
-                const leaf = findLeafAt(worldPos, targetState);
-                if (!leaf) break;
-                if (imageCells.has(leaf.path) || buttonCells.has(leaf.path)) break;
-                if (leaf.depth < limit) {
-                    refined = true;
-                    targetState.delete(leaf.path);
-                    vn.add(leaf.path);
-                    const x = leaf.x, y = leaf.y, os = leaf.originalSize, d = leaf.depth, p = leaf.path;
-                    const ns = os / 2, nd = d + 1, o = os / 4;
-                    createQuadTree(x - o, y + o, ns, nd, p + '/0', nd);
-                    createQuadTree(x + o, y + o, ns, nd, p + '/1', nd);
-                    createQuadTree(x - o, y - o, ns, nd, p + '/2', nd);
-                    createQuadTree(x + o, y - o, ns, nd, p + '/3', nd);
-                    const c0 = p + '/0', c1 = p + '/1', c2 = p + '/2', c3 = p + '/3';
-                    if (targetState.has(c0)) sp.add(c0);
-                    if (targetState.has(c1)) sp.add(c1);
-                    if (targetState.has(c2)) sp.add(c2);
-                    if (targetState.has(c3)) sp.add(c3);
-                } else {
-                    break;
-                }
-            }
-            return refined;
+    const sp = (scene.userData._hoverSpawn ||= new Set());
+    const vn = (scene.userData._hoverVanish ||= new Set());
+
+    const isLand = isLandscapeLike();
+    const limit = isLand ? (TARGET_DEPTH + 1) : TARGET_DEPTH;
+
+    while (it < maxIt) {
+        it++;
+        const leaf = findLeafAt(worldPos, targetState);
+        if (!leaf) break;
+        if (imageCells.has(leaf.path) || buttonCells.has(leaf.path)) break;
+
+        if (leaf.depth < limit) {
+            refined = true;
+            targetState.delete(leaf.path);
+            vn.add(leaf.path);
+
+            const x = leaf.x;
+            const y = leaf.y;
+            const os = leaf.originalSize;
+            const d = leaf.depth;
+            const p = leaf.path;
+
+            const ns = os / 2;
+            const nd = d + 1;
+            const o = os / 4;
+
+            createQuadTree(x - o, y + o, ns, nd, p + '/0', nd);
+            createQuadTree(x + o, y + o, ns, nd, p + '/1', nd);
+            createQuadTree(x - o, y - o, ns, nd, p + '/2', nd);
+            createQuadTree(x + o, y - o, ns, nd, p + '/3', nd);
+
+            const c0 = p + '/0';
+            const c1 = p + '/1';
+            const c2 = p + '/2';
+            const c3 = p + '/3';
+
+            if (targetState.has(c0)) sp.add(c0);
+            if (targetState.has(c1)) sp.add(c1);
+            if (targetState.has(c2)) sp.add(c2);
+            if (targetState.has(c3)) sp.add(c3);
+        } else {
+            break;
         }
+    }
+    return refined;
+}
+
 
 
         function computeDefaultGridCursorSize() {
