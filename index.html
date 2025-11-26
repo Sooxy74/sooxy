@@ -2114,97 +2114,105 @@ function onScroll() {
 
 
         function updateFractalBase(forceFull = false) {
-            if (forceFull) targetState.clear();
+    if (forceFull) targetState.clear();
 
-            const { w } = getLayoutMetrics();
-            const preset = presetForBucket(currentBucket);
+    const { w } = getLayoutMetrics();
+    const preset = presetForBucket(currentBucket);
 
-            if (!preset) {
-                ensureFallbackButtons();
-                return true;
-            }
+    if (!preset) {
+        ensureFallbackButtons();
+        return true;
+    }
 
-            const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
+    const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
 
-            const FORCE_D1 = new Set();
-            (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
-            (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
+    const FORCE_D1 = new Set();
+    (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
+    (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            let totalRows;
-            if (isMobileBucket()) {
-                totalRows = mobileRowsNeeded();
-            } else {
-                const { contentTop } = getLayoutMetrics();
-                const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
-                totalRows = Math.max(baseRowsPrimary, visibleRows);
-            }
+    let totalRows;
+    if (isMobileBucket()) {
+        totalRows = mobileRowsNeeded();
+    } else {
+        const { contentTop } = getLayoutMetrics();
+        const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
+        totalRows = Math.max(baseRowsPrimary, visibleRows);
+    }
 
-            const offsetCols = contentOffsetColsForBucket();
-            const contentCols = contentColsForBucket();
+    const offsetCols = contentOffsetColsForBucket();
+    const contentCols = contentColsForBucket();
 
-            for (let row = 0; row < totalRows; row++) {
-                const isPrimary = row < baseRowsPrimary;
-                const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
+    // --- création de la base content/filler ---
+    for (let row = 0; row < totalRows; row++) {
+        const isPrimary = row < baseRowsPrimary;
+        const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
 
-                for (let col = 0; col < colsThisRow; col++) {
-                    const pref = isPrimary ? 'content' : 'filler';
-                    const path = `${pref}/${row}/${col}`;
+        for (let col = 0; col < colsThisRow; col++) {
+            const pref = isPrimary ? 'content' : 'filler';
+            const path = `${pref}/${row}/${col}`;
 
-                    const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
-                    const y = (getLayoutMetrics().contentTop) - row * w - w / 2;
+            const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
+            const y = (getLayoutMetrics().contentTop) - row * w - w / 2;
 
-                    const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
-                    createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
-                }
-
-                if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
-            }
-
-            for (let row = 0; row < totalRows; row++) {
-                addRightFillersForOverlayPattern(row, offsetCols);
-            }
-
-            if (currentBucket === 'desktop-21:9' || currentBucket === 'desktop-32:9') {
-                for (let row = 0; row < totalRows; row++) {
-                    addUltrawideRightFiller(row, offsetCols);
-                }
-            }
-
-            if (!isMobileBucket()) {
-                enforceNoD1InColumns(NO_D1_CONTENT_COLS);
-                enforceNoD1InSideFillers();
-
-                const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
-                const protectedD1Paths = new Set();
-                (preset?.buttons || []).forEach(b => { if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`); });
-
-                ensureMinDepth2Cells(requiredD2, 0, protectedD1Paths);
-            }
-
-            if (isMobileBucket()) {
-                forceMobilePattern();
-            }
-            cutOutUnderButtons();
-
-            dedupeTargetState();
-            forceNoD1GlobalExceptFixed();
-
-            sprinkleRefinements(isMobileBucket() ? 12 : 12);
-
-            if (!isMobileBucket() && isLandscapeLike()) {
-                enforceD2AdjacencyConstraint();
-            }
-
-            if (!isMobileBucket()) {
-                enforceDepth6AdjacencyConstraint();
-            }
-
-            if (!isMobileBucket()) {
-                enforceNoD1InColumns(NO_D1_CONTENT_COLS);
-            }
-
-            return true;
+            const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
+            createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
         }
+
+        if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
+    }
+
+    for (let row = 0; row < totalRows; row++) {
+        addRightFillersForOverlayPattern(row, offsetCols);
+    }
+
+    if (currentBucket === 'desktop-21:9' || currentBucket === 'desktop-32:9') {
+        for (let row = 0; row < totalRows; row++) {
+            addUltrawideRightFiller(row, offsetCols);
+        }
+    }
+
+    if (!isMobileBucket()) {
+        enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+        enforceNoD1InSideFillers();
+
+        const requiredD2 = (BUTTONS_ON_D2 ? REQUIRED_BUTTONS : 0) + WANT_D2;
+        const protectedD1Paths = new Set();
+        (preset?.buttons || []).forEach(b => {
+            if (b.size === 'D1') protectedD1Paths.add(`content/${b.row}/${b.col}`);
+        });
+
+        ensureMinDepth2Cells(requiredD2, 0, protectedD1Paths);
+    }
+
+    if (isMobileBucket()) {
+        forceMobilePattern();
+    }
+
+    // Nettoyage / contraintes générales
+    cutOutUnderButtons();
+    dedupeTargetState();
+    forceNoD1GlobalExceptFixed();
+
+    // ⚠️ IMPORTANT : on ne fait des raffinements aléatoires que lors
+    // d'une reconstruction "complète" (forceFull = true).
+    // Les rebuilds dus au scroll (forceFull = false) n'ajoutent plus
+    // de subdivisions partout dans la grille.
+    if (forceFull) {
+        sprinkleRefinements(isMobileBucket() ? 12 : 12);
+    }
+
+    if (!isMobileBucket() && isLandscapeLike()) {
+        enforceD2AdjacencyConstraint();
+    }
+
+    if (!isMobileBucket()) {
+        enforceDepth6AdjacencyConstraint();
+        enforceNoD1InColumns(NO_D1_CONTENT_COLS);
+    }
+
+    return true;
+}
+
 
 
         function enforceD2AdjacencyConstraint() {
@@ -2579,42 +2587,61 @@ function onScroll() {
 
 
         function reformGridKeepImages() {
-            scene.userData = scene.userData || {};
-            scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
-            globalClickNonce = (globalClickNonce + 1) | 0;
-            forceRecreateLabelsOnce = true;
-            reseed(globalClickNonce);
+    scene.userData = scene.userData || {};
+    scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
+    globalClickNonce = (globalClickNonce + 1) | 0;
+    forceRecreateLabelsOnce = true;
+    reseed(globalClickNonce);
 
-            for (const [key, st] of Array.from(fractalState.entries())) {
-                if (st.isImage) continue;
-                if (st.mesh) {
-                    contentGroup.remove(st.mesh);
-                    meshPool.push(st.mesh);
-                }
-                if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
-                if (st.labelSprite) { scene.remove(st.labelSprite); }
-                if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-                if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                fractalState.delete(key);
-            }
+    // on garde uniquement les états liés aux images
+    for (const [key, st] of Array.from(fractalState.entries())) {
+        if (st.isImage) continue;
 
-            if (typeof instantKill !== 'undefined' && instantKill.clear) instantKill.clear();
-
-            targetState.clear();
-            buttonCells.clear();
-            buttonSlots.clear();
-            imageSlots.clear();
-
-            if (isMobileBucket()) mobileWorldContentHeight = 0;
-
-            updateFractalBase(false);
-            buildFreeOverlays();
-            syncStateToMeshes();
-            needsRefineCheck = true;
-            updateScrollDocHeight();
-            forceBrowserToLayoutForHScroll();
+        if (st.mesh) {
+            contentGroup.remove(st.mesh);
+            meshPool.push(st.mesh);
         }
+        if (st.dotMesh) {
+            contentGroup.remove(st.dotMesh);
+            dotMeshPool.push(st.dotMesh);
+        }
+        if (st.labelSprite) {
+            scene.remove(st.labelSprite);
+        }
+        if (st.domLabelEl) {
+            st.domLabelEl.remove();
+            st.domLabelEl = null;
+        }
+        if (st.baffles) {
+            st.baffles.forEach(b => b.stop());
+            st.baffles = null;
+        }
+        if (st.occluderMesh) {
+            contentGroup.remove(st.occluderMesh);
+            st.occluderMesh = null;
+        }
+        fractalState.delete(key);
+    }
+
+    if (typeof instantKill !== 'undefined' && instantKill.clear) instantKill.clear();
+
+    targetState.clear();
+    buttonCells.clear();
+    buttonSlots.clear();
+    imageSlots.clear();
+
+    if (isMobileBucket()) mobileWorldContentHeight = 0;
+
+    // 🔁 ici on veut un rebuild "riche" (clic → nouvelle fractale),
+    // donc on utilise forceFull = true pour réactiver sprinkleRefinements.
+    updateFractalBase(true);
+    buildFreeOverlays();
+    syncStateToMeshes();
+    needsRefineCheck = true;
+    updateScrollDocHeight();
+    forceBrowserToLayoutForHScroll();
+}
+
 
 
         function simplifyGrid() {
