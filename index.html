@@ -160,7 +160,24 @@
             pointer-events: none;
             position: relative;
         }
+        
+        #category-label {
+            position: absolute;
+            left: calc(var(--menu-gap) * 2);
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-weight: 700;
+            font-size: 28.8px;
+            color: #f3f1ee;
+            letter-spacing: .02em;
+            pointer-events: none;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
 
+        
         #nav-links {
             display: flex;
             gap: calc(var(--menu-gap) * 2);
@@ -249,24 +266,34 @@
         }
 
         @media (orientation: portrait) and (max-width: 1024px) {
-            #header-inner {
-                justify-content: center;
-            }
+    #header-inner {
+        justify-content: center;
+    }
 
-            #nav-links {
-                display: none !important;
-            }
+    #nav-links {
+        display: none !important;
+    }
 
-            #logo-link {
-                margin-left: 0;
-            }
+    #logo-link {
+        margin-left: 0;
+    }
 
-            #mobile-left,
-            #mobile-right {
-                display: inline-flex;
-                align-items: center;
-            }
-        }
+    #mobile-left,
+    #mobile-right {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    #mobile-right {
+        right: var(--menu-gap);
+        left: auto;
+    }
+
+    #mobile-left {
+        left: auto;
+        right: calc(2 * var(--menu-gap) + var(--menu-h));
+    }
+}
 
         @media (orientation: landscape) {
             #header-inner {
@@ -496,31 +523,36 @@
     <div id="loader-overlay">[ 0% ]</div>
 
     <header id="ui-header" aria-label="Top menu">
-        <div id="header-inner">
-            <a id="mobile-left" href="#about" aria-label="About / Info">
-                <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path fill="#f3f1ee"
-                        d="M119.5,61.73c-7.8,0-14.72,3.82-19,9.69-4.28-5.87-11.2-9.69-19-9.69h-26.5v68h33c4.68,0,8.49,3.81,8.5,8.49v.05s9-.04,9-.04c0-4.69,3.81-8.5,8.5-8.5h31V61.73h-25.5ZM88,120.73h-24v-50h17.5c8,0,14.5,6.5,14.5,14.5v.04l.35,37.58c-2.48-1.36-5.33-2.13-8.35-2.13ZM136,120.73h-22c-3.14,0-6.09.85-8.64,2.3l-.36-37.81c0-7.99,6.51-14.49,14.5-14.49h16.5v50Z" />
-                </svg>
+    <div id="header-inner">
 
-            </a>
-            <nav id="nav-links" aria-label="Primary">
-                <a class="nav-btn" href="#about">[ ABOUT ]</a>
-                <a class="nav-btn" href="#contact">[ CONTACT ]</a>
-            </nav>
-            <a id="logo-link" href="/" aria-label="Home">
-                <img id="logo-overlay" src="img/logo-sooxy-art.png" alt="Logo Sooxy Art" loading="eager"
-                    decoding="async" />
-            </a>
-            <a id="mobile-right" href="#contact" aria-label="Contact">
-                <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path fill="#f3f1ee"
-                        d="M55,136h90v-72H55v72ZM64,73h72v7.29l-36.47,23.82-35.53-23.85v-7.25ZM64,91.09l35.47,23.81,36.53-23.86v35.96h-72v-35.91Z" />
-                </svg>
+        <div id="category-label">Fractal Art</div>
 
-            </a>
-        </div>
-    </header>
+        <a id="mobile-left" href="#about" aria-label="About / Info">
+            <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path fill="#f3f1ee"
+                    d="M119.5,61.73c-7.8,0-14.72,3.82-19,9.69-4.28-5.87-11.2-9.69-19-9.69h-26.5v68h33c4.68,0,8.49,3.81,8.5,8.49v.05s9-.04,9-.04c0-4.69,3.81-8.5,8.5-8.5h31V61.73h-25.5ZM88,120.73h-24v-50h17.5c8,0,14.5,6.5,14.5,14.5v.04l.35,37.58c-2.48-1.36-5.33-2.13-8.35-2.13ZM136,120.73h-22c-3.14,0-6.09.85-8.64,2.3l-.36-37.81c0-7.99,6.51-14.49,14.5-14.49h16.5v50Z" />
+            </svg>
+        </a>
+
+        <nav id="nav-links" aria-label="Primary">
+            <a class="nav-btn" href="#about">[ ABOUT ]</a>
+            <a class="nav-btn" href="#contact">[ CONTACT ]</a>
+        </nav>
+
+        <a id="logo-link" href="/" aria-label="Home">
+            <img id="logo-overlay" src="img/logo-sooxy-art.png" alt="Logo Sooxy Art" loading="eager"
+                decoding="async" />
+        </a>
+
+        <a id="mobile-right" href="#contact" aria-label="Contact">
+            <svg class="mobile-icon" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path fill="#f3f1ee"
+                    d="M55,136h90v-72H55v72ZM64,73h72v7.29l-36.47,23.82-35.53-23.85v-7.25ZM64,91.09l35.47,23.81,36.53-23.86v35.96h-72v-35.91Z" />
+            </svg>
+        </a>
+    </div>
+</header>
+
 
     <div id="scroll-spacer" aria-hidden="true"></div>
 
@@ -1191,6 +1223,15 @@
         async function bootstrap() {
             await document.fonts.ready;
 
+            // --- CORRECTION : On calcule le layout et on applique la taille du texte TOUT DE SUITE ---
+            const w = window.innerWidth, h = window.innerHeight;
+            currentBucket = pickBucket(w, h);
+            applyBucket();
+
+            // On force la taille du label "Fractal Art" maintenant, avant le chargement des images
+            syncCategoryLabelSize(getLayoutMetrics());
+            // ----------------------------------------------------------------------------------------
+
             const onProgress = (current, total) => {
                 if (loaderOverlay) {
                     const percent = Math.min(100, Math.floor((current / total) * 100));
@@ -1198,13 +1239,11 @@
                 }
             };
 
+            // Ensuite seulement, on lance le scan d'images (qui peut prendre du temps)
             await scanLocalImages(onProgress);
             FontMetrics.init();
-            if (loaderOverlay) loaderOverlay.textContent = `[ 100% ]`;
 
-            const w = window.innerWidth, h = window.innerHeight;
-            currentBucket = pickBucket(w, h);
-            applyBucket();
+            if (loaderOverlay) loaderOverlay.textContent = `[ 100% ]`;
 
             resetFractalRandom();
 
@@ -1218,6 +1257,9 @@
             lastGridCursorSizeWorld = computeDefaultGridCursorSize();
 
             setContentTransformFromScroll();
+            
+            const catLabel = document.getElementById('category-label');
+            if(catLabel) catLabel.style.opacity = '1';
         }
 
 
@@ -1602,8 +1644,6 @@
         };
     }
 
-    // ⚠️ plus de handler flèches ici : les flèches sont gérées par installDragSwipeScroll()
-
     function orientationFlip(pw, ph, w, h) {
         const prevPortrait = ph >= pw;
         const nowPortrait = h >= w;
@@ -1617,77 +1657,80 @@
     }
 
     function handleResizeNow() {
-        raf = 0;
-        const { w, h, ot } = snapshotVV();
-        const dw = Math.abs(w - lastW);
-        const dh = Math.abs(h - lastH);
-        const dot = Math.abs(ot - lastOT);
+    raf = 0;
+    const { w, h, ot } = snapshotVV();
+    const dw = Math.abs(w - lastW);
+    const dh = Math.abs(h - lastH);
+    const dot = Math.abs(ot - lastOT);
 
-        const flip = orientationFlip(lastW, lastH, w, h);
-        const jiggle = !flip && dw <= WIDTH_JIGGLE && (dh <= HEIGHT_JIGGLE || dot <= OFFSET_JIGGLE);
+    const flip = orientationFlip(lastW, lastH, w, h);
+    const jiggle = !flip && dw <= WIDTH_JIGGLE && (dh <= HEIGHT_JIGGLE || dot <= OFFSET_JIGGLE);
 
-        if (jiggle) {
-            syncCssHeaderHeight();
-            updateMenuGeometry();
-            updateScrollDocHeight();
-            updateFreeOverlays();
-
-            const prevWorld = scrollOffsetWorld;
-            const nextWorld = computeScrollOffsetWorldFromScrollY();
-            scrollOffsetWorld = nextWorld;
-
-            if (mouseSquare?.userData?.anchor) {
-                mobileBuildScrollAt += (nextWorld - prevWorld);
-            }
-
-            applyFooterTick();
-            needsRefineCheck = true;
-
-            lastW = w; lastH = h; lastOT = ot;
-            return;
-        }
-
-        const aspect = (w || 1) / (h || 1);
-        const height = 10;
-        const width = height * aspect;
-
-        camera.left   = -width / 2;
-        camera.right  =  width / 2;
-        camera.top    =  height / 2;
-        camera.bottom = -height / 2;
-        camera.updateProjectionMatrix();
-
-        renderer.setSize(w, h);
-
-        STABLE_VP_W = w;
-        STABLE_VP_H = h;
-
-        updateGrainPlaneSize();
+    if (jiggle) {
         syncCssHeaderHeight();
         updateMenuGeometry();
-        applyFooterTick();
+        updateScrollDocHeight();
+        updateFreeOverlays();
 
-        const newBucket = pickBucket(w, h);
-        if (newBucket !== currentBucket) {
-            currentBucket = newBucket;
-            applyBucket();
-            reformGridKeepImages();
-            buildFreeOverlays();
-            lastGridCursorSizeWorld = computeDefaultGridCursorSize();
-            needsRefineCheck = true;
-            updateScrollDocHeight();
-            installDragSwipeScroll();
-        } else {
-            updateScrollDocHeight();
-            updateFreeOverlays();
-            needsRefineCheck = true;
-            installDragSwipeScroll();
+        const prevWorld = scrollOffsetWorld;
+        const nextWorld = computeScrollOffsetWorldFromScrollY();
+        scrollOffsetWorld = nextWorld;
+
+        if (mouseSquare?.userData?.anchor) {
+            mobileBuildScrollAt += (nextWorld - prevWorld);
         }
 
-        lastW = w;
-        lastH = h;
-        lastOT = ot;
+        applyFooterTick();
+        needsRefineCheck = true;
+
+        lastW = w; lastH = h; lastOT = ot;
+        return;
     }
+
+    const aspect = (w || 1) / (h || 1);
+    const height = 10;
+    const width = height * aspect;
+
+    camera.left   = -width / 2;
+    camera.right  =  width / 2;
+    camera.top    =  height / 2;
+    camera.bottom = -height / 2;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(w, h);
+
+    STABLE_VP_W = w;
+    STABLE_VP_H = h;
+
+    updateGrainPlaneSize();
+    syncCssHeaderHeight();
+    updateMenuGeometry();
+    applyFooterTick();
+
+    const newBucket = pickBucket(w, h);
+    if (newBucket !== currentBucket) {
+        currentBucket = newBucket;
+        applyBucket();
+        reformGridKeepImages();
+        buildFreeOverlays();
+        lastGridCursorSizeWorld = computeDefaultGridCursorSize();
+        needsRefineCheck = true;
+        updateScrollDocHeight();
+        installDragSwipeScroll();
+    } else {
+        updateScrollDocHeight();
+        updateFreeOverlays();
+        needsRefineCheck = true;
+        installDragSwipeScroll();
+    }
+
+    syncCategoryLabelSize(getLayoutMetrics());
+
+    lastW = w;
+    lastH = h;
+    lastOT = ot;
+}
+
 
     function onResize() {
         if (raf) return;
@@ -3466,6 +3509,16 @@ function onScroll() {
     return base * scale;
 }
 
+    function syncCategoryLabelSize(lmOverride) {
+    const catEl = document.getElementById('category-label');
+    if (!catEl) return;
+
+    const lm = lmOverride || getLayoutMetrics();
+    const basePx = ensureGlobalLabelFontPx(lm);   // même base que les titres de paragraphes
+    const titlePx = basePx * 1.6;                 // même facteur que ton 1.6em
+
+    catEl.style.fontSize = `${titlePx}px`;
+}
 
 
 
@@ -3700,9 +3753,6 @@ function onScroll() {
     el.style.transform =
         `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
 }
-
-
-
 
 
 
