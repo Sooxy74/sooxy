@@ -1,0 +1,499 @@
+:root {
+            color-scheme: dark;
+            --menu-h: 48px;
+            --menu-gap: 16px;
+            --doc-h: 100vh;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        #webgl-canvas,
+        #labels-layer {
+            cursor: none !important;
+        }
+
+        #ui-header {
+            position: fixed;
+            inset: 0 auto auto 0;
+            z-index: 4;
+            background: #090B0B;
+        }
+
+        #ui-header::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            opacity: 0.5;
+            /* Ajustez l'opacité selon l'intensité de votre PNG (souvent 0.3 à 0.5 suffit) */
+            /* Le filtre contrast n'est généralement plus nécessaire avec un PNG, sauf si le bruit est trop gris */
+            background-image: url('../img/noise.png');
+            background-repeat: repeat;
+            background-size: 256px 256px;
+            /* Taille de votre texture */
+            image-rendering: auto;
+            z-index: 0;
+        }
+
+
+        #ui-header::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 1px;
+            background: #0055ff;
+            transform: translateZ(0);
+            z-index: 1;
+        }
+
+
+        #ui-header,
+        #ui-header * {
+            cursor: none !important;
+        }
+
+        #cursor-overlay {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 6;
+            opacity: 0;
+        }
+
+        #cursor-overlay .inner {
+            width: 100%;
+            height: 100%;
+            background: #f3ff00;
+            opacity: .85;
+            box-shadow: 0 0 0 1px #090B0B inset;
+        }
+
+        /* Loader overlay */
+        #loader-overlay {
+            position: fixed;
+            bottom: calc(100vw / 16);
+            right: calc(100vw / 16);
+            z-index: 9999;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-size: 32px;
+            color: #f3f1ee;
+            letter-spacing: .02em;
+            opacity: 1;
+            pointer-events: none;
+            transition: opacity .4s ease;
+        }
+
+        @media (min-width:1025px) {}
+
+
+
+        body {
+            margin: 0;
+            overflow: auto;
+            background-color: #0055ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        #webgl-canvas {
+            position: fixed;
+            inset: 0;
+            display: block;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity .25s ease;
+        }
+
+        #ui-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: var(--menu-h);
+            z-index: 4;
+            pointer-events: none;
+        }
+
+        #ui-header::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 1px;
+            background: #0055ff;
+            transform: translateZ(0);
+        }
+
+        #header-inner {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 var(--menu-gap);
+            padding-right: calc(var(--menu-gap) * 2);
+            box-sizing: border-box;
+            pointer-events: none;
+            position: relative;
+        }
+
+        #category-label {
+            position: absolute;
+            left: calc(var(--menu-gap) * 2);
+            top: 50%;
+            transform: translateY(-50%);
+            font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-weight: 700;
+            font-size: 28.8px;
+            color: #f3f1ee;
+            letter-spacing: .02em;
+            pointer-events: none;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+
+        #nav-links {
+            display: flex;
+            gap: calc(var(--menu-gap) * 2);
+            align-items: center;
+            white-space: nowrap;
+            pointer-events: auto;
+        }
+
+        .nav-btn {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-size: 14px;
+            color: #f3f1ee;
+            letter-spacing: .02em;
+            text-decoration: none;
+        }
+
+        .nav-btn:hover,
+        .nav-btn:focus {
+            outline: none;
+            color: #f3ff00;
+        }
+
+        #nav-links .nav-btn {
+            position: relative;
+            display: inline-block;
+            overflow: hidden;
+            line-height: 1.1;
+        }
+
+        #nav-links .nav-btn .text-container {
+            position: relative;
+            display: block;
+            top: -1px;
+        }
+
+        #nav-links .nav-btn .button-text {
+            display: block;
+            white-space: nowrap;
+        }
+
+        #nav-links .nav-btn .letter {
+            display: inline-block;
+            will-change: transform;
+        }
+
+
+
+        #logo-link {
+            pointer-events: auto;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: calc(var(--menu-gap) * 2);
+        }
+
+        #logo-overlay {
+            height: calc(var(--menu-h) * 0.5);
+            max-height: 44px;
+            aspect-ratio: auto;
+            display: block;
+            user-select: none;
+        }
+
+        #mobile-left,
+        #mobile-right {
+            display: none;
+            pointer-events: auto;
+            color: #f3f1ee;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #mobile-left {
+            left: var(--menu-gap);
+        }
+
+        #mobile-right {
+            right: var(--menu-gap);
+        }
+
+        .mobile-icon {
+            display: block;
+            width: calc(var(--menu-h) * 1.00);
+            height: calc(var(--menu-h) * 1.00);
+        }
+
+        @media (orientation: portrait) and (max-width: 1024px) {
+    #header-inner {
+        justify-content: center;
+    }
+
+    #nav-links {
+        display: none !important;
+    }
+
+    #logo-link {
+        margin-left: 0;
+    }
+
+    #mobile-left,
+    #mobile-right {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    #mobile-right {
+        right: var(--menu-gap);
+        left: auto;
+    }
+
+    #mobile-left {
+        left: auto;
+        right: calc(2 * var(--menu-gap) + var(--menu-h));
+    }
+}
+
+        @media (orientation: landscape) {
+            #header-inner {
+                justify-content: flex-end;
+            }
+
+            #nav-links {
+                display: flex !important;
+                white-space: nowrap;
+            }
+
+            #logo-link {
+                display: inline-flex;
+            }
+
+            #mobile-left,
+            #mobile-right {
+                display: none !important;
+            }
+
+            #ui-header {
+                position: fixed;
+                left: 0;
+                right: 0;
+                top: 0;
+                max-width: 100vw;
+                overflow: hidden;
+            }
+        }
+
+
+
+        #scroll-spacer {
+            height: var(--doc-h);
+        }
+
+        #labels-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .hover-label {
+    position: absolute;
+    font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-weight: 400;              /* texte par défaut = normal */
+    font-size: 18px;
+    color: #f3f1ee;
+    line-height: 1;
+    transform-origin: 100% 0%;
+    will-change: transform;
+    pointer-events: none;
+    white-space: normal;
+}
+
+/* Titre = première ligne, en gras */
+.hover-label .line:first-child {
+    font-weight: 700;
+}
+
+/* Les autres lignes sont normales (héritent du 400 de .hover-label) */
+.hover-label .line {
+    display: block;
+    white-space: nowrap;
+}
+
+/* Variante “sub” si tu l’utilises encore (petit texte secondaire) */
+.hover-label .line.sub {
+    font-style: italic;
+    font-weight: 400;
+    font-size: .6em;
+    line-height: 1.6667;
+    white-space: nowrap;
+}
+
+        }
+
+        #mobile-footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 320px;
+            background: #090B0B;
+            border-top: 1px solid #0055ff;
+            pointer-events: none;
+            z-index: 3;
+            transform: translateY(320px);
+            transition: transform .12s ease-out;
+            will-change: transform;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+            backface-visibility: hidden;
+        }
+
+        #mobile-footer::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: .10;
+            /* Gardez l'opacité faible ici comme avant */
+            background-image: url('../img/noise.png');
+            background-repeat: repeat;
+            background-size: 256px 256px;
+            image-rendering: auto;
+            mix-blend-mode: normal;
+        }
+
+        #ui-header {
+            background: transparent !important;
+        }
+
+        #ui-header::before {
+            content: none !important;
+            display: none !important;
+        }
+
+        #ui-header::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 1px;
+            background: #0055ff;
+            transform: translateZ(0);
+            z-index: 1;
+        }
+
+
+        #images-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 3;
+            opacity: 0;
+        }
+
+        /* Styles pour les labels des carrés noirs */
+        .hover-label.black-text {
+            text-align: left !important;
+            direction: ltr !important;
+            white-space: normal !important;
+            word-wrap: break-word !important;
+            max-width: 100%;
+        }
+
+        .hover-label.black-text .line:first-child {
+            font-size: 1.6em !important; /* Titre nettement plus gros */
+            font-weight: 700;
+            margin-bottom: 0.35em;
+        }
+
+        .hover-label.black-text .line:not(:first-child) {
+            font-size: 1em !important;   /* Paragraphe un poil plus gros */
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+
+        .dom-ol {
+            position: absolute;
+            left: 0;
+            top: 0;
+            transform: translate(-50%, -50%);
+            overflow: hidden;
+            will-change: transform, width, height;
+            image-rendering: auto;
+        }
+
+        .dom-ol img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Gouttières 1px comme la grille WebGL */
+        .dom-ol .gut {
+            position: absolute;
+            top: -1px;
+            bottom: -1px;
+            width: 1px;
+            background: #090B0B;
+            pointer-events: none;
+        }
+
+        .dom-ol .gut.left {
+            left: -1px;
+        }
+
+        .dom-ol .gut.right {
+            right: -1px;
+        }
+
+
+        @media (prefers-reduced-motion: reduce) {
+            #webgl-canvas {
+                transition: none;
+            }
+        }
+
+        @media (min-width:1025px) {
+            html {
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+            }
+
+            body {
+                overflow: hidden !important;
+            }
+        }
+
+        #scroll-spacer {
+            display: block;
+            min-height: 100vh;
+        }
