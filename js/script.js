@@ -288,6 +288,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.m
         let lastMouseScreenPos = new THREE.Vector2(0, 0);
         const fractalState = new Map(); const meshPool = []; const dotMeshPool = [];
         let targetState = new Map();
+        let targetStateDirty = true;
         let darkMaterial, cursorMaterial, geometry, dotMaterial, menuBorderMaterial;
         let needsBaseUpdate = true; let needsRefineCheck = false; let refineBudgetPerFrame = 64;
         const imageCells = new Set(); const buttonCells = new Map(); let persistentButtonPaths = [];
@@ -295,7 +296,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.m
         const materialCache = new Map(); const textureLoader = new THREE.TextureLoader();
         let baseCols = 4, baseRowsPrimary = 2, WANT_D1 = 1, WANT_D2 = 4, BUTTONS_ON_D2 = true;
         let TARGET_DEPTH = prefersReducedMotion ? 5 : 7;
-        let domCursorEl = null;
         let cursorInHeader = false;
         let lastGridCursorSizeWorld = 0;
         let persistentImageUrls = null;
@@ -446,8 +446,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.m
             const gy = (contentGroup?.position?.y || 0);
             const viewW = camera.right - camera.left;
             const viewH = contentTop - camera.bottom;
-            const extendX = isLandscapeLike() ? viewW * 2.5 : 0;
-            const extendY = isLandscapeLike() ? 0 : viewH * 2.5;
+            const extendX = isLandscapeLike() ? viewW * 4.0 : 0;
+            const extendY = isLandscapeLike() ? 0 : viewH * 4.0;
             const L = camera.left - gx - extendX;
             const R = camera.right - gx + extendX;
             const B = camera.bottom - gy - extendY;
@@ -549,14 +549,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.m
             mouseSquare = new THREE.Mesh(geometry, cursorMaterial);
             mouseSquare.userData.targetPosition = new THREE.Vector3();
             mouseSquare.userData.targetScale = new THREE.Vector3();
-            mouseSquare.renderOrder = 4;
+            mouseSquare.renderOrder = 200;
             scene.add(mouseSquare);
 
             cursorBorder = new THREE.Mesh(geometry, darkMaterial);
             cursorBorder.userData.targetPosition = new THREE.Vector3();
             cursorBorder.userData.targetScale = new THREE.Vector3();
-            cursorBorder.renderOrder = 3;
-            cursorBorder.renderOrder = 3;
+            cursorBorder.renderOrder = 199;
             scene.add(cursorBorder);
 
             // --- Instanced Meshes Setup ---
@@ -629,14 +628,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.m
                 button.addEventListener('mouseenter', () => tl.play());
                 button.addEventListener('mouseleave', () => tl.reverse());
             }
-
-            (function createDomCursor() {
-                const el = document.createElement('div');
-                el.id = 'cursor-overlay';
-                el.innerHTML = '<div class="inner"></div>';
-                document.body.appendChild(el);
-                domCursorEl = el;
-            })();
 
             enableNavButtonHoverAnimation();
 
@@ -1556,7 +1547,7 @@ function onScroll() {
             createQuadTree(x, y, w, 1, p, -1);
         }
 
-        function addRightFillersForOverlayPattern(row, offsetCols) {
+        function addRightFillersForOverlayPattern(row, offsetCols, maxMeshX) {
             const { w, contentTop } = getLayoutMetrics();
             const y = contentTop - row * w - w / 2;
 
@@ -1569,7 +1560,12 @@ function onScroll() {
 
             const baseX = camera.left + (offsetCols + 0.5) * w;
             const lastCenterX = baseX + (patternCols - 1) * (w + gapXWorld);
-            const rightEdge = lastCenterX + w / 2;
+            let rightEdge = lastCenterX + w / 2;
+
+            // Ensure we cover the requested generation bounds for infinite scroll
+            if (maxMeshX !== undefined && maxMeshX > rightEdge) {
+                rightEdge = maxMeshX;
+            }
 
             const innerRightEdge = camera.left + (offsetCols + contentCols) * w;
 
@@ -1591,6 +1587,45 @@ function onScroll() {
         }
 
 
+        function getGenerationBounds() {
+            const { w, viewHeight, viewWidth, contentTop } = getLayoutMetrics();
+            const GEN_BUFFER = 2.5;
+
+            // Vertical
+            const V = scene.userData._vscroll || { yWorld: 0 };
+            const yWorld = V.yWorld || 0;
+            const bufferPxV = viewHeight * GEN_BUFFER;
+
+            // Visible + Buffer: [camera.bottom - yWorld - bufferPxV, camera.top - yWorld + bufferPxV]
+            const minMeshY = camera.bottom - yWorld - bufferPxV;
+            const maxMeshY = camera.top - yWorld + bufferPxV;
+
+            const topY = contentTop - w / 2;
+            let minRow = Math.floor((topY - maxMeshY) / w);
+            let maxRow = Math.ceil((topY - minMeshY) / w);
+            minRow = Math.max(0, minRow);
+            // Ensure we cover at least baseRowsPrimary
+            maxRow = Math.max(maxRow, baseRowsPrimary);
+
+            // Horizontal
+            const H = scene.userData._hscroll || { xWorld: 0 };
+            const xWorld = H.xWorld || 0;
+            const bufferPxH = viewWidth * GEN_BUFFER;
+
+            // Visible + Buffer: [camera.left + xWorld - bufferPxH, camera.right + xWorld + bufferPxH]
+            const minMeshX = camera.left + xWorld - bufferPxH;
+            const maxMeshX = camera.right + xWorld + bufferPxH;
+
+            const offsetCols = contentOffsetColsForBucket();
+            const colBase = camera.left + (offsetCols + 0.5) * w;
+
+            let minCol = Math.floor((minMeshX - colBase) / w);
+            let maxCol = Math.ceil((maxMeshX - colBase) / w);
+            minCol = Math.max(0, minCol);
+
+            return { minRow, maxRow, minCol, maxCol, maxMeshX };
+        }
+
         function updateFractalBase(forceFull = false) {
     if (forceFull) targetState.clear();
 
@@ -1602,26 +1637,28 @@ function onScroll() {
         return true;
     }
 
-    const EXTRA_BOTTOM_ROWS_DESKTOP = 3;
+    // Bounds based on scroll + buffer
+    const bounds = getGenerationBounds();
+
+    if (isMobileBucket()) {
+       // Mobile: ensure we cover patternRows
+       const V = scene.userData._vscroll;
+       const patRows = (V && V.patternRows) ? V.patternRows : 0;
+       // getGenerationBounds covers visible area. If pattern is visible, it will be covered.
+       // We also ensure we cover at least the "needed" rows if we are near the top, to avoid initial glitches
+       const needed = mobileRowsNeeded();
+       if (bounds.maxRow < needed) bounds.maxRow = needed;
+    }
 
     const FORCE_D1 = new Set();
     (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
     (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-    let totalRows;
-    if (isMobileBucket()) {
-        totalRows = mobileRowsNeeded();
-    } else {
-        const { contentTop } = getLayoutMetrics();
-        const visibleRows = Math.ceil((contentTop - camera.bottom) / w);
-        totalRows = Math.max(baseRowsPrimary, visibleRows);
-    }
-
     const offsetCols = contentOffsetColsForBucket();
     const contentCols = contentColsForBucket();
 
     // --- création de la base content/filler ---
-    for (let row = 0; row < totalRows; row++) {
+    for (let row = bounds.minRow; row < bounds.maxRow; row++) {
         const isPrimary = row < baseRowsPrimary;
         const colsThisRow = isPrimary ? Math.min(contentCols, baseCols) : baseCols;
 
@@ -1637,14 +1674,12 @@ function onScroll() {
         }
 
         if (isPrimary) addPrimaryRowSideFillers(row, offsetCols);
-    }
 
-    for (let row = 0; row < totalRows; row++) {
-        addRightFillersForOverlayPattern(row, offsetCols);
-    }
+        // Right Fillers (Infinite Horizontal)
+        addRightFillersForOverlayPattern(row, offsetCols, bounds.maxMeshX);
 
-    if (currentBucket === 'desktop-21:9' || currentBucket === 'desktop-32:9') {
-        for (let row = 0; row < totalRows; row++) {
+        // Ultrawide
+         if (currentBucket === 'desktop-21:9' || currentBucket === 'desktop-32:9') {
             addUltrawideRightFiller(row, offsetCols);
         }
     }
@@ -1688,6 +1723,8 @@ function onScroll() {
         enforceNoD1InColumns(NO_D1_CONTENT_COLS);
     }
 
+    ensureCoverage();
+    targetStateDirty = true;
     return true;
 }
 
@@ -1905,7 +1942,7 @@ function onScroll() {
 
         function dedupeTargetState() {
             const { onePxWorld } = getLayoutMetrics();
-            const EPS = Math.max(1e-6, (onePxWorld || 0.001) * 0.25);
+            const EPS = Math.max(1e-6, (onePxWorld || 0.001) * 0.45);
             const keyOf = s => `${Math.round(s.x / EPS)}|${Math.round(s.y / EPS)}|${Math.round(s.originalSize / EPS)}`;
             const rank = (path) => {
                 if (imageCells.has(path)) return 100;
@@ -3192,9 +3229,12 @@ function onScroll() {
 
 
         function syncStateToMeshes() {
-            // Rebuild spatial hash for optimized findLeafAt
-            spatialHashCache = buildSpatialHash();
-            spatialHashCacheVersion++;
+            // Rebuild spatial hash ONLY if dirty
+            if (targetStateDirty) {
+                spatialHashCache = buildSpatialHash();
+                spatialHashCacheVersion++;
+                targetStateDirty = false;
+            }
 
             const getOccluderMaterial = () => {
                 if (!scene.userData.occluderMaterial) {
@@ -3213,14 +3253,30 @@ function onScroll() {
             const gy = contentGroup?.position?.y || 0;
             const viewW = camera.right - camera.left;
             const viewH = lm.contentTop - camera.bottom;
-            const extendX = isLandscapeLike() ? viewW * 4.0 : 0;
-            const extendY = isLandscapeLike() ? 0 : viewH * 4.0;
-            const hardX = isLandscapeLike() ? viewW * 4.0 : extendX;
-            const hardY = isLandscapeLike() ? extendY : viewH * 4.0;
+
+            // Culling margins must be strictly > generation margins (2.5)
+            // We use 3.0 or 4.0
+            const CULL_MARGIN = 4.0;
+            const extendX = isLandscapeLike() ? viewW * CULL_MARGIN : 0;
+            const extendY = isLandscapeLike() ? 0 : viewH * CULL_MARGIN;
+            const hardX = isLandscapeLike() ? viewW * CULL_MARGIN : extendX;
+            const hardY = isLandscapeLike() ? extendY : viewH * CULL_MARGIN;
             const Lhard = camera.left - gx - hardX;
             const Rhard = camera.right - gx + hardX;
             const Bhard = camera.bottom - gy - hardY;
             const Thard = lm.contentTop - gy + hardY;
+
+            const POPIN_MARGIN = 1.0; // Margin relative to view size to disable animation
+            const popX = isLandscapeLike() ? viewW * POPIN_MARGIN : 0;
+            const popY = isLandscapeLike() ? 0 : viewH * POPIN_MARGIN;
+            const Lpop = camera.left - gx - popX;
+            const Rpop = camera.right - gx + popX;
+            const Bpop = camera.bottom - gy - popY;
+            const Tpop = lm.contentTop - gy + popY;
+
+            const isVisibleForAnim = (x, y) => {
+               return (x >= Lpop && x <= Rpop && y >= Bpop && y <= Tpop);
+            };
 
             // Optimized Loop: Iterate directly over the map to avoid Array.from allocation
             for (const [key, st] of fractalState) {
@@ -3286,7 +3342,11 @@ function onScroll() {
                         const mesh = meshPool.pop() || new THREE.Mesh(geometry);
                         mesh.material = material;
                         mesh.position.set(t.x, t.y, 0);
-                        const startScale = 0;
+
+                        // Fix Pop-in: if created far from view, start at target scale
+                        const visible = isVisibleForAnim(t.x, t.y);
+                        const startScale = visible ? 0 : t.size;
+
                         mesh.scale.set(startScale, startScale, 1);
                         mesh.renderOrder = IMAGE_ORDER;
                         contentGroup.add(mesh);
@@ -3303,6 +3363,10 @@ function onScroll() {
                             anchorPosition: new THREE.Vector3(t.x, t.y, 0),
                             targetPosition: new THREE.Vector3(t.x, t.y, 0),
                             targetScale: new THREE.Vector3(t.size, t.size, 1),
+
+                            currentPosition: new THREE.Vector3(t.x, t.y, 0),
+                            currentScale: new THREE.Vector3(startScale, startScale, 1),
+
                             originalSize: t.originalSize,
                             isButton: isBtn,
                             isImage: isImg
@@ -3346,6 +3410,10 @@ function onScroll() {
                         }
                     } else {
                         // New state (no mesh)
+                        // Fix Pop-in: if created far from view, start at target scale
+                        const visible = isVisibleForAnim(t.x, t.y);
+                        const startScale = visible ? 0 : t.size;
+
                         const st = {
                             mesh: null, // No individual mesh
                             dotMesh: null, // No individual dot mesh
@@ -3361,7 +3429,7 @@ function onScroll() {
 
                             // Initialize current values for lerping
                             currentPosition: new THREE.Vector3(t.x, t.y, 0),
-                            currentScale: new THREE.Vector3(0, 0, 1),
+                            currentScale: new THREE.Vector3(startScale, startScale, 1),
 
                             originalSize: t.originalSize,
                             isButton: isBtn,
@@ -3487,7 +3555,6 @@ function onScroll() {
             const isMobile = isMobileBucket();
             mouseSquare.visible = !isMobile;
             cursorBorder.visible = !isMobile;
-            if (domCursorEl && isMobile) domCursorEl.style.opacity = '0';
 
             const clock = scene.userData.__clock || (scene.userData.__clock = new THREE.Clock());
             let dt = clock.getDelta();
@@ -3636,17 +3703,33 @@ function onScroll() {
                 }
             }
 
-            bgSquaresInstanced.count = bgIdx;
-            bgSquaresInstanced.instanceMatrix.needsUpdate = true;
+            if (bgSquaresInstanced.count !== bgIdx) {
+                bgSquaresInstanced.count = bgIdx;
+                bgSquaresInstanced.instanceMatrix.needsUpdate = true;
+            } else if (fGrid > 0.001) { // Only update matrix if animation is active
+                bgSquaresInstanced.instanceMatrix.needsUpdate = true;
+            }
 
-            btnSquaresInstanced.count = btnIdx;
-            btnSquaresInstanced.instanceMatrix.needsUpdate = true;
+            if (btnSquaresInstanced.count !== btnIdx) {
+                btnSquaresInstanced.count = btnIdx;
+                btnSquaresInstanced.instanceMatrix.needsUpdate = true;
+            } else if (fGrid > 0.001) {
+                btnSquaresInstanced.instanceMatrix.needsUpdate = true;
+            }
 
-            bgDotsInstanced.count = bgDotIdx;
-            bgDotsInstanced.instanceMatrix.needsUpdate = true;
+            if (bgDotsInstanced.count !== bgDotIdx) {
+                bgDotsInstanced.count = bgDotIdx;
+                bgDotsInstanced.instanceMatrix.needsUpdate = true;
+            } else if (fGrid > 0.001) {
+                 bgDotsInstanced.instanceMatrix.needsUpdate = true;
+            }
 
-            btnDotsInstanced.count = btnDotIdx;
-            btnDotsInstanced.instanceMatrix.needsUpdate = true;
+            if (btnDotsInstanced.count !== btnDotIdx) {
+                btnDotsInstanced.count = btnDotIdx;
+                btnDotsInstanced.instanceMatrix.needsUpdate = true;
+            } else if (fGrid > 0.001) {
+                btnDotsInstanced.instanceMatrix.needsUpdate = true;
+            }
 
             renderer.render(scene, camera);
             const canvas = document.getElementById('webgl-canvas');
@@ -3881,6 +3964,7 @@ function onScroll() {
 
         if (leaf.depth < limit) {
             refined = true;
+            targetStateDirty = true;
             targetState.delete(leaf.path);
             vn.add(leaf.path);
 
@@ -3954,9 +4038,9 @@ function onScroll() {
         if (!(fs > 0)) fs = Math.max(0, (w / 2) - config.borderWidth);
 
         mouseSquare.userData.anchor = null;
-        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 4);
+        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 200);
         mouseSquare.userData.targetScale.set(fs, fs, 1);
-        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 3);
+        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 199);
         cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
         return;
     }
@@ -3971,9 +4055,9 @@ function onScroll() {
         if (!(fs > 0)) fs = Math.max(0, (w / 2) - config.borderWidth);
 
         mouseSquare.userData.anchor = null;
-        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 4);
+        mouseSquare.userData.targetPosition.set(worldPos.x, worldPos.y, 200);
         mouseSquare.userData.targetScale.set(fs, fs, 1);
-        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 3);
+        cursorBorder.userData.targetPosition.set(worldPos.x, worldPos.y, 199);
         cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
         lastGridCursorSizeWorld = fs;
         return;
@@ -4003,9 +4087,9 @@ function onScroll() {
     const dx = nx + gx;
     const dy = ny + gy;
 
-    mouseSquare.userData.targetPosition.set(dx, dy, 4);
+    mouseSquare.userData.targetPosition.set(dx, dy, 200);
     mouseSquare.userData.targetScale.set(fs, fs, 1);
-    cursorBorder.userData.targetPosition.set(dx, dy, 3);
+    cursorBorder.userData.targetPosition.set(dx, dy, 199);
     cursorBorder.userData.targetScale.set(fs + config.borderWidth, fs + config.borderWidth, 1);
 
     lastGridCursorSizeWorld = fs;
@@ -4028,33 +4112,6 @@ function onScroll() {
     lastMouseScreenPos.set(nx, ny);
     needsRefineCheck = true;
 
-    const headerEl = document.getElementById('ui-header');
-    const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
-    const inHeader = e.clientY <= headerPx;
-
-    // Position du curseur DOM (toujours en pixels)
-    if (domCursorEl) {
-        if (inHeader) {
-            // On garde la taille utilisée dans le contenu pour éviter le “snap”
-            let fsWorld = lastGridCursorSizeWorld && lastGridCursorSizeWorld > 0
-                ? lastGridCursorSizeWorld
-                : computeDefaultGridCursorSize();
-
-            const worldW = camera.right - camera.left;
-            const pxPerWorldX = vpW / worldW;
-            const sidePx = Math.max(0, fsWorld) * pxPerWorldX;
-
-            domCursorEl.style.opacity = '1';
-            domCursorEl.style.width = sidePx + 'px';
-            domCursorEl.style.height = sidePx + 'px';
-            domCursorEl.style.left = e.clientX + 'px';
-            domCursorEl.style.top = e.clientY + 'px';
-        } else {
-            // On fade au lieu de couper brutalement
-            domCursorEl.style.opacity = '0';
-        }
-    }
-
     // Coordonnées monde de la souris
     const wp = new THREE.Vector3(
         (e.clientX / vpW) * 2 - 1,
@@ -4066,7 +4123,7 @@ function onScroll() {
 
     // seulement si on est dans le contenu (sous le header)
     const { contentTop } = getLayoutMetrics();
-    if (!inHeader && wp.y < contentTop) {
+    if (wp.y < contentTop) {
         const did = refineTargetStateAt(wp);
         if (did) {
             cutOutUnderButtons();
@@ -4193,4 +4250,35 @@ function onScroll() {
             const cy = contentTop - row * w - w / 2;
             const quad = (wp.y > cy ? (wp.x < cx ? 2 : 3) : (wp.x < cx ? 0 : 1));
             console.log(`{ size:'D2', row:${row}, col:${col}, quad:${quad} }`);
+        }        function ensureCoverage() {
+             const { w, contentTop } = getLayoutMetrics();
+             const bounds = getGenerationBounds();
+             const offsetCols = contentOffsetColsForBucket();
+             const contentCols = contentColsForBucket();
+
+             // Quick check: iterate all cells in view
+             // We only check "content" cells for now as they are most important
+             for (let row = bounds.minRow; row < bounds.maxRow; row++) {
+                if (row >= baseRowsPrimary) continue; // Only check primary content rows for gaps
+
+                for (let col = 0; col < contentCols; col++) {
+                    const cx = camera.left + (col + 0.5 + offsetCols) * w;
+                    const cy = contentTop - row * w - w/2;
+
+                    // Is this point covered?
+                    const wp = {x: cx, y: cy};
+                    // Important: findLeafAt checks if a square COVERS the point.
+                    // If spatialHash is not up to date (we are in update), it does full scan.
+                    // We invalidated spatialHashCache or assume dirty.
+                    if (!findLeafAt(wp, targetState)) {
+                         // Hole detected! Fill it.
+                         const path = `content/${row}/${col}`;
+                         // Only fill if not button/image?
+                         if (buttonCells.has(path) || imageCells.has(path)) continue;
+
+                         // Create a basic cell
+                         createQuadTree(cx, cy, w, 1, path, 1);
+                    }
+                }
+             }
         }
