@@ -1012,10 +1012,8 @@
             const viewW = camera.right - camera.left;
             const viewH = contentTop - camera.bottom;
 
-            // --- OPTIMISATION : Zone de culling réduite (1.5x au lieu de 6.0x) ---
-            // Cela évite de calculer la fractale pour des zones très loin hors de l'écran.
-            const extendX = isLandscapeLike() ? viewW * 1.5 : 0;
-            const extendY = isLandscapeLike() ? 0 : viewH * 1.5; // J'ai aussi harmonisé Y pour être cohérent
+                        const extendX = isLandscapeLike() ? viewW * 1.5 : 0;
+            const extendY = isLandscapeLike() ? 0 : viewH * 1.5;
 
             const L = camera.left - gx - extendX;
             const R = camera.right - gx + extendX;
@@ -4151,7 +4149,13 @@ function onScroll() {
                 if (scene.userData._cursorSnapFrames > 4) scene.userData._cursorSnapFrames = 4;
             }
 
-            updateMouseSquareTarget(wp);
+            if (!isScrolling) {
+    updateMouseSquareTarget(wp);
+} else {
+    // Pendant le scroll, on cache le curseur de grille pour économiser le GPU/CPU
+    mouseSquare.scale.set(0, 0, 1);
+    cursorBorder.scale.set(0, 0, 1);
+}
 
             const isMobile = isMobileBucket();
             mouseSquare.visible = !isMobile;
