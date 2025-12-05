@@ -3967,10 +3967,15 @@ function onScroll() {
                     (t.y - half) > screenT
                 );
                 
-                const startScale = (isVisibleStrictly || isImg) ? (isImg ? t.size : 0) : t.size;
+                // --- MODIFICATION 1 : Animation au chargement ---
+                // On fixe le scale de départ à 0 pour tout le monde lors de la création.
+                // Cela force l'animation 0->100% comme pour les carrés de la grille.
+                const startScale = 0;
 
-                // Z-index fix : Images à 0.02, le reste à 0
-                const zPos = isImg ? 0.02 : 0;
+                // --- MODIFICATION 2 : Position Z ---
+                // On passe de 0.02 à 0.2 pour les images afin d'éviter que les carrés gris (à Z=0)
+                // ne passent devant lors du scroll sur mobile/tablette.
+                const zPos = isImg ? 0.2 : 0;
 
                 if (isImg) {
                     const url = imageAssignment.get(key);
@@ -3996,6 +4001,7 @@ function onScroll() {
                         
                         mesh.position.set(t.x, t.y, zPos);
                         
+                        // Utilisation du startScale à 0 pour animer l'ouverture
                         mesh.scale.set(startScale, startScale, 1);
                         mesh.renderOrder = IMAGE_ORDER;
                         contentGroup.add(mesh);
