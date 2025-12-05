@@ -2175,30 +2175,22 @@ function onScroll() {
                 return true;
             }
 
-            // --- OPTIMISATION SCROLL (Performance du Code 2) ---
-            // Si on scroll, on passe en mode rapide : pas de raffinements coûteux
-            const isFastMode = isScrolling && !forceFull;
-            
-            const bufferMulti = (isFastMode) ? 1.5 : 2.5; // Moins de génération hors écran si on scrolle vite
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            // Calcul de la zone visible étendue
-            const genBuffX = isLandscapeLike() ? viewWidth * bufferMulti : viewWidth * 0.5;
-            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * (isFastMode ? 1.5 : 2.0);
+            const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
+            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 4.0;
 
             let minCol = Math.floor((scrollX - genBuffX) / w);
             let maxCol = Math.ceil((scrollX + viewWidth + genBuffX) / w);
+
             let minRow = Math.floor((scrollY - genBuffY) / w);
             let maxRow = Math.ceil((scrollY + viewHeight + genBuffY) / w);
 
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            // --- NETTOYAGE INTELLIGENT (Fix du Code 2) ---
-            // On supprime ce qui est très loin pour libérer la mémoire,
-            // MAIS on protège strictement 'black/' et 'rib/' pour qu'ils ne disparaissent pas.
-            const pruneBuffer = w * 5.0;
+            const pruneBuffer = w * 12.0; 
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
             const keepMinY = contentTop - scrollY - viewHeight - genBuffY - pruneBuffer;
@@ -2206,8 +2198,8 @@ function onScroll() {
 
             if (!forceFull) {
                 for (const [key, s] of Array.from(targetState.entries())) {
-                    // PROTECTION : On ne supprime JAMAIS les images, les boutons ou les textes noirs ici
-                    if (imageCells.has(key) || buttonCells.has(key) || key.startsWith('black/')) continue;
+                    // PROTECTION RENFORCÉE : On garde rib/, black/, images et boutons quoi qu'il arrive
+                    if (key.startsWith('rib/') || imageCells.has(key) || buttonCells.has(key) || key.startsWith('black/')) continue;
                     
                     if (s.x < keepMinX || s.x > keepMaxX || s.y < keepMinY || s.y > keepMaxY) {
                         targetState.delete(key);
@@ -2226,7 +2218,22 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            // Vecteur temporaire pour éviter les allocations mémoire
+            const protectedRects = [];
+            for (const key of imageCells) {
+                const s = targetState.get(key);
+                if (s) {
+                    const h = s.originalSize * 0.5 - 0.01; 
+                    protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
+                }
+            }
+            for (const key of buttonCells.keys()) {
+                const s = targetState.get(key);
+                if (s) {
+                    const h = s.originalSize * 0.5 - 0.01;
+                    protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
+                }
+            }
+
             const tempVec = new THREE.Vector3();
 
             for (let row = minRow; row < maxRow; row++) {
@@ -2238,15 +2245,24 @@ function onScroll() {
                     const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
                     const y = contentTop - row * w - w / 2;
 
-                    // Optimisation : Si la case existe déjà, on ne la recalcule pas
                     if (!forceFull) {
                          const rootKey = `content/${row}/${col}`;
-                         // Si la racine ou un élément important est là, on passe
                          if (targetState.has(rootKey)) continue;
-                         // Vérification spatiale rapide
+                         
                          tempVec.set(x, y, 0);
                          if (findLeafAt(tempVec, targetState)) continue;
                     }
+
+                    const h = w * 0.5;
+                    const L = x - h, R = x + h, B = y - h, T = y + h;
+                    let overlap = false;
+                    for (const r of protectedRects) {
+                        if (!(R <= r.l || L >= r.r || T <= r.b || B >= r.t)) {
+                            overlap = true;
+                            break;
+                        }
+                    }
+                    if (overlap) continue;
 
                     let pref = 'filler';
                     if (isPrimary) {
@@ -2258,8 +2274,8 @@ function onScroll() {
 
                     const path = `${pref}/${row}/${col}`;
                     
-                    // Si c'est déjà occupé par une image/texte, on ne touche pas
-                    if (imageCells.has(path) || buttonCells.has(path) || path.startsWith('black/')) continue;
+                    // PROTECTION : Ne pas écraser une cellule réservée
+                    if (path.startsWith('rib/') || imageCells.has(path) || buttonCells.has(path) || path.startsWith('black/')) continue;
 
                     const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
                     createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
@@ -2297,15 +2313,11 @@ function onScroll() {
                 forceMobilePattern();
             }
 
-            // Nettoyage et structure
             cutOutUnderButtons();
             dedupeTargetState();
             forceNoD1GlobalExceptFixed();
 
-            // RAFFINEMENTS : C'est ici que se joue le LAG.
-            // Si on est en mode Scroll (isFastMode), on NE FAIT PAS les calculs de détails (sprinkleRefinements).
-            // Cela libère énormément de CPU pour que le scroll soit fluide.
-            if (!isFastMode || forceFull) {
+            if (!isScrolling || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
                 if (!isMobileBucket() && isLandscapeLike()) {
@@ -2738,18 +2750,15 @@ function onScroll() {
 
 
         function reformGridKeepImages() {
-            // Mise à jour de la graine aléatoire pour le nouveau décor
+            // Mise à jour de la graine aléatoire (Système Code 1)
             scene.userData = scene.userData || {};
             scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
             globalClickNonce = (globalClickNonce + 1) | 0;
             
-            // Marqueur temporel
-            scene.userData._lastRegenTime = performance.now();
-
             reseed(globalClickNonce);
             forceRecreateLabelsOnce = true;
 
-            // 1. Nettoyage Logique Sélectif (TargetState)
+            // 1. Nettoyage Logique Sélectif
             // On garde impérativement les images (rib/) ET les textes (black/)
             const keysToKeep = new Set();
             for (const k of targetState.keys()) {
@@ -2757,36 +2766,35 @@ function onScroll() {
                     keysToKeep.add(k);
                 }
             }
-            // On supprime tout ce qui n'est pas dans la liste à garder
+            // On supprime tout le reste
             for (const k of Array.from(targetState.keys())) {
                 if (!keysToKeep.has(k)) {
                     targetState.delete(k);
                 }
             }
 
-            // 2. Gestion des boutons
-            // On ne vide PAS les boutons liés aux carrés noirs pour éviter le clignotement
+            // 2. Gestion des boutons (On ne vide pas les boutons textes pour éviter le flash)
             const blacks = [];
             for (const [k, v] of buttonCells) {
                 if (k.startsWith('black/')) blacks.push({k, v});
             }
             buttonCells.clear();
             buttonSlots.clear();
-            // On restaure immédiatement les textes noirs
+            // On restaure les textes
             blacks.forEach(item => buttonCells.set(item.k, item.v));
             
-            // IMPORTANT : On ne touche PAS à imageCells, car les positions sont fixes.
-
             if (isMobileBucket()) mobileWorldContentHeight = 0;
 
-            // 3. Reconstruction
+            // 3. Reconstruction : On force updateFractalBase(true) comme dans le Code 2
+            // pour garantir une régénération propre autour des images conservées
             updateFractalBase(true);
+            
             buildFreeOverlays();
-            createBlackNeighborImages(); // S'assure que les textes sont bien là
+            createBlackNeighborImages();
             cutOutUnderButtons();
             dedupeTargetState();
 
-            // 4. Raffinements (seulement si le device est puissant)
+            // 4. Raffinements
             if (!isMobileBucket()) {
                 sprinkleRefinements(12);
                 if (isLandscapeLike()) {
@@ -3242,264 +3250,252 @@ function onScroll() {
 
 
         function buildFreeOverlays() {
-    if (!imageTextures || imageTextures.length === 0) {
-        updateScrollDocHeight();
-        forceBrowserToLayoutForHScroll();
-        return;
-    }
+            if (!imageTextures || imageTextures.length === 0) {
+                updateScrollDocHeight();
+                forceBrowserToLayoutForHScroll();
+                return;
+            }
 
-    const lm = getLayoutMetrics();
-    const { w, contentTop } = lm;
-    const stableTop = contentTop;
+            const lm = getLayoutMetrics();
+            const { w, contentTop } = lm;
+            const stableTop = contentTop;
 
-    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-    const gapXWorld = Math.max(0, H.gapCols) * w;
+            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+            const gapXWorld = Math.max(0, H.gapCols) * w;
 
-    const bucketOffset = contentOffsetColsForBucket();
-    const baseX = camera.left + (bucketOffset + 0.5) * w;
+            const bucketOffset = contentOffsetColsForBucket();
+            const baseX = camera.left + (bucketOffset + 0.5) * w;
 
-    const isPortrait = !isLandscapeLike();
+            const isPortrait = !isLandscapeLike();
 
-    const expectedCount = imageTextures.length;
+            const expectedCount = imageTextures.length;
 
-    const desired = new Set();
-    const slots = [];
+            const desired = new Set();
+            const slots = [];
 
-    if (isPortrait) {
-        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
-        V.patternRows = expectedCount;
-        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-        const gapYWorld = Math.max(0, V.gapRows) * w;
+            if (isPortrait) {
+                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+                V.patternRows = expectedCount;
+                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+                const gapYWorld = Math.max(0, V.gapRows) * w;
 
-        for (let i = 0; i < expectedCount; i++) {
-            const col = (i % 2 === 0) ? 0 : 1;
-            const cx = camera.left + (bucketOffset + col + 0.5) * w;
-            const cy = stableTop - (i * (w + gapYWorld) + w / 2);
-            const path = `rib/${i}`;
-            desired.add(path);
-            slots.push({
-                index: i,
-                path,
-                x: cx,
-                y: cy,
-                os: w,
-                sz: Math.max(0, w - config.borderWidth)
-            });
+                for (let i = 0; i < expectedCount; i++) {
+                    const col = (i % 2 === 0) ? 0 : 1;
+                    const cx = camera.left + (bucketOffset + col + 0.5) * w;
+                    const cy = stableTop - (i * (w + gapYWorld) + w / 2);
+                    const path = `rib/${i}`;
+                    desired.add(path);
+                    slots.push({
+                        index: i,
+                        path,
+                        x: cx,
+                        y: cy,
+                        os: w,
+                        sz: Math.max(0, w - config.borderWidth)
+                    });
+                }
+
+                const totalWorld =
+                    (expectedCount * w) +
+                    Math.max(0, expectedCount - 1) * gapYWorld;
+
+                mobileWorldContentHeight = totalWorld;
+                V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
+            } else {
+                for (let i = 0; i < expectedCount; i++) {
+                    const row = (i % 2 === 0) ? 0 : 1;
+                    const slot = Math.floor(i / 2);
+                    const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
+                    const cx = baseX + col * (w + gapXWorld);
+                    const cy = stableTop - (row + 0.5) * w;
+                    const path = `rib/${i}`;
+                    desired.add(path);
+                    slots.push({
+                        index: i,
+                        path,
+                        x: cx,
+                        y: cy,
+                        os: w,
+                        sz: Math.max(0, w - config.borderWidth)
+                    });
+                }
+            }
+
+            for (const s of slots) {
+                // On force la mise à jour pour être sûr
+                targetState.set(s.path, {
+                    x: s.x,
+                    y: s.y,
+                    size: s.sz,
+                    depth: 1,
+                    path: s.path,
+                    originalSize: s.os
+                });
+
+                imageCells.add(s.path);
+                const url = imageTextures[s.index] || 'img/logo-sooxy-art.png';
+                imageAssignment.set(s.path, url);
+            }
+
+            for (const key of Array.from(targetState.keys())) {
+                if (key.startsWith('rib/') && !desired.has(key)) {
+                    targetState.delete(key);
+                    imageCells.delete(key);
+                }
+            }
+
+            cutOutUnderButtons();
+            dedupeTargetState();
+            createBlackNeighborImages();
+            cutOutUnderButtons();
+            syncStateToMeshes();
+
+            updateScrollDocHeight();
+            forceBrowserToLayoutForHScroll();
         }
-
-        const totalWorld =
-            (expectedCount * w) +
-            Math.max(0, expectedCount - 1) * gapYWorld;
-
-        mobileWorldContentHeight = totalWorld;
-        V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
-    } else {
-        for (let i = 0; i < expectedCount; i++) {
-            const row = (i % 2 === 0) ? 0 : 1;
-            const slot = Math.floor(i / 2);
-            const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
-            const cx = baseX + col * (w + gapXWorld);
-            const cy = stableTop - (row + 0.5) * w;
-            const path = `rib/${i}`;
-            desired.add(path);
-            slots.push({
-                index: i,
-                path,
-                x: cx,
-                y: cy,
-                os: w,
-                sz: Math.max(0, w - config.borderWidth)
-            });
-        }
-    }
-
-    for (const s of slots) {
-        const existing = targetState.get(s.path);
-        if (!existing) {
-            targetState.set(s.path, {
-                x: s.x,
-                y: s.y,
-                size: s.sz,
-                depth: 1,
-                path: s.path,
-                originalSize: s.os
-            });
-        } else {
-            existing.x = s.x;
-            existing.y = s.y;
-            existing.originalSize = s.os;
-            existing.size = s.sz;
-            existing.depth = 1;
-        }
-
-        imageCells.add(s.path);
-        const url = imageTextures[s.index] || 'img/logo-sooxy-art.png';
-        imageAssignment.set(s.path, url);
-    }
-
-    for (const key of Array.from(targetState.keys())) {
-        if (key.startsWith('rib/') && !desired.has(key)) {
-            targetState.delete(key);
-            imageCells.delete(key);
-        }
-    }
-
-    cutOutUnderButtons();
-    dedupeTargetState();
-    createBlackNeighborImages();
-    cutOutUnderButtons();
-    syncStateToMeshes();
-
-    updateScrollDocHeight();
-    forceBrowserToLayoutForHScroll();
-}
 
 
 
 
 
         function updateFreeOverlays() {
-    if (!imageTextures || imageTextures.length === 0) return;
+            if (!imageTextures || imageTextures.length === 0) return;
 
-    const lm = getLayoutMetrics();
-    const { w, contentTop } = lm;
-    const stableTop = contentTop;
+            const lm = getLayoutMetrics();
+            const { w, contentTop } = lm;
+            const stableTop = contentTop;
 
-    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
-    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-    const gapXWorld = Math.max(0, H.gapCols) * w;
+            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 10, gapCols: 0 });
+            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+            const gapXWorld = Math.max(0, H.gapCols) * w;
 
-    const bucketOffset = contentOffsetColsForBucket();
-    const baseX = camera.left + (bucketOffset + 0.5) * w;
+            const bucketOffset = contentOffsetColsForBucket();
+            const baseX = camera.left + (bucketOffset + 0.5) * w;
 
-    const isPortrait = !isLandscapeLike();
+            const isPortrait = !isLandscapeLike();
 
-    const expectedCount = imageTextures.length;
+            const expectedCount = imageTextures.length;
 
-    const desired = new Set();
-    let changed = false;
+            const desired = new Set();
+            let changed = false;
 
-    if (isPortrait) {
-        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
-        V.patternRows = expectedCount;
-        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
-        const gapYWorld = Math.max(0, V.gapRows) * w;
+            if (isPortrait) {
+                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+                V.patternRows = expectedCount;
+                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+                const gapYWorld = Math.max(0, V.gapRows) * w;
 
-        for (let i = 0; i < expectedCount; i++) {
-            const col = (i % 2 === 0) ? 0 : 1;
-            const cx = camera.left + (bucketOffset + col + 0.5) * w;
-            const cy = stableTop - (i * (w + gapYWorld) + w / 2);
-            const path = `rib/${i}`;
-            desired.add(path);
+                for (let i = 0; i < expectedCount; i++) {
+                    const col = (i % 2 === 0) ? 0 : 1;
+                    const cx = camera.left + (bucketOffset + col + 0.5) * w;
+                    const cy = stableTop - (i * (w + gapYWorld) + w / 2);
+                    const path = `rib/${i}`;
+                    desired.add(path);
 
-            const s = targetState.get(path);
-            const os = w;
-            const sz = Math.max(0, os - config.borderWidth);
+                    const s = targetState.get(path);
+                    const os = w;
+                    const sz = Math.max(0, os - config.borderWidth);
 
-            if (!s) {
-                targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
-                changed = true;
+                    if (!s) {
+                        targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
+                        changed = true;
+                    } else {
+                        if (
+                            Math.abs(s.x - cx) > 1e-6 ||
+                            Math.abs(s.y - cy) > 1e-6 ||
+                            Math.abs(s.originalSize - os) > 1e-6 ||
+                            Math.abs(s.size - sz) > 1e-6 ||
+                            s.depth !== 1
+                        ) {
+                            s.x = cx;
+                            s.y = cy;
+                            s.originalSize = os;
+                            s.size = sz;
+                            s.depth = 1;
+                            changed = true;
+                        }
+                    }
+
+                    imageCells.add(path);
+                    const url = imageTextures[i] || 'img/logo-sooxy-art.png';
+                    if (imageAssignment.get(path) !== url) {
+                        imageAssignment.set(path, url);
+                        changed = true;
+                    }
+                }
+
+                const totalWorld =
+                    (expectedCount * w) +
+                    Math.max(0, expectedCount - 1) * gapYWorld;
+
+                mobileWorldContentHeight = totalWorld;
+                V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
             } else {
-                if (
-                    Math.abs(s.x - cx) > 1e-6 ||
-                    Math.abs(s.y - cy) > 1e-6 ||
-                    Math.abs(s.originalSize - os) > 1e-6 ||
-                    Math.abs(s.size - sz) > 1e-6 ||
-                    s.depth !== 1
-                ) {
-                    s.x = cx;
-                    s.y = cy;
-                    s.originalSize = os;
-                    s.size = sz;
-                    s.depth = 1;
+                for (let i = 0; i < expectedCount; i++) {
+                    const row = (i % 2 === 0) ? 0 : 1;
+                    const slot = Math.floor(i / 2);
+                    const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
+                    const cx = baseX + col * (w + gapXWorld);
+                    const cy = stableTop - (row + 0.5) * w;
+                    const path = `rib/${i}`;
+                    desired.add(path);
+
+                    const s = targetState.get(path);
+                    const os = w;
+                    const sz = Math.max(0, os - config.borderWidth);
+
+                    if (!s) {
+                        targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
+                        changed = true;
+                    } else {
+                        if (
+                            Math.abs(s.x - cx) > 1e-6 ||
+                            Math.abs(s.y - cy) > 1e-6 ||
+                            Math.abs(s.originalSize - os) > 1e-6 ||
+                            Math.abs(s.size - sz) > 1e-6 ||
+                            s.depth !== 1
+                        ) {
+                            s.x = cx;
+                            s.y = cy;
+                            s.originalSize = os;
+                            s.size = sz;
+                            s.depth = 1;
+                            changed = true;
+                        }
+                    }
+
+                    imageCells.add(path);
+                    const url = imageTextures[i] || 'img/logo-sooxy-art.png';
+                    if (imageAssignment.get(path) !== url) {
+                        imageAssignment.set(path, url);
+                        changed = true;
+                    }
+                }
+            }
+
+            for (const key of Array.from(targetState.keys())) {
+                if (key.startsWith('rib/') && !desired.has(key)) {
+                    targetState.delete(key);
+                    imageCells.delete(key);
                     changed = true;
                 }
             }
 
-            imageCells.add(path);
-            const url = imageTextures[i] || 'img/logo-sooxy-art.png';
-            if (imageAssignment.get(path) !== url) {
-                imageAssignment.set(path, url);
-                changed = true;
-            }
-        }
-
-        const totalWorld =
-            (expectedCount * w) +
-            Math.max(0, expectedCount - 1) * gapYWorld;
-
-        mobileWorldContentHeight = totalWorld;
-        V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
-    } else {
-        for (let i = 0; i < expectedCount; i++) {
-            const row = (i % 2 === 0) ? 0 : 1;
-            const slot = Math.floor(i / 2);
-            const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
-            const cx = baseX + col * (w + gapXWorld);
-            const cy = stableTop - (row + 0.5) * w;
-            const path = `rib/${i}`;
-            desired.add(path);
-
-            const s = targetState.get(path);
-            const os = w;
-            const sz = Math.max(0, os - config.borderWidth);
-
-            if (!s) {
-                targetState.set(path, { x: cx, y: cy, size: sz, depth: 1, path, originalSize: os });
-                changed = true;
-            } else {
-                if (
-                    Math.abs(s.x - cx) > 1e-6 ||
-                    Math.abs(s.y - cy) > 1e-6 ||
-                    Math.abs(s.originalSize - os) > 1e-6 ||
-                    Math.abs(s.size - sz) > 1e-6 ||
-                    s.depth !== 1
-                ) {
-                    s.x = cx;
-                    s.y = cy;
-                    s.originalSize = os;
-                    s.size = sz;
-                    s.depth = 1;
-                    changed = true;
-                }
+            if (changed) {
+                cutOutUnderButtons();
+                dedupeTargetState();
             }
 
-            imageCells.add(path);
-            const url = imageTextures[i] || 'img/logo-sooxy-art.png';
-            if (imageAssignment.get(path) !== url) {
-                imageAssignment.set(path, url);
-                changed = true;
+            createBlackNeighborImages();
+            cutOutUnderButtons();
+
+            if (changed || buttonCells.size > 0) {
+                syncStateToMeshes();
             }
+
+            updateScrollDocHeight();
         }
-    }
-
-    for (const key of Array.from(targetState.keys())) {
-        if (key.startsWith('rib/') && !desired.has(key)) {
-            targetState.delete(key);
-            imageCells.delete(key);
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        cutOutUnderButtons();
-        dedupeTargetState();
-    }
-
-    createBlackNeighborImages();
-    cutOutUnderButtons();
-
-    if (changed || buttonCells.size > 0) {
-        syncStateToMeshes();
-    }
-
-    updateScrollDocHeight();
-}
-
-
-
-
 
 
 
@@ -3891,201 +3887,216 @@ function onScroll() {
 
 
         function syncStateToMeshes() {
-    const getOccluderMaterial = () => {
-        if (!scene.userData.occluderMaterial) {
-            scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({ color: config.darkColor, depthTest: false, depthWrite: false });
-        }
-        return scene.userData.occluderMaterial;
-    };
-    const isMobile = isMobileBucket();
-    const newKeys = new Set(targetState.keys());
-    const IMAGE_ORDER = 2.96;
-    const DOT_ORDER_NONBTN = 2.50;
-    const BUTTON_ORDER = 3.00;
-    const DOT_ORDER_BUTTON = 3.40;
-    const lm = getLayoutMetrics();
-    const gx = contentGroup?.position?.x || 0;
-    const gy = contentGroup?.position?.y || 0;
-    const viewW = camera.right - camera.left;
-    const viewH = lm.contentTop - camera.bottom;
+            const getOccluderMaterial = () => {
+                if (!scene.userData.occluderMaterial) {
+                    scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({ color: config.darkColor, depthTest: false, depthWrite: false });
+                }
+                return scene.userData.occluderMaterial;
+            };
+            const isMobile = isMobileBucket();
+            const newKeys = new Set(targetState.keys());
+            const IMAGE_ORDER = 2.96;
+            const DOT_ORDER_NONBTN = 2.50;
+            const BUTTON_ORDER = 3.00;
+            const DOT_ORDER_BUTTON = 3.40;
+            const lm = getLayoutMetrics();
+            const gx = contentGroup?.position?.x || 0;
+            const gy = contentGroup?.position?.y || 0;
+            const viewW = camera.right - camera.left;
+            const viewH = lm.contentTop - camera.bottom;
 
-    const isLand = isLandscapeLike();
-    const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
-    const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
+            const isLand = isLandscapeLike();
+            // Augmentation des limites hard pour éviter le culling prématuré
+            const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
+            const hardY = isLand ? viewH * 2.0 : viewH * 15.0;
 
-    const Lhard = camera.left - gx - hardX;
-    const Rhard = camera.right - gx + hardX;
-    const Bhard = camera.bottom - gy - hardY;
-    const Thard = lm.contentTop - gy + hardY;
+            const Lhard = camera.left - gx - hardX;
+            const Rhard = camera.right - gx + hardX;
+            const Bhard = camera.bottom - gy - hardY;
+            const Thard = lm.contentTop - gy + hardY;
 
-    const screenL = camera.left - gx;
-    const screenR = camera.right - gx;
-    const screenB = camera.bottom - gy;
-    const screenT = lm.contentTop - gy;
+            const screenL = camera.left - gx;
+            const screenR = camera.right - gx;
+            const screenB = camera.bottom - gy;
+            const screenT = lm.contentTop - gy;
 
-    for (const [key, st] of fractalState) {
-        if (!newKeys.has(key)) {
-            const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
-            const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
+            for (const [key, st] of fractalState) {
+                if (!newKeys.has(key)) {
+                    const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+                    const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
 
-            const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
-            const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+                    const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+                    const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
 
-            const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
-            const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
+                    const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
+                    
+                    // PROTECTION : On empêche le 'tooFar' pour les images
+                    let tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
+                    if (st.isImage || key.startsWith('rib/')) tooFar = false;
 
-            if (tooFar || instantKill.has(key)) {
-                if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
-                if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
-                if (st.labelSprite) { scene.remove(st.labelSprite); }
-                if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-                if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                fractalState.delete(key);
-            } else {
-                st.targetScale.set(0, 0, 0);
-                if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
-                if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
-                if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-            }
-        }
-    }
-
-    for (const key of newKeys) {
-        const t = targetState.get(key);
-        const ex = fractalState.get(key);
-        const isImg = imageCells.has(key);
-        const isBtn = buttonCells.has(key);
-
-        const half = t.size / 2;
-
-        const isVisibleStrictly = !(
-            (t.x + half) < screenL ||
-            (t.x - half) > screenR ||
-            (t.y + half) < screenB ||
-            (t.y - half) > screenT
-        );
-        const startScale = isVisibleStrictly ? 0 : t.size;
-
-        if (isImg) {
-            const url = imageAssignment.get(key);
-            const material = getImageMaterial(url);
-
-            if (ex) {
-                ex.logicalCenter ||= new THREE.Vector3();
-                ex.logicalCenter.set(t.x, t.y, 0);
-                ex.anchorPosition ||= new THREE.Vector3();
-                ex.anchorPosition.set(t.x, t.y, 0);
-                ex.mesh.position.set(t.x, t.y, 0);
-                ex.targetScale.set(t.size, t.size, 1);
-                ex.originalSize = t.originalSize;
-                if (ex.mesh.material !== material) ex.mesh.material = material;
-                ex.isButton = isBtn;
-                ex.isImage = isImg;
-                ex.mesh.renderOrder = IMAGE_ORDER;
-            } else {
-                const mesh = meshPool.pop() || new THREE.Mesh(geometry);
-                mesh.material = material;
-                mesh.position.set(t.x, t.y, 0);
-                mesh.scale.set(startScale, startScale, 1);
-                mesh.renderOrder = IMAGE_ORDER;
-                contentGroup.add(mesh);
-
-                const st = {
-                    mesh,
-                    dotMesh: null,
-                    labelSprite: null,
-                    domLabelEl: null,
-                    baffles: null,
-                    occluderMesh: null,
-                    hovering: false,
-                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetScale: new THREE.Vector3(t.size, t.size, 1),
-                    originalSize: t.originalSize,
-                    isButton: isBtn,
-                    isImage: isImg
-                };
-                fractalState.set(key, st);
-            }
-        } else {
-            if (ex) {
-                ex.logicalCenter ||= new THREE.Vector3();
-                ex.logicalCenter.set(t.x, t.y, 0);
-                ex.anchorPosition ||= new THREE.Vector3();
-                ex.anchorPosition.set(t.x, t.y, 0);
-                ex.targetPosition.set(t.x, t.y, 0);
-                ex.targetScale.set(t.size, t.size, 1);
-                ex.originalSize = t.originalSize;
-                ex.isButton = isBtn;
-                ex.isImage = isImg;
-
-                if (isBtn) {
-                    const label = buttonCells.get(key)?.label || '';
-                    if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) { rebuildDomLabel(ex, label); }
-                } else { destroyDomLabel(ex); }
-
-                if (isBtn && isMobile) {
-                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                    const inset = lm.onePxWorld * insetPx;
-                    if (!ex.occluderMesh) {
-                        ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                        contentGroup.add(ex.occluderMesh);
+                    // Si c'est une image, on force le scale à ne pas être 0 pour éviter la suppression par shrinking
+                    if ((st.isImage || key.startsWith('rib/')) && st.targetScale.x === 0) {
+                         st.targetScale.set(st.originalSize, st.originalSize, 1);
                     }
-                    ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                    ex.occluderMesh.position.set(t.x, t.y, 0.05);
-                    const sz = Math.max(0, t.size - inset * 2);
-                    ex.occluderMesh.scale.set(sz, sz, 1);
-                } else if (ex.occluderMesh) {
-                    contentGroup.remove(ex.occluderMesh);
-                    ex.occluderMesh = null;
-                }
-            } else {
-                const st = {
-                    mesh: null,
-                    dotMesh: null,
-                    labelSprite: null,
-                    domLabelEl: null,
-                    baffles: null,
-                    occluderMesh: null,
-                    hovering: false,
-                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetScale: new THREE.Vector3(t.size, t.size, 1),
-                    currentPosition: new THREE.Vector3(t.x, t.y, 0),
-                    currentScale: new THREE.Vector3(startScale, startScale, 1),
-                    originalSize: t.originalSize,
-                    isButton: isBtn,
-                    isImage: isImg
-                };
-                fractalState.set(key, st);
 
-                if (isBtn && isMobile) {
-                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                    const inset = lm.onePxWorld * insetPx;
-                    st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                    st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                    st.occluderMesh.position.set(t.x, t.y, 0.05);
-                    const sz = Math.max(0, t.size - inset * 2);
-                    st.occluderMesh.scale.set(sz, sz, 1);
-                    contentGroup.add(st.occluderMesh);
+                    if (tooFar || instantKill.has(key)) {
+                        if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
+                        if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
+                        if (st.labelSprite) { scene.remove(st.labelSprite); }
+                        if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
+                        if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
+                        if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+                        fractalState.delete(key);
+                    } else {
+                        // Animation de sortie standard pour les non-images
+                        if (!st.isImage && !key.startsWith('rib/')) {
+                            st.targetScale.set(0, 0, 0);
+                            if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
+                            if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
+                            if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+                            if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
+                            if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
+                        }
+                    }
+                }
+            }
+
+            for (const key of newKeys) {
+                const t = targetState.get(key);
+                const ex = fractalState.get(key);
+                const isImg = imageCells.has(key) || key.startsWith('rib/');
+                const isBtn = buttonCells.has(key);
+
+                const half = t.size / 2;
+
+                const isVisibleStrictly = !(
+                    (t.x + half) < screenL ||
+                    (t.x - half) > screenR ||
+                    (t.y + half) < screenB ||
+                    (t.y - half) > screenT
+                );
+                
+                // Les images commencent et restent à 100%
+                const startScale = (isVisibleStrictly || isImg) ? (isImg ? t.size : 0) : t.size;
+
+                if (isImg) {
+                    const url = imageAssignment.get(key);
+                    const material = getImageMaterial(url);
+
+                    if (ex) {
+                        ex.logicalCenter ||= new THREE.Vector3();
+                        ex.logicalCenter.set(t.x, t.y, 0);
+                        ex.anchorPosition ||= new THREE.Vector3();
+                        ex.anchorPosition.set(t.x, t.y, 0);
+                        ex.mesh.position.set(t.x, t.y, 0);
+                        // Force 100% scale pour les images existantes
+                        ex.targetScale.set(t.size, t.size, 1);
+                        ex.originalSize = t.originalSize;
+                        if (ex.mesh.material !== material) ex.mesh.material = material;
+                        ex.isButton = isBtn;
+                        ex.isImage = isImg;
+                        ex.mesh.renderOrder = IMAGE_ORDER;
+                    } else {
+                        const mesh = meshPool.pop() || new THREE.Mesh(geometry);
+                        mesh.material = material;
+                        mesh.position.set(t.x, t.y, 0);
+                        mesh.scale.set(startScale, startScale, 1);
+                        mesh.renderOrder = IMAGE_ORDER;
+                        contentGroup.add(mesh);
+
+                        const st = {
+                            mesh,
+                            dotMesh: null,
+                            labelSprite: null,
+                            domLabelEl: null,
+                            baffles: null,
+                            occluderMesh: null,
+                            hovering: false,
+                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetScale: new THREE.Vector3(t.size, t.size, 1),
+                            originalSize: t.originalSize,
+                            isButton: isBtn,
+                            isImage: isImg
+                        };
+                        fractalState.set(key, st);
+                    }
+                } else {
+                    if (ex) {
+                        ex.logicalCenter ||= new THREE.Vector3();
+                        ex.logicalCenter.set(t.x, t.y, 0);
+                        ex.anchorPosition ||= new THREE.Vector3();
+                        ex.anchorPosition.set(t.x, t.y, 0);
+                        ex.targetPosition.set(t.x, t.y, 0);
+                        ex.targetScale.set(t.size, t.size, 1);
+                        ex.originalSize = t.originalSize;
+                        ex.isButton = isBtn;
+                        ex.isImage = isImg;
+
+                        if (isBtn) {
+                            const label = buttonCells.get(key)?.label || '';
+                            if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) { rebuildDomLabel(ex, label); }
+                        } else { destroyDomLabel(ex); }
+
+                        if (isBtn && isMobile) {
+                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                            const inset = lm.onePxWorld * insetPx;
+                            if (!ex.occluderMesh) {
+                                ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                                contentGroup.add(ex.occluderMesh);
+                            }
+                            ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                            ex.occluderMesh.position.set(t.x, t.y, 0.05);
+                            const sz = Math.max(0, t.size - inset * 2);
+                            ex.occluderMesh.scale.set(sz, sz, 1);
+                        } else if (ex.occluderMesh) {
+                            contentGroup.remove(ex.occluderMesh);
+                            ex.occluderMesh = null;
+                        }
+                    } else {
+                        const st = {
+                            mesh: null,
+                            dotMesh: null,
+                            labelSprite: null,
+                            domLabelEl: null,
+                            baffles: null,
+                            occluderMesh: null,
+                            hovering: false,
+                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetScale: new THREE.Vector3(t.size, t.size, 1),
+                            currentPosition: new THREE.Vector3(t.x, t.y, 0),
+                            currentScale: new THREE.Vector3(startScale, startScale, 1),
+                            originalSize: t.originalSize,
+                            isButton: isBtn,
+                            isImage: isImg
+                        };
+                        fractalState.set(key, st);
+
+                        if (isBtn && isMobile) {
+                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                            const inset = lm.onePxWorld * insetPx;
+                            st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                            st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                            st.occluderMesh.position.set(t.x, t.y, 0.05);
+                            const sz = Math.max(0, t.size - inset * 2);
+                            st.occluderMesh.scale.set(sz, sz, 1);
+                            contentGroup.add(st.occluderMesh);
+                        }
+                    }
+                }
+            }
+
+            for (const st of fractalState.values()) {
+                if (!st.isImage && st.dotMesh) {
+                    contentGroup.remove(st.dotMesh);
+                    dotMeshPool.push(st.dotMesh);
+                    st.dotMesh = null;
                 }
             }
         }
-    }
-
-    for (const st of fractalState.values()) {
-        if (!st.isImage && st.dotMesh) {
-            contentGroup.remove(st.dotMesh);
-            dotMeshPool.push(st.dotMesh);
-            st.dotMesh = null;
-        }
-    }
-}
 
         function addDotToState(st) {
             // No-op for instanced items
@@ -4119,10 +4130,6 @@ function onScroll() {
             if (needsBaseUpdate) {
                 const ok = updateFractalBase(false);
                 if (ok) {
-                    // SUPPRESSION DES APPELS REDONDANTS ICI
-                    // buildFreeOverlays() n'est pas nécessaire pendant le scroll
-                    // dedupeTargetState() est trop lourd et géré intelligemment dans updateFractalBase
-                    // cutOutUnderButtons() est inclus dans updateFractalBase
                     syncStateToMeshes();
                 }
                 needsBaseUpdate = false;
@@ -4177,12 +4184,11 @@ function onScroll() {
                 if (scene.userData._cursorSnapFrames > 4) scene.userData._cursorSnapFrames = 4;
             }
 
-            if (!isScrolling) {
-                updateMouseSquareTarget(wp);
-            } else {
-                mouseSquare.scale.set(0, 0, 1);
-                cursorBorder.scale.set(0, 0, 1);
-            }
+            // --- CORRECTION ICI ---
+            // On met TOUJOURS à jour la cible du curseur, même pendant le scroll.
+            // Cela permet de garder sa taille et sa position relative correcte.
+            updateMouseSquareTarget(wp); 
+            // ----------------------
 
             const isMobile = isMobileBucket();
             mouseSquare.visible = !isMobile;
