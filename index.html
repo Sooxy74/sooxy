@@ -2178,8 +2178,9 @@ function onScroll() {
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
-            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 4.0;
+            // Augmentation massive des buffers pour éviter le pop-in visuel
+            const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.75;
+            const genBuffY = isLandscapeLike() ? viewHeight * 0.75 : viewHeight * 3.0;
 
             let minCol = Math.floor((scrollX - genBuffX) / w);
             let maxCol = Math.ceil((scrollX + viewWidth + genBuffX) / w);
@@ -2190,7 +2191,8 @@ function onScroll() {
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            const pruneBuffer = w * 12.0; 
+            // Protection anti-suppression très large
+            const pruneBuffer = w * 15.0; 
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
             const keepMinY = contentTop - scrollY - viewHeight - genBuffY - pruneBuffer;
@@ -2198,9 +2200,7 @@ function onScroll() {
 
             if (!forceFull) {
                 for (const [key, s] of Array.from(targetState.entries())) {
-                    // PROTECTION RENFORCÉE : On garde rib/, black/, images et boutons quoi qu'il arrive
                     if (key.startsWith('rib/') || imageCells.has(key) || buttonCells.has(key) || key.startsWith('black/')) continue;
-                    
                     if (s.x < keepMinX || s.x > keepMaxX || s.y < keepMinY || s.y > keepMaxY) {
                         targetState.delete(key);
                     }
@@ -2218,21 +2218,21 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
+            // --- CORRECTION MAJEURE ICI : Agrandissement de la zone de protection ---
+            // On ajoute une marge de sécurité (borderWidth) pour être sûr que rien ne spawn SOUS l'image.
+            const safetyMargin = config.borderWidth * 2;
             const protectedRects = [];
-            for (const key of imageCells) {
+            
+            const addProt = (key) => {
                 const s = targetState.get(key);
                 if (s) {
-                    const h = s.originalSize * 0.5 - 0.01; 
+                    const h = (s.originalSize * 0.5) + safetyMargin; // On AGGRANDIT la zone interdite
                     protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
                 }
-            }
-            for (const key of buttonCells.keys()) {
-                const s = targetState.get(key);
-                if (s) {
-                    const h = s.originalSize * 0.5 - 0.01;
-                    protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
-                }
-            }
+            };
+
+            for (const key of imageCells) addProt(key);
+            for (const key of buttonCells.keys()) addProt(key);
 
             const tempVec = new THREE.Vector3();
 
@@ -2248,15 +2248,16 @@ function onScroll() {
                     if (!forceFull) {
                          const rootKey = `content/${row}/${col}`;
                          if (targetState.has(rootKey)) continue;
-                         
                          tempVec.set(x, y, 0);
                          if (findLeafAt(tempVec, targetState)) continue;
                     }
 
+                    // Vérification stricte des chevauchements
                     const h = w * 0.5;
                     const L = x - h, R = x + h, B = y - h, T = y + h;
                     let overlap = false;
                     for (const r of protectedRects) {
+                        // Si le carré de grille touche la zone protégée élargie, on l'annule
                         if (!(R <= r.l || L >= r.r || T <= r.b || B >= r.t)) {
                             overlap = true;
                             break;
@@ -2273,8 +2274,6 @@ function onScroll() {
                     }
 
                     const path = `${pref}/${row}/${col}`;
-                    
-                    // PROTECTION : Ne pas écraser une cellule réservée
                     if (path.startsWith('rib/') || imageCells.has(path) || buttonCells.has(path) || path.startsWith('black/')) continue;
 
                     const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
@@ -2319,11 +2318,7 @@ function onScroll() {
 
             if (!isScrolling || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
-
-                if (!isMobileBucket() && isLandscapeLike()) {
-                    enforceD2AdjacencyConstraint();
-                }
-
+                if (!isMobileBucket() && isLandscapeLike()) enforceD2AdjacencyConstraint();
                 if (!isMobileBucket()) {
                     enforceDepth6AdjacencyConstraint();
                     enforceNoD1InColumns(NO_D1_CONTENT_COLS);
@@ -2507,13 +2502,14 @@ function onScroll() {
 
         function cutOutUnderButtons() {
             const { onePxWorld } = getLayoutMetrics();
-            const eps = Math.max(config.borderWidth * 0.5, 0);
+            
+            // --- CORRECTION : On utilise un epsilon NÉGATIF pour agrandir la zone de découpe ---
+            // Cela garantit qu'on efface bien les carrés gris qui toucheraient les bords.
+            const eps = -0.001; 
             
             const rects = [];
             const pushRect = (s) => {
                 const h = s.originalSize / 2;
-                // On utilise une tolérance stricte pour nettoyer tout ce qui est dessous
-                // Pas d'inset ici pour les images : on veut que le fond soit totalement clean
                 rects.push({
                     left: s.x - h + eps,
                     right: s.x + h - eps,
@@ -2745,7 +2741,6 @@ function onScroll() {
 
 
         function reformGridKeepImages() {
-            // Mise à jour de la graine aléatoire (Système Code 1)
             scene.userData = scene.userData || {};
             scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
             globalClickNonce = (globalClickNonce + 1) | 0;
@@ -2753,43 +2748,36 @@ function onScroll() {
             reseed(globalClickNonce);
             forceRecreateLabelsOnce = true;
 
-            // 1. Nettoyage Logique Sélectif
-            // On garde impérativement les images (rib/) ET les textes (black/)
             const keysToKeep = new Set();
             for (const k of targetState.keys()) {
                 if (k.startsWith('rib/') || k.startsWith('black/')) {
                     keysToKeep.add(k);
                 }
             }
-            // On supprime tout le reste
             for (const k of Array.from(targetState.keys())) {
                 if (!keysToKeep.has(k)) {
                     targetState.delete(k);
                 }
             }
 
-            // 2. Gestion des boutons (On ne vide pas les boutons textes pour éviter le flash)
             const blacks = [];
             for (const [k, v] of buttonCells) {
                 if (k.startsWith('black/')) blacks.push({k, v});
             }
             buttonCells.clear();
             buttonSlots.clear();
-            // On restaure les textes
             blacks.forEach(item => buttonCells.set(item.k, item.v));
             
             if (isMobileBucket()) mobileWorldContentHeight = 0;
 
-            // 3. Reconstruction : On force updateFractalBase(true) comme dans le Code 2
-            // pour garantir une régénération propre autour des images conservées
+            // --- CORRECTION : D'abord on place les images, PUIS on génère la grille autour ---
+            buildFreeOverlays(); 
             updateFractalBase(true);
             
-            buildFreeOverlays();
             createBlackNeighborImages();
             cutOutUnderButtons();
             dedupeTargetState();
 
-            // 4. Raffinements
             if (!isMobileBucket()) {
                 sprinkleRefinements(12);
                 if (isLandscapeLike()) {
@@ -2799,7 +2787,6 @@ function onScroll() {
                 }
             }
 
-            // 5. Application
             syncStateToMeshes();
             
             needsRefineCheck = true;
@@ -3154,86 +3141,93 @@ function onScroll() {
 
 
         function createBlackNeighborImages() {
-    const { w } = getLayoutMetrics();
-    const isPortrait = !isLandscapeLike();
-    
-    const validBlackPaths = new Set();
+            const { w } = getLayoutMetrics();
+            const isPortrait = !isLandscapeLike();
+            
+            // On garde une trace des carrés noirs valides pour ce frame
+            const validBlackPaths = new Set();
 
-    for (const imgPath of imageCells) {
-        if (!imgPath.startsWith('rib/')) continue;
+            // Parcourt toutes les images "rib/*" pour créer un carré noir voisin
+            for (const imgPath of imageCells) {
+                if (!imgPath.startsWith('rib/')) continue;
 
-        const img = targetState.get(imgPath);
-        if (!img || Math.abs(img.originalSize - w) > 1e-6) continue;
+                const img = targetState.get(imgPath);
+                // Si l'image n'est pas chargée ou taille incorrecte, on ignore
+                if (!img || Math.abs(img.originalSize - w) > 1e-6) continue;
 
-        const match = imgPath.match(/^rib\/(\d+)$/);
-        if (!match) continue;
+                const match = imgPath.match(/^rib\/(\d+)$/);
+                if (!match) continue;
 
-        const index = parseInt(match[1], 10);
+                const index = parseInt(match[1], 10);
 
-        let blackX, blackY, blackPath;
+                let blackX, blackY, blackPath;
 
-        if (isPortrait) {
-            const col = (index % 2 === 0) ? 0 : 1;
-            if (col === 0) {
-                blackX = img.x + w;
-                blackY = img.y;
-                blackPath = `black/${index}_right`;
-            } else {
-                blackX = img.x - w;
-                blackY = img.y;
-                blackPath = `black/${index}_left`;
+                if (isPortrait) {
+                    const col = (index % 2 === 0) ? 0 : 1;
+                    if (col === 0) { // Image gauche -> texte droite
+                        blackX = img.x + w;
+                        blackY = img.y;
+                        blackPath = `black/${index}_right`;
+                    } else { // Image droite -> texte gauche
+                        blackX = img.x - w;
+                        blackY = img.y;
+                        blackPath = `black/${index}_left`;
+                    }
+                } else {
+                    const row = (index % 2 === 0) ? 0 : 1;
+                    if (row === 0) { // Image haut -> texte bas
+                        blackX = img.x;
+                        blackY = img.y - w;
+                        blackPath = `black/${index}_below`;
+                    } else { // Image bas -> texte haut
+                        blackX = img.x;
+                        blackY = img.y + w;
+                        blackPath = `black/${index}_above`;
+                    }
+                }
+
+                const size = w - config.borderWidth;
+                validBlackPaths.add(blackPath);
+
+                // On crée ou met à jour le carré noir dans le targetState
+                if (!targetState.has(blackPath)) {
+                    targetState.set(blackPath, {
+                        x: blackX, y: blackY, size: size,
+                        depth: 1, path: blackPath, originalSize: w
+                    });
+                } else {
+                    const s = targetState.get(blackPath);
+                    s.x = blackX; s.y = blackY;
+                    s.originalSize = w; s.size = size;
+                }
+
+                // Contenu du texte
+                const title = `Title ${index + 1}`;
+                const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`;
+                const labelText = `${title}\n${paragraph}`;
+
+                // On l'enregistre comme un bouton (non-cliquable via '#') pour qu'il ait un label
+                if (!buttonCells.has(blackPath)) {
+                    buttonCells.set(blackPath, {
+                        category: 'black_text',
+                        label: labelText,
+                        url: '#'
+                    });
+                }
             }
-        } else {
-            const row = (index % 2 === 0) ? 0 : 1;
-            if (row === 0) {
-                blackX = img.x;
-                blackY = img.y - w;
-                blackPath = `black/${index}_below`;
-            } else {
-                blackX = img.x;
-                blackY = img.y + w;
-                blackPath = `black/${index}_above`;
+            
+            // Nettoyage : Si un vieux carré noir traîne mais ne correspond plus à une image, on le vire
+            const toRemove = [];
+            for (const key of targetState.keys()) {
+                if (key.startsWith('black/') && !validBlackPaths.has(key)) {
+                    toRemove.push(key);
+                }
+            }
+            for (const key of toRemove) {
+                targetState.delete(key);
+                buttonCells.delete(key);
             }
         }
-
-        const size = w - config.borderWidth;
-        validBlackPaths.add(blackPath);
-
-        if (!targetState.has(blackPath)) {
-            targetState.set(blackPath, {
-                x: blackX, y: blackY, size: size,
-                depth: 1, path: blackPath, originalSize: w
-            });
-        } else {
-            const s = targetState.get(blackPath);
-            s.x = blackX; s.y = blackY;
-            s.originalSize = w; s.size = size;
-        }
-
-        const title = `Title ${index + 1}`;
-        const paragraph = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`;
-        const labelText = `${title}\n${paragraph}`;
-
-        if (!buttonCells.has(blackPath)) {
-            buttonCells.set(blackPath, {
-                category: 'black_text',
-                label: labelText,
-                url: '#'
-            });
-        }
-    }
-    
-    const toRemove = [];
-    for (const key of targetState.keys()) {
-        if (key.startsWith('black/') && !validBlackPaths.has(key)) {
-            toRemove.push(key);
-        }
-    }
-    for (const key of toRemove) {
-        targetState.delete(key);
-        buttonCells.delete(key);
-    }
-}
 
 
 
@@ -3645,46 +3639,83 @@ function onScroll() {
     const el = st.domLabelEl;
     const { w } = lm;
 
+    // --- ratio d’agrandissement du carré (0 → 1) ---
     const targetSize = (st.targetScale && st.targetScale.x) || st.originalSize || w;
     const currentSize = (st.currentScale && st.currentScale.x) ||
         (st.mesh ? st.mesh.scale.x : targetSize);
 
     const ratio = targetSize > 0 ? (currentSize / targetSize) : 1;
+
+    // Taille affichée du carré
     const dispS = Math.max(0, currentSize);
 
+    // Centre en coordonnées locales (contentGroup)
     const localX = st.currentPosition ? st.currentPosition.x :
         (st.mesh ? st.mesh.position.x : 0);
     const localY = st.currentPosition ? st.currentPosition.y :
         (st.mesh ? st.mesh.position.y : 0);
 
+    // Décalage du groupe (scroll)
     const gx = contentGroup?.position?.x || 0;
     const gy = contentGroup?.position?.y || 0;
 
+    // Coordonnées monde
     const worldX = localX + gx;
     const worldY = localY + gy;
 
     const half = dispS / 2;
 
+    // Carrés noirs "paragraphe" (ceux sous les images)
     const isBlackSquare =
         !!st.isBlackSquare ||
         (st.labelText && st.labelText.toLowerCase().includes('lorem ipsum'));
 
+    // Sommes-nous dans un format vertical ?
     const isPortraitBucket =
         currentBucket === 'mobile-v' ||
         currentBucket === 'tablet-3:4' ||
         currentBucket === 'tablet-9:16';
 
+    // Est-ce que ce carré noir est à gauche de l’image la plus proche ?
     let isLeftOfImage = false;
     if (isBlackSquare && isPortraitBucket) {
-        if (st.path && st.path.endsWith('_left')) {
-            isLeftOfImage = true;
+        const cx = localX;
+        const cy = localY;
+
+        let bestD2 = Infinity;
+        let bestImageX = null;
+
+        for (const other of fractalState.values()) {
+            if (!other.isImage) continue;
+            const ox = other.currentPosition
+                ? other.currentPosition.x
+                : (other.mesh ? other.mesh.position.x : 0);
+            const oy = other.currentPosition
+                ? other.currentPosition.y
+                : (other.mesh ? other.mesh.position.y : 0);
+
+            const dx = ox - cx;
+            const dy = oy - cy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                bestImageX = ox;
+            }
+        }
+
+        if (bestImageX != null) {
+            // si l'image est à droite du texte → texte à gauche de l'image
+            if (bestImageX > cx + 1e-4) {
+                isLeftOfImage = true;
+            }
         }
     }
 
+    // Ici on décide si le texte doit être ferré à droite dans le carré
     const alignRightInside = isBlackSquare && isPortraitBucket && isLeftOfImage;
 
     const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-    const marginPctTop    = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP    - 2));
+    const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
 
     let mRightWorld = dispS * marginPctRight;
     const mTopWorld = dispS * marginPctTop;
@@ -3693,21 +3724,26 @@ function onScroll() {
     let txWorld, tyWorld;
 
     if (isBlackSquare) {
+        // Même marge à gauche et à droite
         mLeftWorld  = dispS * marginPctTop;
         mRightWorld = mLeftWorld;
 
         if (alignRightInside) {
+            // Texte ferré à droite dans le carré
             txWorld = worldX + half - mRightWorld;
         } else {
+            // Texte ferré à gauche comme avant
             txWorld = worldX - half + mLeftWorld;
         }
 
         tyWorld = worldY + half - mTopWorld;
     } else {
+        // Boutons "normaux" : ancrage haut-droit
         txWorld = worldX + half - mRightWorld;
         tyWorld = worldY + half - mTopWorld;
     }
 
+    // Re-mesure au besoin
     if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl) {
         const fm = FontMetrics.measure(st.labelText || '');
         st.baseFontPx = fm.fontSize;
@@ -3721,6 +3757,7 @@ function onScroll() {
     const pxPerWorldX =
         (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
 
+    // Largeur dispo en px
     let availablePxFinal;
     if (isBlackSquare) {
         const innerWorld = Math.max(0, dispS - (mLeftWorld + mRightWorld));
@@ -3731,7 +3768,14 @@ function onScroll() {
         el.style.maxWidth = '';
     }
 
+    // Taille de base calculée en fonction du viewport + bucket
     const baseFontPx = ensureGlobalLabelFontPx(lm);
+
+    const isDesktopBucket =
+        currentBucket === 'desktop-16:9' ||
+        currentBucket === 'desktop-21:9' ||
+        currentBucket === 'desktop-32:9';
+
     const isMobilePortrait  = currentBucket === 'mobile-v';
     const isTabletPortrait  = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
     const isCompact         = isMobilePortrait || isTabletPortrait;
@@ -3741,6 +3785,7 @@ function onScroll() {
             ? (st.labelBaseWidthPx / st.baseFontPx)
             : 0;
 
+    // Taille max permise par la place dispo
     let maxByWidth = perPx > 0
         ? (availablePxFinal / perPx)
         : (st.baseFontPx || baseFontPx);
@@ -3748,6 +3793,7 @@ function onScroll() {
     let finalFontPx;
 
     if (isBlackSquare) {
+        // Paragraphes sous images
         if (isCompact) {
             finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
             finalFontPx = Math.max(
@@ -3759,6 +3805,7 @@ function onScroll() {
             finalFontPx = Math.max(finalFontPx, 13);
         }
     } else {
+        // Labels de boutons
         if (isCompact) {
             finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
             finalFontPx = Math.max(
@@ -3771,13 +3818,17 @@ function onScroll() {
         }
     }
 
+    // Arrondi et bornes globales
     finalFontPx = Math.round(finalFontPx * 2) / 2;
     finalFontPx = Math.max(9, Math.min(64, finalFontPx));
     el.style.fontSize = finalFontPx + 'px';
     el.style.color = '#f3f1ee';
 
+    // 🔥 SEUIL 80% : apparition du texte + ANIMATION UNE SEULE FOIS
     if (!st.appearTriggered && ratio >= 0.8) {
         st.appearTriggered = true;
+
+        // Apparition brutale du texte
         el.style.opacity = '1';
 
         if (st.baffles && !st.hasAnimatedBaffle) {
@@ -3789,6 +3840,7 @@ function onScroll() {
         }
     }
 
+    // Alignement final (en tenant compte des CSS !important)
     const desiredAlign = isBlackSquare
         ? (alignRightInside ? 'right' : 'left')
         : 'right';
@@ -3800,9 +3852,11 @@ function onScroll() {
         });
     }
 
+    // Origine de transform pour coller à l’alignement
     const originX = (isBlackSquare && !alignRightInside) ? '0%' : '100%';
     el.style.transformOrigin = `${originX} 0%`;
 
+    // Projection monde → pixels
     const p = worldToClientXY(new THREE.Vector3(txWorld, tyWorld, 0));
     const translateX = (isBlackSquare && !alignRightInside)
         ? 'translateX(0%)'
