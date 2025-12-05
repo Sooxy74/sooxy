@@ -2507,29 +2507,26 @@ function onScroll() {
 
         function cutOutUnderButtons() {
             const { onePxWorld } = getLayoutMetrics();
-            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-            const inset = insetPx * onePxWorld;
             const eps = Math.max(config.borderWidth * 0.5, 0);
             
-            // On prépare les zones à nettoyer (boutons + images)
             const rects = [];
             const pushRect = (s) => {
                 const h = s.originalSize / 2;
+                // On utilise une tolérance stricte pour nettoyer tout ce qui est dessous
+                // Pas d'inset ici pour les images : on veut que le fond soit totalement clean
                 rects.push({
-                    left: s.x - h + inset - eps,
-                    right: s.x + h - inset + eps,
-                    bottom: s.y - h + inset - eps,
-                    top: s.y + h - inset + eps
+                    left: s.x - h + eps,
+                    right: s.x + h - eps,
+                    bottom: s.y - h + eps,
+                    top: s.y + h - eps
                 });
             };
 
-            // On ajoute tous les boutons (y compris les carrés noirs black/*)
             for (const [btnPath] of buttonCells.entries()) {
                 const s = targetState.get(btnPath);
                 if (s) pushRect(s);
             }
             
-            // On ajoute toutes les images
             for (const imgPath of imageCells) {
                 const s = targetState.get(imgPath);
                 if (s) pushRect(s);
@@ -2543,8 +2540,6 @@ function onScroll() {
                 return !(R <= r.left || L >= r.right || T <= r.bottom || B >= r.top);
             };
 
-            // On supprime tout carré FRACTAL qui touche ces zones
-            // (On ne supprime pas les boutons ou images eux-mêmes)
             const toRemove = [];
             for (const [path, s] of targetState.entries()) {
                 if (buttonCells.has(path) || imageCells.has(path)) continue;
@@ -3906,7 +3901,6 @@ function onScroll() {
             const viewH = lm.contentTop - camera.bottom;
 
             const isLand = isLandscapeLike();
-            // Augmentation des limites hard pour éviter le culling prématuré
             const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
             const hardY = isLand ? viewH * 2.0 : viewH * 15.0;
 
@@ -3930,11 +3924,9 @@ function onScroll() {
 
                     const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
                     
-                    // PROTECTION : On empêche le 'tooFar' pour les images
                     let tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
                     if (st.isImage || key.startsWith('rib/')) tooFar = false;
 
-                    // Si c'est une image, on force le scale à ne pas être 0 pour éviter la suppression par shrinking
                     if ((st.isImage || key.startsWith('rib/')) && st.targetScale.x === 0) {
                          st.targetScale.set(st.originalSize, st.originalSize, 1);
                     }
@@ -3948,7 +3940,6 @@ function onScroll() {
                         if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
                         fractalState.delete(key);
                     } else {
-                        // Animation de sortie standard pour les non-images
                         if (!st.isImage && !key.startsWith('rib/')) {
                             st.targetScale.set(0, 0, 0);
                             if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
@@ -3976,8 +3967,10 @@ function onScroll() {
                     (t.y - half) > screenT
                 );
                 
-                // Les images commencent et restent à 100%
                 const startScale = (isVisibleStrictly || isImg) ? (isImg ? t.size : 0) : t.size;
+
+                // Z-index fix : Images à 0.02, le reste à 0
+                const zPos = isImg ? 0.02 : 0;
 
                 if (isImg) {
                     const url = imageAssignment.get(key);
@@ -3988,8 +3981,9 @@ function onScroll() {
                         ex.logicalCenter.set(t.x, t.y, 0);
                         ex.anchorPosition ||= new THREE.Vector3();
                         ex.anchorPosition.set(t.x, t.y, 0);
-                        ex.mesh.position.set(t.x, t.y, 0);
-                        // Force 100% scale pour les images existantes
+                        
+                        ex.mesh.position.set(t.x, t.y, zPos);
+                        
                         ex.targetScale.set(t.size, t.size, 1);
                         ex.originalSize = t.originalSize;
                         if (ex.mesh.material !== material) ex.mesh.material = material;
@@ -3999,7 +3993,9 @@ function onScroll() {
                     } else {
                         const mesh = meshPool.pop() || new THREE.Mesh(geometry);
                         mesh.material = material;
-                        mesh.position.set(t.x, t.y, 0);
+                        
+                        mesh.position.set(t.x, t.y, zPos);
+                        
                         mesh.scale.set(startScale, startScale, 1);
                         mesh.renderOrder = IMAGE_ORDER;
                         contentGroup.add(mesh);
