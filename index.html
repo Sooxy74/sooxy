@@ -2176,13 +2176,11 @@ function onScroll() {
             }
 
             // --- OPTIMISATION SCROLL ---
-            // Mode performance pendant le scroll : pas de calculs inutiles
             const isFastMode = isScrolling && !forceFull;
 
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            // Buffers de génération (zones hors écran prêtes à être affichées)
             const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
             const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 1.5;
 
@@ -2195,7 +2193,6 @@ function onScroll() {
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            // Pruning : Suppression des cellules trop lointaines pour libérer la mémoire
             const pruneBuffer = w * 3;
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
@@ -2220,7 +2217,10 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            // Vecteur temporaire réutilisé pour éviter l'allocation mémoire dans la boucle
+            const protectedRects = [];
+            // (Optionnel) Ajout des zones protégées pour éviter conflits si nécessaire, 
+            // mais ici on garde la logique légère du code 1 pour la boucle principale.
+            
             const tempVec = new THREE.Vector3();
 
             for (let row = minRow; row < maxRow; row++) {
@@ -2232,14 +2232,7 @@ function onScroll() {
                     const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
                     const y = contentTop - row * w - w / 2;
 
-                    // LEVIER PRINCIPAL : Si on n'est pas en reset complet,
-                    // on vérifie si la case est déjà occupée via findLeafAt (version optimisée).
-                    if (!forceFull) {
-                        tempVec.set(x, y, 0);
-                        const existing = findLeafAt(tempVec, targetState);
-                        if (existing) continue; // On saute la génération si ça existe déjà
-                    }
-
+                    // --- CALCUL DU TYPE (Pref) EN AVANCE ---
                     let pref = 'filler';
                     if (isPrimary) {
                         if (col < Math.min(contentCols, baseCols)) pref = 'content';
@@ -2247,8 +2240,23 @@ function onScroll() {
                     } else {
                         pref = 'content';
                     }
-
+                    
                     const path = `${pref}/${row}/${col}`;
+
+                    // --- OPTIMISATION CRITIQUE (RESTITUÉE DU CODE 1) ---
+                    // 1. Vérification rapide : Si la case existe déjà telle quelle, on passe.
+                    if (!forceFull && targetState.has(path)) continue;
+
+                    // 2. Vérification géométrique (plus lente) : Si la case est occupée par des sous-divisions (D2+).
+                    if (!forceFull) {
+                         tempVec.set(x, y, 0);
+                         if (findLeafAt(tempVec, targetState)) continue;
+                    }
+
+                    // --- PROTECTION ---
+                    // Ne pas écraser une cellule réservée (images, boutons, black squares)
+                    if (path.startsWith('rib/') || imageCells.has(path) || buttonCells.has(path) || path.startsWith('black/')) continue;
+
                     const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
                     createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
                 }
@@ -2285,13 +2293,12 @@ function onScroll() {
                 forceMobilePattern();
             }
 
-            // Nettoyage structurel
             cutOutUnderButtons();
             dedupeTargetState();
             forceNoD1GlobalExceptFixed();
 
-            // RAFFINEMENTS : On ne les fait que si on ne scrolle pas (FastMode),
-            // sauf si on force un refresh complet. Cela fluidifie grandement le scroll.
+            // RAFFINEMENTS : Uniquement si on ne scroll pas (isFastMode), 
+            // sauf si on force un refresh complet.
             if (!isFastMode || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
