@@ -2196,22 +2196,16 @@ function onScroll() {
             minRow = Math.max(0, minRow);
 
             // Pruning : Suppression des cellules trop lointaines pour libérer la mémoire
-            // ICI C'EST IMPORTANT : Buffer x12 pour le vertical
-            const pruneBuffer = w * 12.0; 
+            const pruneBuffer = w * 3;
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
             const keepMinY = contentTop - scrollY - viewHeight - genBuffY - pruneBuffer;
             const keepMaxY = contentTop - scrollY + genBuffY + pruneBuffer;
 
-            if (!forceFull) {
-                for (const [key, s] of Array.from(targetState.entries())) {
-                    // PROTECTION STRICTE : On ne supprime JAMAIS une image ou un bouton du state
-                    // C'est ça qui manquait dans le code 2
-                    if (key.startsWith('rib/') || imageCells.has(key) || buttonCells.has(key) || key.startsWith('black/')) continue;
-                    
-                    if (s.x < keepMinX || s.x > keepMaxX || s.y < keepMinY || s.y > keepMaxY) {
-                        targetState.delete(key);
-                    }
+            for (const [key, s] of Array.from(targetState.entries())) {
+                if (imageCells.has(key) || buttonCells.has(key)) continue;
+                if (s.x < keepMinX || s.x > keepMaxX || s.y < keepMinY || s.y > keepMaxY) {
+                    targetState.delete(key);
                 }
             }
 
@@ -2226,23 +2220,7 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            // On protège les zones sous les images pour ne pas générer de grille par dessus
-            const protectedRects = [];
-            for (const key of imageCells) {
-                const s = targetState.get(key);
-                if (s) {
-                    const h = s.originalSize * 0.5 - 0.01; 
-                    protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
-                }
-            }
-            for (const key of buttonCells.keys()) {
-                const s = targetState.get(key);
-                if (s) {
-                    const h = s.originalSize * 0.5 - 0.01;
-                    protectedRects.push({ l: s.x - h, r: s.x + h, b: s.y - h, t: s.y + h });
-                }
-            }
-
+            // Vecteur temporaire réutilisé pour éviter l'allocation mémoire dans la boucle
             const tempVec = new THREE.Vector3();
 
             for (let row = minRow; row < maxRow; row++) {
@@ -2254,25 +2232,13 @@ function onScroll() {
                     const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
                     const y = contentTop - row * w - w / 2;
 
+                    // LEVIER PRINCIPAL : Si on n'est pas en reset complet,
+                    // on vérifie si la case est déjà occupée via findLeafAt (version optimisée).
                     if (!forceFull) {
-                         const rootKey = `content/${row}/${col}`;
-                         if (targetState.has(rootKey)) continue;
-                         
-                         tempVec.set(x, y, 0);
-                         if (findLeafAt(tempVec, targetState)) continue;
+                        tempVec.set(x, y, 0);
+                        const existing = findLeafAt(tempVec, targetState);
+                        if (existing) continue; // On saute la génération si ça existe déjà
                     }
-
-                    // Vérification de chevauchement avec une image
-                    const h = w * 0.5;
-                    const L = x - h, R = x + h, B = y - h, T = y + h;
-                    let overlap = false;
-                    for (const r of protectedRects) {
-                        if (!(R <= r.l || L >= r.r || T <= r.b || B >= r.t)) {
-                            overlap = true;
-                            break;
-                        }
-                    }
-                    if (overlap) continue;
 
                     let pref = 'filler';
                     if (isPrimary) {
@@ -2283,10 +2249,6 @@ function onScroll() {
                     }
 
                     const path = `${pref}/${row}/${col}`;
-                    
-                    // Sécurité supplémentaire
-                    if (path.startsWith('rib/') || imageCells.has(path) || buttonCells.has(path) || path.startsWith('black/')) continue;
-
                     const forceThisCell = (pref === 'content') && FORCE_D1.has(path);
                     createQuadTree(x, y, w, 1, path, forceThisCell ? 1 : -1);
                 }
@@ -2323,10 +2285,13 @@ function onScroll() {
                 forceMobilePattern();
             }
 
+            // Nettoyage structurel
             cutOutUnderButtons();
             dedupeTargetState();
             forceNoD1GlobalExceptFixed();
 
+            // RAFFINEMENTS : On ne les fait que si on ne scrolle pas (FastMode),
+            // sauf si on force un refresh complet. Cela fluidifie grandement le scroll.
             if (!isFastMode || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
@@ -2520,7 +2485,6 @@ function onScroll() {
             const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
             const inset = insetPx * onePxWorld;
             const eps = Math.max(config.borderWidth * 0.5, 0);
-            
             const rects = [];
             const pushRect = (s) => {
                 const h = s.originalSize / 2;
@@ -2531,40 +2495,29 @@ function onScroll() {
                     top: s.y + h - inset + eps
                 });
             };
-
             for (const [btnPath] of buttonCells.entries()) {
                 const s = targetState.get(btnPath);
                 if (s) pushRect(s);
             }
-            
             for (const imgPath of imageCells) {
                 const s = targetState.get(imgPath);
                 if (s) pushRect(s);
             }
-
             if (rects.length === 0) return;
-
             const intersects = (tile, r) => {
                 const h = tile.originalSize / 2;
                 const L = tile.x - h, R = tile.x + h, B = tile.y - h, T = tile.y + h;
                 return !(R <= r.left || L >= r.right || T <= r.bottom || B >= r.top);
             };
-
-            const toRemove = [];
-            for (const [path, s] of targetState.entries()) {
+            for (const [path, s] of Array.from(targetState.entries())) {
                 if (buttonCells.has(path) || imageCells.has(path)) continue;
-                
                 for (const r of rects) {
                     if (intersects(s, r)) {
-                        toRemove.push(path);
+                        targetState.delete(path);
+                        if (typeof instantKill !== 'undefined' && instantKill.add) instantKill.add(path);
                         break;
                     }
                 }
-            }
-
-            for(const path of toRemove) {
-                targetState.delete(path);
-                if (typeof instantKill !== 'undefined' && instantKill.add) instantKill.add(path);
             }
         }
 
@@ -2790,7 +2743,8 @@ function onScroll() {
             
             if (isMobileBucket()) mobileWorldContentHeight = 0;
 
-            // 3. Reconstruction : On force updateFractalBase(true) pour bien placer le décor autour
+            // 3. Reconstruction : On force updateFractalBase(true) comme dans le Code 2
+            // pour garantir une régénération propre autour des images conservées
             updateFractalBase(true);
             
             buildFreeOverlays();
@@ -3910,7 +3864,6 @@ function onScroll() {
             const viewH = lm.contentTop - camera.bottom;
 
             const isLand = isLandscapeLike();
-            // Limites de distance pour supprimer les objets 3D (Culling)
             const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
             const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
 
@@ -3933,18 +3886,7 @@ function onScroll() {
                     const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
 
                     const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
-                    
-                    let tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
-                    
-                    // --- LA LIGNE MAGIQUE DU CODE 1 ---
-                    // Si c'est une image (rib/), on force tooFar à faux. 
-                    // L'objet ne sera jamais supprimé par distance.
-                    if (st.isImage || key.startsWith('rib/')) tooFar = false;
-
-                    // Si c'est une image et qu'elle a été marquée invisible, on la remet visible
-                    if ((st.isImage || key.startsWith('rib/')) && st.targetScale.x === 0) {
-                         st.targetScale.set(st.originalSize, st.originalSize, 1);
-                    }
+                    const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
 
                     if (tooFar || instantKill.has(key)) {
                         if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
@@ -3955,15 +3897,12 @@ function onScroll() {
                         if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
                         fractalState.delete(key);
                     } else {
-                        // Animation de sortie standard pour les non-images
-                        if (!st.isImage && !key.startsWith('rib/')) {
-                            st.targetScale.set(0, 0, 0);
-                            if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
-                            if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
-                            if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                            if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                            if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-                        }
+                        st.targetScale.set(0, 0, 0);
+                        if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
+                        if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
+                        if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
+                        if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
+                        if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
                     }
                 }
             }
@@ -3971,7 +3910,7 @@ function onScroll() {
             for (const key of newKeys) {
                 const t = targetState.get(key);
                 const ex = fractalState.get(key);
-                const isImg = imageCells.has(key) || key.startsWith('rib/');
+                const isImg = imageCells.has(key);
                 const isBtn = buttonCells.has(key);
 
                 const half = t.size / 2;
@@ -3982,10 +3921,7 @@ function onScroll() {
                     (t.y + half) < screenB ||
                     (t.y - half) > screenT
                 );
-                
-                // Pour les images : si elles existent, on les affiche à 100% tout de suite (t.size)
-                // Sinon (carrés gris), on commence à 0 pour l'animation d'apparition
-                const startScale = (isVisibleStrictly || isImg) ? (isImg ? t.size : 0) : t.size;
+                const startScale = isVisibleStrictly ? 0 : t.size;
 
                 if (isImg) {
                     const url = imageAssignment.get(key);
@@ -3997,11 +3933,8 @@ function onScroll() {
                         ex.anchorPosition ||= new THREE.Vector3();
                         ex.anchorPosition.set(t.x, t.y, 0);
                         ex.mesh.position.set(t.x, t.y, 0);
-                        
-                        // Force 100% scale pour les images existantes pour éviter le pop-in
                         ex.targetScale.set(t.size, t.size, 1);
                         ex.originalSize = t.originalSize;
-                        
                         if (ex.mesh.material !== material) ex.mesh.material = material;
                         ex.isButton = isBtn;
                         ex.isImage = isImg;
@@ -4140,6 +4073,12 @@ function onScroll() {
             if (needsBaseUpdate) {
                 const ok = updateFractalBase(false);
                 if (ok) {
+                    // --- CORRECTION MAJEURE ISSUE DU PREMIER CODE ---
+                    // On s'assure que les images sont bien placées et que le fond est nettoyé
+                    // C'est ce qui empêche les carrés gris d'apparaître devant les images
+                    buildFreeOverlays(); 
+                    cutOutUnderButtons();
+                    dedupeTargetState();
                     syncStateToMeshes();
                 }
                 needsBaseUpdate = false;
@@ -4194,9 +4133,8 @@ function onScroll() {
                 if (scene.userData._cursorSnapFrames > 4) scene.userData._cursorSnapFrames = 4;
             }
 
-            // --- CORRECTION ICI ---
+            // --- CORRECTION ICI (Fonctionnalité du Code 2 conservée) ---
             // On met TOUJOURS à jour la cible du curseur, même pendant le scroll.
-            // Cela permet de garder sa taille et sa position relative correcte.
             updateMouseSquareTarget(wp); 
             // ----------------------
 
