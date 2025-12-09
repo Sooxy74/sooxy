@@ -1508,18 +1508,19 @@
             noiseTexture.minFilter = THREE.LinearFilter;
             
             // On utilise un matériau simple avec ta texture
-            // depthTest: false assure qu'il est dessiné comme un fond
-            // renderOrder: 1 assure qu'il est dessiné AVANT les images (qui sont à 3)
+            // depthTest: false assure qu'il est dessiné comme un fond sans écrire dans le depth buffer
             const mat = new THREE.MeshBasicMaterial({
                 map: noiseTexture,
                 transparent: true,
-                opacity: config.grainOpacity, // Utilise la config (0.12)
+                opacity: config.grainOpacity, 
                 depthTest: false,
                 depthWrite: false
             });
 
             grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-            grainPlane.position.z = 1; 
+            // CORRECTION : On le met proche du fond (0) pour ne pas gêner les images (1.5)
+            grainPlane.position.z = 0.1; 
+            // CORRECTION : RenderOrder bas pour qu'il soit dessiné en premier (fond)
             grainPlane.renderOrder = 1; 
             scene.add(grainPlane);
             
@@ -3960,244 +3961,253 @@ function onScroll() {
 
 
         function syncStateToMeshes() {
-    const getOccluderMaterial = () => {
-        if (!scene.userData.occluderMaterial) {
-            scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({
-                color: config.darkColor,
-                depthTest: false,
-                depthWrite: false
-            });
-        }
-        return scene.userData.occluderMaterial;
-    };
-    const isMobile = isMobileBucket();
-    const newKeys = new Set(targetState.keys());
-    const IMAGE_ORDER = 3.0;
-    const DOT_ORDER_NONBTN = 2.50;
-    const BUTTON_ORDER = 3.1;
-    const DOT_ORDER_BUTTON = 3.40;
-    const lm = getLayoutMetrics();
-    const gx = contentGroup?.position?.x || 0;
-    const gy = contentGroup?.position?.y || 0;
-    const viewW = camera.right - camera.left;
-    const viewH = lm.contentTop - camera.bottom;
+            const getOccluderMaterial = () => {
+                if (!scene.userData.occluderMaterial) {
+                    scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({
+                        color: config.darkColor,
+                        depthTest: false,
+                        depthWrite: false
+                    });
+                }
+                return scene.userData.occluderMaterial;
+            };
+            const isMobile = isMobileBucket();
+            const newKeys = new Set(targetState.keys());
+            
+            // CORRECTION : On force un ordre de rendu élevé pour les images
+            const IMAGE_ORDER = 10.0; 
+            const BUTTON_ORDER = 10.1;
+            
+            const DOT_ORDER_NONBTN = 2.50;
+            const DOT_ORDER_BUTTON = 10.40;
+            
+            const lm = getLayoutMetrics();
+            const gx = contentGroup?.position?.x || 0;
+            const gy = contentGroup?.position?.y || 0;
+            const viewW = camera.right - camera.left;
+            const viewH = lm.contentTop - camera.bottom;
 
-    const isLand = isLandscapeLike();
-    const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
-    const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
+            const isLand = isLandscapeLike();
+            const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
+            const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
 
-    const Lhard = camera.left - gx - hardX;
-    const Rhard = camera.right - gx + hardX;
-    const Bhard = camera.bottom - gy - hardY;
-    const Thard = lm.contentTop - gy + hardY;
+            const Lhard = camera.left - gx - hardX;
+            const Rhard = camera.right - gx + hardX;
+            const Bhard = camera.bottom - gy - hardY;
+            const Thard = lm.contentTop - gy + hardY;
 
-    const screenL = camera.left - gx;
-    const screenR = camera.right - gx;
-    const screenB = camera.bottom - gy;
-    const screenT = lm.contentTop - gy;
+            const screenL = camera.left - gx;
+            const screenR = camera.right - gx;
+            const screenB = camera.bottom - gy;
+            const screenT = lm.contentTop - gy;
 
-    for (const [key, st] of fractalState) {
-        if (!newKeys.has(key)) {
-            const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
-            const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
+            for (const [key, st] of fractalState) {
+                if (!newKeys.has(key)) {
+                    const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+                    const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
 
-            const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
-            const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+                    const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+                    const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
 
-            const l = cx - half,
-                r = cx + half,
-                b = cy - half,
-                t = cy + half;
-            const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
+                    const l = cx - half,
+                        r = cx + half,
+                        b = cy - half,
+                        t = cy + half;
+                    const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
 
-            if (tooFar || instantKill.has(key)) {
-                if (st.mesh) {
-                    contentGroup.remove(st.mesh);
-                    meshPool.push(st.mesh);
-                }
-                if (st.dotMesh) {
-                    contentGroup.remove(st.dotMesh);
-                    dotMeshPool.push(st.dotMesh);
-                }
-                if (st.labelSprite) {
-                    scene.remove(st.labelSprite);
-                }
-                if (st.domLabelEl) {
-                    st.domLabelEl.remove();
-                    st.domLabelEl = null;
-                }
-                if (st.baffles) {
-                    st.baffles.forEach(b => b.stop());
-                    st.baffles = null;
-                }
-                if (st.occluderMesh) {
-                    contentGroup.remove(st.occluderMesh);
-                    st.occluderMesh = null;
-                }
-                fractalState.delete(key);
-            } else {
-                st.targetScale.set(0, 0, 0);
-                if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
-                if (st.labelSprite) {
-                    scene.remove(st.labelSprite);
-                    st.labelSprite = null;
-                }
-                if (st.occluderMesh) {
-                    contentGroup.remove(st.occluderMesh);
-                    st.occluderMesh = null;
-                }
-                if (st.domLabelEl) {
-                    st.domLabelEl.remove();
-                    st.domLabelEl = null;
-                }
-                if (st.baffles) {
-                    st.baffles.forEach(b => b.stop());
-                    st.baffles = null;
+                    if (tooFar || instantKill.has(key)) {
+                        if (st.mesh) {
+                            contentGroup.remove(st.mesh);
+                            meshPool.push(st.mesh);
+                        }
+                        if (st.dotMesh) {
+                            contentGroup.remove(st.dotMesh);
+                            dotMeshPool.push(st.dotMesh);
+                        }
+                        if (st.labelSprite) {
+                            scene.remove(st.labelSprite);
+                        }
+                        if (st.domLabelEl) {
+                            st.domLabelEl.remove();
+                            st.domLabelEl = null;
+                        }
+                        if (st.baffles) {
+                            st.baffles.forEach(b => b.stop());
+                            st.baffles = null;
+                        }
+                        if (st.occluderMesh) {
+                            contentGroup.remove(st.occluderMesh);
+                            st.occluderMesh = null;
+                        }
+                        fractalState.delete(key);
+                    } else {
+                        st.targetScale.set(0, 0, 0);
+                        if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
+                        if (st.labelSprite) {
+                            scene.remove(st.labelSprite);
+                            st.labelSprite = null;
+                        }
+                        if (st.occluderMesh) {
+                            contentGroup.remove(st.occluderMesh);
+                            st.occluderMesh = null;
+                        }
+                        if (st.domLabelEl) {
+                            st.domLabelEl.remove();
+                            st.domLabelEl = null;
+                        }
+                        if (st.baffles) {
+                            st.baffles.forEach(b => b.stop());
+                            st.baffles = null;
+                        }
+                    }
                 }
             }
-        }
-    }
 
-    for (const key of newKeys) {
-        const t = targetState.get(key);
-        const ex = fractalState.get(key);
-        const isImg = imageCells.has(key);
-        const isBtn = buttonCells.has(key);
+            for (const key of newKeys) {
+                const t = targetState.get(key);
+                const ex = fractalState.get(key);
+                const isImg = imageCells.has(key);
+                const isBtn = buttonCells.has(key);
 
-        const half = t.size / 2;
+                const half = t.size / 2;
 
-        const isVisibleStrictly = !(
-            (t.x + half) < screenL ||
-            (t.x - half) > screenR ||
-            (t.y + half) < screenB ||
-            (t.y - half) > screenT
-        );
-        const startScale = isVisibleStrictly ? 0 : t.size;
+                const isVisibleStrictly = !(
+                    (t.x + half) < screenL ||
+                    (t.x - half) > screenR ||
+                    (t.y + half) < screenB ||
+                    (t.y - half) > screenT
+                );
+                const startScale = isVisibleStrictly ? 0 : t.size;
 
-        if (isImg) {
-            const url = imageAssignment.get(key);
-            const material = getImageMaterial(url);
+                if (isImg) {
+                    const url = imageAssignment.get(key);
+                    const material = getImageMaterial(url);
 
-            if (ex) {
-                ex.logicalCenter ||= new THREE.Vector3();
-                ex.logicalCenter.set(t.x, t.y, 0);
-                ex.anchorPosition ||= new THREE.Vector3();
-                ex.anchorPosition.set(t.x, t.y, 0);
-                
-                ex.mesh.position.set(t.x, t.y, 1.5); 
-                
-                ex.targetScale.set(t.size, t.size, 1);
-                ex.originalSize = t.originalSize;
-                if (ex.mesh.material !== material) ex.mesh.material = material;
-                ex.isButton = isBtn;
-                ex.isImage = isImg;
-                ex.mesh.renderOrder = IMAGE_ORDER;
-            } else {
-                const mesh = meshPool.pop() || new THREE.Mesh(geometry);
-                mesh.material = material;
-                mesh.position.set(t.x, t.y, 1.5);
-                
-                mesh.scale.set(startScale, startScale, 1);
-                mesh.renderOrder = IMAGE_ORDER;
-                contentGroup.add(mesh);
+                    if (ex) {
+                        ex.logicalCenter ||= new THREE.Vector3();
+                        ex.logicalCenter.set(t.x, t.y, 0);
+                        ex.anchorPosition ||= new THREE.Vector3();
+                        ex.anchorPosition.set(t.x, t.y, 0);
+                        
+                        // CORRECTION : Z à 1.5, devant le grain (0.1)
+                        ex.mesh.position.set(t.x, t.y, 1.5); 
+                        
+                        ex.targetScale.set(t.size, t.size, 1);
+                        ex.originalSize = t.originalSize;
+                        if (ex.mesh.material !== material) ex.mesh.material = material;
+                        ex.isButton = isBtn;
+                        ex.isImage = isImg;
+                        ex.mesh.renderOrder = IMAGE_ORDER;
+                    } else {
+                        const mesh = meshPool.pop() || new THREE.Mesh(geometry);
+                        mesh.material = material;
+                        
+                        // CORRECTION : Z à 1.5
+                        mesh.position.set(t.x, t.y, 1.5);
+                        
+                        mesh.scale.set(startScale, startScale, 1);
+                        mesh.renderOrder = IMAGE_ORDER;
+                        contentGroup.add(mesh);
 
-                const st = {
-                    mesh,
-                    dotMesh: null,
-                    labelSprite: null,
-                    domLabelEl: null,
-                    baffles: null,
-                    occluderMesh: null,
-                    hovering: false,
-                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetScale: new THREE.Vector3(t.size, t.size, 1),
-                    originalSize: t.originalSize,
-                    isButton: isBtn,
-                    isImage: isImg
-                };
-                fractalState.set(key, st);
-            }
-        } else {
-            if (ex) {
-                ex.logicalCenter ||= new THREE.Vector3();
-                ex.logicalCenter.set(t.x, t.y, 0);
-                ex.anchorPosition ||= new THREE.Vector3();
-                ex.anchorPosition.set(t.x, t.y, 0);
-                ex.targetPosition.set(t.x, t.y, 0);
-                ex.targetScale.set(t.size, t.size, 1);
-                ex.originalSize = t.originalSize;
-                ex.isButton = isBtn;
-                ex.isImage = isImg;
-
-                if (isBtn) {
-                    const label = buttonCells.get(key)?.label || '';
-                    if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) {
-                        rebuildDomLabel(ex, label);
+                        const st = {
+                            mesh,
+                            dotMesh: null,
+                            labelSprite: null,
+                            domLabelEl: null,
+                            baffles: null,
+                            occluderMesh: null,
+                            hovering: false,
+                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetScale: new THREE.Vector3(t.size, t.size, 1),
+                            originalSize: t.originalSize,
+                            isButton: isBtn,
+                            isImage: isImg
+                        };
+                        fractalState.set(key, st);
                     }
                 } else {
-                    destroyDomLabel(ex);
-                }
+                    if (ex) {
+                        ex.logicalCenter ||= new THREE.Vector3();
+                        ex.logicalCenter.set(t.x, t.y, 0);
+                        ex.anchorPosition ||= new THREE.Vector3();
+                        ex.anchorPosition.set(t.x, t.y, 0);
+                        ex.targetPosition.set(t.x, t.y, 0);
+                        ex.targetScale.set(t.size, t.size, 1);
+                        ex.originalSize = t.originalSize;
+                        ex.isButton = isBtn;
+                        ex.isImage = isImg;
 
-                if (isBtn && isMobile) {
-                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                    const inset = lm.onePxWorld * insetPx;
-                    if (!ex.occluderMesh) {
-                        ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                        contentGroup.add(ex.occluderMesh);
+                        if (isBtn) {
+                            const label = buttonCells.get(key)?.label || '';
+                            if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) {
+                                rebuildDomLabel(ex, label);
+                            }
+                        } else {
+                            destroyDomLabel(ex);
+                        }
+
+                        if (isBtn && isMobile) {
+                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                            const inset = lm.onePxWorld * insetPx;
+                            if (!ex.occluderMesh) {
+                                ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                                contentGroup.add(ex.occluderMesh);
+                            }
+                            ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                            ex.occluderMesh.position.set(t.x, t.y, 0.05);
+                            const sz = Math.max(0, t.size - inset * 2);
+                            ex.occluderMesh.scale.set(sz, sz, 1);
+                        } else if (ex.occluderMesh) {
+                            contentGroup.remove(ex.occluderMesh);
+                            ex.occluderMesh = null;
+                        }
+                    } else {
+                        const st = {
+                            mesh: null,
+                            dotMesh: null,
+                            labelSprite: null,
+                            domLabelEl: null,
+                            baffles: null,
+                            occluderMesh: null,
+                            hovering: false,
+                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                            targetScale: new THREE.Vector3(t.size, t.size, 1),
+                            currentPosition: new THREE.Vector3(t.x, t.y, 0),
+                            currentScale: new THREE.Vector3(startScale, startScale, 1),
+                            originalSize: t.originalSize,
+                            isButton: isBtn,
+                            isImage: isImg
+                        };
+                        fractalState.set(key, st);
+
+                        if (isBtn && isMobile) {
+                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                            const inset = lm.onePxWorld * insetPx;
+                            st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                            st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                            st.occluderMesh.position.set(t.x, t.y, 0.05);
+                            const sz = Math.max(0, t.size - inset * 2);
+                            st.occluderMesh.scale.set(sz, sz, 1);
+                            contentGroup.add(st.occluderMesh);
+                        }
                     }
-                    ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                    ex.occluderMesh.position.set(t.x, t.y, 0.05);
-                    const sz = Math.max(0, t.size - inset * 2);
-                    ex.occluderMesh.scale.set(sz, sz, 1);
-                } else if (ex.occluderMesh) {
-                    contentGroup.remove(ex.occluderMesh);
-                    ex.occluderMesh = null;
                 }
-            } else {
-                const st = {
-                    mesh: null,
-                    dotMesh: null,
-                    labelSprite: null,
-                    domLabelEl: null,
-                    baffles: null,
-                    occluderMesh: null,
-                    hovering: false,
-                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                    targetScale: new THREE.Vector3(t.size, t.size, 1),
-                    currentPosition: new THREE.Vector3(t.x, t.y, 0),
-                    currentScale: new THREE.Vector3(startScale, startScale, 1),
-                    originalSize: t.originalSize,
-                    isButton: isBtn,
-                    isImage: isImg
-                };
-                fractalState.set(key, st);
+            }
 
-                if (isBtn && isMobile) {
-                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                    const inset = lm.onePxWorld * insetPx;
-                    st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                    st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                    st.occluderMesh.position.set(t.x, t.y, 0.05);
-                    const sz = Math.max(0, t.size - inset * 2);
-                    st.occluderMesh.scale.set(sz, sz, 1);
-                    contentGroup.add(st.occluderMesh);
+            for (const st of fractalState.values()) {
+                if (!st.isImage && st.dotMesh) {
+                    contentGroup.remove(st.dotMesh);
+                    dotMeshPool.push(st.dotMesh);
+                    st.dotMesh = null;
                 }
             }
         }
-    }
-
-    for (const st of fractalState.values()) {
-        if (!st.isImage && st.dotMesh) {
-            contentGroup.remove(st.dotMesh);
-            dotMeshPool.push(st.dotMesh);
-            st.dotMesh = null;
-        }
-    }
-}
+        
+        
         function addDotToState(st) {
             // No-op for instanced items
         }
