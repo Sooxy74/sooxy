@@ -1508,19 +1508,22 @@
             noiseTexture.minFilter = THREE.LinearFilter;
             
             // On utilise un matériau simple avec ta texture
-            // depthTest: false assure qu'il est dessiné comme un fond sans écrire dans le depth buffer
             const mat = new THREE.MeshBasicMaterial({
                 map: noiseTexture,
                 transparent: true,
                 opacity: config.grainOpacity, 
-                depthTest: false,
+                // CORRECTION CRITIQUE ICI :
+                // On active le depthTest pour que le grain comprenne qu'il est "derrière" les images
+                // et qu'il ne doit pas s'afficher là où il y a déjà une image opaque.
+                depthTest: true, 
                 depthWrite: false
             });
 
             grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-            // CORRECTION : On le met proche du fond (0) pour ne pas gêner les images (1.5)
+            // On le met proche du fond (0.1)
             grainPlane.position.z = 0.1; 
-            // CORRECTION : RenderOrder bas pour qu'il soit dessiné en premier (fond)
+            // Le renderOrder n'a plus autant d'importance avec depthTest: true, 
+            // mais on le laisse bas par propreté.
             grainPlane.renderOrder = 1; 
             scene.add(grainPlane);
             
