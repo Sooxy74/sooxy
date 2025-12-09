@@ -1012,7 +1012,7 @@
             const viewW = camera.right - camera.left;
             const viewH = contentTop - camera.bottom;
 
-                        const extendX = isLandscapeLike() ? viewW * 1.5 : 0;
+            const extendX = isLandscapeLike() ? viewW * 1.5 : 0;
             const extendY = isLandscapeLike() ? 0 : viewH * 1.5;
 
             const L = camera.left - gx - extendX;
@@ -2178,8 +2178,8 @@ function onScroll() {
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            const genBuffX = isLandscapeLike() ? viewWidth * 1.0 : viewWidth * 0.5;
-            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 2.0;
+            const genBuffX = isLandscapeLike() ? viewWidth * 1.5 : viewWidth * 0.5;
+            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 3.0;
 
             let minCol = Math.floor((scrollX - genBuffX) / w);
             let maxCol = Math.ceil((scrollX + viewWidth + genBuffX) / w);
