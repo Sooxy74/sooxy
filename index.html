@@ -1517,89 +1517,95 @@
 
 
         function updateScrollDocHeight() {
-            const spacer = document.getElementById('scroll-spacer');
-            if (!spacer) return;
+    const spacer = document.getElementById('scroll-spacer');
+    if (!spacer) return;
 
-            const stableW = STABLE_VP_W || window.innerWidth;
-            const stableH = STABLE_VP_H || window.innerHeight;
+    const stableW = STABLE_VP_W || window.innerWidth;
+    const stableH = STABLE_VP_H || window.innerHeight;
 
-            // Nombre d’images trouvées dans img/fractal-art_img
-            const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
+    // Nombre d’images trouvées dans img/fractal-art_img
+    const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
 
-            // --- LOGIQUE CODE 2 (Vertical / Mobile / Portrait) ---
-            if (!isLandscapeLike()) {
-                const { viewHeight, w, menuHeight } = getLayoutMetrics();
-                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+    // --- SCROLL VERTICAL (portrait / mobile-like) ---
+    if (!isLandscapeLike()) {
+        const { viewHeight, w, menuHeight } = getLayoutMetrics();
+        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
 
-                // une "ligne" par image
-                V.patternRows = imgCount > 0 ? imgCount : 1;
-                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+        // une "ligne" par image
+        V.patternRows = imgCount > 0 ? imgCount : 1;
+        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
-                const gapYWorld = Math.max(0, V.gapRows) * w;
+        const gapYWorld = Math.max(0, V.gapRows) * w;
 
-                // Hauteur totale du contenu en world units
-                const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld;
+        // 🔥 hauteur totale du contenu en world units
+        const totalWorld =
+            (V.patternRows * w) +
+            Math.max(0, V.patternRows - 1) * gapYWorld;
 
-                // Zone visible (viewport - header)
-                const visibleWorld = Math.max(0, (viewHeight - menuHeight));
+        // 🔥 zone visible (viewport - header)
+        const visibleWorld = Math.max(0, (viewHeight - menuHeight));
 
-                // Max scroll = total - visible
-                V.maxWorld = Math.max(0, totalWorld - visibleWorld);
-                mobileWorldContentHeight = totalWorld;
+        // 🔥 on veut pouvoir scroller jusqu’en bas : maxWorld = total - visible
+        V.maxWorld = Math.max(0, totalWorld - visibleWorld);
+        mobileWorldContentHeight = totalWorld;
 
-                // On garde le spacer à la taille de la viewport pour le "fake" scroll vertical
-                spacer.style.height = stableH + 'px';
-                spacer.style.width = '1px';
-                spacer.style.display = 'block';
+        // On garde le spacer à la taille de la viewport
+        spacer.style.height = stableH + 'px';
+        spacer.style.width = '1px';
+        spacer.style.display = 'block';
 
-                const root = rootScroller();
-                root.style.overflowX = 'hidden';
-                root.style.overflowY = 'hidden';
-                root.style.webkitOverflowScrolling = 'auto';
+        const root = rootScroller();
+        root.style.overflowX = 'hidden';
+        root.style.overflowY = 'hidden';
+        root.style.webkitOverflowScrolling = 'auto';
 
-                // Clamp du scroll courant
-                V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
-                return;
-            }
+        // Clamp du scroll courant
+        V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
+        return;
+    }
 
-            // --- LOGIQUE CODE 1 (Horizontal / Desktop) ---
-            const { w } = getLayoutMetrics();
-            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 0, gapCols: 0 });
+    // --- SCROLL HORIZONTAL (paysage / desktop) ---
+    const { w } = getLayoutMetrics();
+    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 0, gapCols: 0 });
 
-            const contentCols = contentColsForBucket();
+    const contentCols = contentColsForBucket();
 
-            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
-            // Calcul précis des colonnes pour le Zig-Zag horizontal
-            if (imgCount > 0) {
-                const slots = Math.ceil(imgCount / 2); // 2 images par "bloc" de colonnes
-                const minPatternCols = 2 * slots;      // Chaque bloc prend 2 colonnes de large
-                const extraCols = imgCount > 3 ? 1 : 0; // Marge de sécurité
-                H.patternCols = Math.max(contentCols, minPatternCols + extraCols);
-            } else {
-                H.patternCols = contentCols;
-            }
+    if (imgCount > 0) {
+        const slots = Math.ceil(imgCount / 2);
+        const minPatternCols = 2 * slots;
+        const extraCols = imgCount > 3 ? 1 : 0;
+        H.patternCols = Math.max(contentCols, minPatternCols + extraCols);
+    } else {
+        H.patternCols = contentCols;
+    }
 
-            const patternCols = H.patternCols;
-            const gapXWorld = Math.max(0, H.gapCols) * w;
+    const patternCols = H.patternCols;
+    const gapXWorld = Math.max(0, H.gapCols) * w;
 
-            const totalWorld = (patternCols * w) + Math.max(0, patternCols - 1) * gapXWorld;
-            const visibleWorld = (contentCols * w) + Math.max(0, contentCols - 1) * gapXWorld;
+    const totalWorld =
+        (patternCols * w) +
+        Math.max(0, patternCols - 1) * gapXWorld;
 
-            const extraWorld = Math.max(0, totalWorld - visibleWorld);
-            H.maxWorld = extraWorld;
+    const visibleWorld =
+        (contentCols * w) +
+        Math.max(0, contentCols - 1) * gapXWorld;
 
-            spacer.style.height = stableH + 'px';
-            spacer.style.width = '1px';
-            spacer.style.display = 'block';
+    const extraWorld = Math.max(0, totalWorld - visibleWorld);
+    H.maxWorld = extraWorld;
 
-            const root = rootScroller();
-            root.style.overflowX = 'hidden';
-            root.style.overflowY = 'hidden';
-            root.style.webkitOverflowScrolling = 'auto';
+    spacer.style.height = stableH + 'px';
+    spacer.style.width = '1px';
+    spacer.style.display = 'block';
 
-            H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
-        }
+    const root = rootScroller();
+    root.style.overflowX = 'hidden';
+    root.style.overflowY = 'hidden';
+    root.style.webkitOverflowScrolling = 'auto';
+
+    H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
+}
 
 
 
@@ -2170,13 +2176,11 @@ function onScroll() {
             }
 
             // --- OPTIMISATION SCROLL ---
-            // Mode performance pendant le scroll : pas de calculs inutiles
             const isFastMode = isScrolling && !forceFull;
 
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            // Buffers de génération (zones hors écran prêtes à être affichées)
             const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
             const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 1.5;
 
@@ -2189,7 +2193,6 @@ function onScroll() {
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            // Pruning : Suppression des cellules trop lointaines pour libérer la mémoire
             const pruneBuffer = w * 3;
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
@@ -2214,7 +2217,6 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            // Vecteur temporaire réutilisé pour éviter l'allocation mémoire dans la boucle
             const tempVec = new THREE.Vector3();
 
             for (let row = minRow; row < maxRow; row++) {
@@ -2226,12 +2228,10 @@ function onScroll() {
                     const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
                     const y = contentTop - row * w - w / 2;
 
-                    // LEVIER PRINCIPAL : Si on n'est pas en reset complet,
-                    // on vérifie si la case est déjà occupée via findLeafAt (version optimisée).
                     if (!forceFull) {
                         tempVec.set(x, y, 0);
                         const existing = findLeafAt(tempVec, targetState);
-                        if (existing) continue; // On saute la génération si ça existe déjà
+                        if (existing) continue;
                     }
 
                     let pref = 'filler';
@@ -2284,8 +2284,9 @@ function onScroll() {
             dedupeTargetState();
             forceNoD1GlobalExceptFixed();
 
-            // RAFFINEMENTS : On ne les fait que si on ne scrolle pas (FastMode),
-            // sauf si on force un refresh complet. Cela fluidifie grandement le scroll.
+            // --- CORRECTION: On bouche les trous impérativement ici, même pendant le scroll ---
+            fillBlueGaps(); 
+
             if (!isFastMode || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
@@ -2702,7 +2703,6 @@ function onScroll() {
 
 
         function reformGridKeepImages() {
-            // Mise à jour de la graine aléatoire (Système Code 1)
             scene.userData = scene.userData || {};
             scene.userData._regenNonce = ((scene.userData._regenNonce | 0) + 1) | 0;
             globalClickNonce = (globalClickNonce + 1) | 0;
@@ -2710,43 +2710,39 @@ function onScroll() {
             reseed(globalClickNonce);
             forceRecreateLabelsOnce = true;
 
-            // 1. Nettoyage Logique Sélectif
-            // On garde impérativement les images (rib/) ET les textes (black/)
             const keysToKeep = new Set();
             for (const k of targetState.keys()) {
                 if (k.startsWith('rib/') || k.startsWith('black/')) {
                     keysToKeep.add(k);
                 }
             }
-            // On supprime tout le reste
             for (const k of Array.from(targetState.keys())) {
                 if (!keysToKeep.has(k)) {
                     targetState.delete(k);
                 }
             }
 
-            // 2. Gestion des boutons (On ne vide pas les boutons textes pour éviter le flash)
             const blacks = [];
             for (const [k, v] of buttonCells) {
                 if (k.startsWith('black/')) blacks.push({k, v});
             }
             buttonCells.clear();
             buttonSlots.clear();
-            // On restaure les textes
             blacks.forEach(item => buttonCells.set(item.k, item.v));
             
             if (isMobileBucket()) mobileWorldContentHeight = 0;
 
-            // 3. Reconstruction : On force updateFractalBase(true) comme dans le Code 2
-            // pour garantir une régénération propre autour des images conservées
             updateFractalBase(true);
             
+            // On reconstruit tout l'agencement autour des images
             buildFreeOverlays();
             createBlackNeighborImages();
             cutOutUnderButtons();
             dedupeTargetState();
+            
+            // Sécurité finale pour boucher les trous après les déplacements d'images
+            fillBlueGaps();
 
-            // 4. Raffinements
             if (!isMobileBucket()) {
                 sprinkleRefinements(12);
                 if (isLandscapeLike()) {
@@ -2756,7 +2752,6 @@ function onScroll() {
                 }
             }
 
-            // 5. Application
             syncStateToMeshes();
             
             needsRefineCheck = true;
@@ -3133,7 +3128,6 @@ function onScroll() {
                 let blackX, blackY, blackPath;
 
                 if (isPortrait) {
-                    // --- LOGIQUE VERTICALE (CODE 2) : Texte à côté ---
                     const col = (index % 2 === 0) ? 0 : 1;
                     if (col === 0) { // Image gauche -> texte droite
                         blackX = img.x + w;
@@ -3145,7 +3139,6 @@ function onScroll() {
                         blackPath = `black/${index}_left`;
                     }
                 } else {
-                    // --- LOGIQUE HORIZONTALE (CODE 1) : Texte dessous/dessus ---
                     const row = (index % 2 === 0) ? 0 : 1;
                     if (row === 0) { // Image haut -> texte bas
                         blackX = img.x;
@@ -3221,25 +3214,22 @@ function onScroll() {
             const bucketOffset = contentOffsetColsForBucket();
             const baseX = camera.left + (bucketOffset + 0.5) * w;
 
-            // Détection : Portrait (Code 2 logic) ou Paysage (Code 1 logic)
             const isPortrait = !isLandscapeLike();
 
             const expectedCount = imageTextures.length;
+
             const desired = new Set();
             const slots = [];
 
             if (isPortrait) {
-                // --- LOGIQUE VERTICALE (CODE 2) ---
                 const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
                 V.patternRows = expectedCount;
                 V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
                 const gapYWorld = Math.max(0, V.gapRows) * w;
 
                 for (let i = 0; i < expectedCount; i++) {
-                    // Alterne gauche (0) / droite (1)
                     const col = (i % 2 === 0) ? 0 : 1;
                     const cx = camera.left + (bucketOffset + col + 0.5) * w;
-                    // Empilement vertical
                     const cy = stableTop - (i * (w + gapYWorld) + w / 2);
                     const path = `rib/${i}`;
                     desired.add(path);
@@ -3252,20 +3242,18 @@ function onScroll() {
                         sz: Math.max(0, w - config.borderWidth)
                     });
                 }
-                // Mise à jour hauteur contenu mobile
-                const totalWorld = (expectedCount * w) + Math.max(0, expectedCount - 1) * gapYWorld;
+
+                const totalWorld =
+                    (expectedCount * w) +
+                    Math.max(0, expectedCount - 1) * gapYWorld;
+
                 mobileWorldContentHeight = totalWorld;
                 V.maxWorld = Math.max(0, totalWorld - (lm.viewHeight - lm.menuHeight));
-
             } else {
-                // --- LOGIQUE HORIZONTALE (CODE 1) ---
                 for (let i = 0; i < expectedCount; i++) {
-                    // Zig-Zag : Haut (0) / Bas (1)
                     const row = (i % 2 === 0) ? 0 : 1;
                     const slot = Math.floor(i / 2);
-                    // Décalage horizontal progressif
                     const col = (row === 0) ? (2 * slot) : (2 * slot + 1);
-                    
                     const cx = baseX + col * (w + gapXWorld);
                     const cy = stableTop - (row + 0.5) * w;
                     const path = `rib/${i}`;
@@ -3281,8 +3269,8 @@ function onScroll() {
                 }
             }
 
-            // Application des positions calculées
             for (const s of slots) {
+                // On force la mise à jour pour être sûr
                 targetState.set(s.path, {
                     x: s.x,
                     y: s.y,
@@ -3297,7 +3285,6 @@ function onScroll() {
                 imageAssignment.set(s.path, url);
             }
 
-            // Nettoyage des anciennes images
             for (const key of Array.from(targetState.keys())) {
                 if (key.startsWith('rib/') && !desired.has(key)) {
                     targetState.delete(key);
@@ -3307,13 +3294,14 @@ function onScroll() {
 
             cutOutUnderButtons();
             dedupeTargetState();
-            createBlackNeighborImages(); // Appelle la fonction modifiée ci-dessous
+            createBlackNeighborImages();
             cutOutUnderButtons();
             syncStateToMeshes();
 
             updateScrollDocHeight();
             forceBrowserToLayoutForHScroll();
         }
+
 
 
 
@@ -4340,7 +4328,54 @@ function onScroll() {
             return innerWorld * pxPerWorldX;
         }
 
+        function fillBlueGaps() {
+    const { w, viewWidth, viewHeight, contentTop } = getLayoutMetrics();
+    const scrollX = (scene.userData._hscroll?.xWorld || 0);
+    const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
+    const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
+    const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 1.5;
+
+    let minCol = Math.floor((scrollX - genBuffX) / w);
+    let maxCol = Math.ceil((scrollX + viewWidth + genBuffX) / w);
+    let minRow = Math.floor((scrollY - genBuffY) / w);
+    let maxRow = Math.ceil((scrollY + viewHeight + genBuffY) / w);
+
+    minCol = Math.max(0, minCol);
+    minRow = Math.max(0, minRow);
+
+    if (isMobileBucket()) {
+        const mobRows = mobileRowsNeeded();
+        maxRow = Math.max(maxRow, mobRows);
+    }
+
+    const offsetCols = contentOffsetColsForBucket();
+    const tempVec = new THREE.Vector3();
+
+    for (let row = minRow; row < maxRow; row++) {
+        const isPrimary = row < baseRowsPrimary;
+
+        for (let col = minCol; col < maxCol; col++) {
+            const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
+            const y = contentTop - row * w - w / 2;
+
+            tempVec.set(x, y, 0);
+
+            if (!findLeafAt(tempVec, targetState)) {
+                const path = `safety/${row}/${col}`;
+                targetState.set(path, {
+                    x: x,
+                    y: y,
+                    size: w - config.borderWidth,
+                    depth: 1,
+                    path: path,
+                    originalSize: w
+                });
+            }
+        }
+    }
+}
+        
         // ——— FIX: même position pour l'image de la 2e ligne sur tous les formats paysages ———
         function extraImageOffsetForPath(path) {
             // on neutralise tout décalage en formats paysages
