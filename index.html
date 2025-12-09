@@ -514,165 +514,161 @@
         }
         
         /* Lightbox Styles */
-        #lightbox-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 10000;
-            background: rgba(9, 11, 11, 0.95);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            cursor: zoom-out;
-        }
+#lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(9, 11, 11, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    cursor: zoom-out;
+}
 
-        #lightbox-overlay.active {
-            opacity: 1;
-        }
+#lightbox-overlay.active {
+    opacity: 1;
+}
 
-        .lightbox-container {
-            display: flex;
-            max-width: 90vw;
-            max-height: 90vh;
-            cursor: default;
-            position: relative;
-            /* CORRECTION 1 : Suppression de l'espace entre l'image et le texte */
-            gap: 0; 
-            box-sizing: border-box;
-        }
+.lightbox-container {
+    display: flex;
+    max-width: 90vw;
+    max-height: 90vh;
+    cursor: default;
+    position: relative;
+    gap: 0; /* Pas d'espace entre les blocs */
+    box-sizing: border-box;
+}
 
-        /* Image Wrapper */
-        .lb-img-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 1px solid #0055ff;
-            background: #090B0B;
-            box-sizing: border-box;
-            overflow: hidden;
-        }
+/* Image Wrapper */
+.lb-img-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #0055ff;
+    background: #090B0B;
+    box-sizing: border-box;
+    overflow: hidden;
+}
 
-        .lb-img {
-            display: block;
-            width: 100%;
-            height: 100%;
-            /* Par défaut (Desktop), on veut voir l'image entière */
-            object-fit: contain; 
-        }
+.lb-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
 
-        /* Text Wrapper */
-        .lb-text-wrapper {
-            position: relative;
-            border: 1px solid #0055ff;
-            background: #090B0B;
-            color: #f3f1ee;
-            font-family: "Space Mono", monospace;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-        }
+/* Text Wrapper */
+.lb-text-wrapper {
+    position: relative;
+    border: 1px solid #0055ff;
+    background: #090B0B;
+    color: #f3f1ee;
+    font-family: "Space Mono", monospace;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
 
-        .lb-text-wrapper::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            opacity: 0.12;
-            background-image: url('img/noise.png');
-            background-repeat: repeat;
-            background-size: 256px 256px;
-            z-index: 0;
-        }
+.lb-text-wrapper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: url('img/noise.png');
+    background-repeat: repeat;
+    background-size: 256px 256px;
+    z-index: 0;
+}
 
-        .lb-content {
-            position: relative;
-            z-index: 1;
-            padding: 32px;
-            overflow-y: auto;
-            height: 100%;
-            box-sizing: border-box;
-        }
+.lb-content {
+    position: relative;
+    z-index: 1;
+    padding: 32px;
+    overflow-y: auto;
+    height: 100%;
+    box-sizing: border-box;
+}
 
-        .lb-title {
-            font-weight: 700;
-            font-size: 24px;
-            margin-bottom: 16px;
-            line-height: 1.2;
-        }
+.lb-title {
+    font-weight: 700;
+    font-size: 24px;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
 
-        .lb-desc {
-            font-weight: 400;
-            font-size: 14px;
-            line-height: 1.6;
-        }
+.lb-desc {
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.6;
+}
 
-        @media (orientation: landscape) {
-            .lightbox-container {
-                flex-direction: row;
-                align-items: stretch;
-                height: 80vh; 
-                width: auto;
-            }
+@media (orientation: landscape) {
+    .lightbox-container {
+        flex-direction: row;
+        align-items: stretch;
+        height: 80vh; 
+        width: auto;
+    }
 
-            .lb-img-wrapper {
-                flex: 1 1 auto;
-                height: 100%;
-                width: auto;
-                min-width: 0; 
-                /* CORRECTION : On retire la bordure droite de l'image pour éviter le doublon (2px) avec le texte */
-                border-right: none; 
-            }
-            
-            .lb-img {
-                height: 100%;
-                width: 100%;
-                max-width: 65vw;
-                object-fit: contain;
-            }
+    .lb-img-wrapper {
+        flex: 1 1 auto;
+        height: 100%;
+        width: auto;
+        min-width: 0; 
+        border-right: none; /* Fusionne la bordure avec le texte à droite */
+    }
+    
+    .lb-img {
+        height: 100%;
+        width: 100%;
+        max-width: 65vw;
+        object-fit: contain;
+    }
 
-            .lb-text-wrapper {
-                flex: 0 0 400px;
-                width: 400px;
-                min-width: 300px;
-                height: 100%;
-            }
-        }
+    .lb-text-wrapper {
+        flex: 0 0 400px;
+        width: 400px;
+        min-width: 300px;
+        height: 100%;
+    }
+}
 
-        @media (orientation: portrait) {
-            .lightbox-container {
-                flex-direction: column;
-                width: 90vw;
-                height: auto;
-                max-height: 90vh;
-            }
+@media (orientation: portrait) {
+    .lightbox-container {
+        flex-direction: column;
+        /* MODIFICATION ICI : Passage de 90vw à 80vw */
+        width: 80vw; 
+        height: auto;
+        max-height: 90vh;
+    }
 
-            .lb-img-wrapper {
-                width: 100%;
-                height: auto; /* La hauteur s'adapte à l'image */
-                flex-shrink: 0;
-                display: block; 
-                /* CORRECTION : On retire la bordure du bas pour éviter le doublon avec le texte */
-                border-bottom: none; 
-            }
+    .lb-img-wrapper {
+        width: 100%;
+        height: auto;
+        flex-shrink: 0;
+        display: block; 
+        border-bottom: none; /* Fusionne la bordure avec le texte en bas */
+    }
 
-            .lb-img {
-                width: 100%;
-                height: auto;
-                /* CORRECTION 2 : On force l'image à remplir la largeur (cover) pour éviter les bandes noires */
-                /* max-height limite la hauteur pour ne pas écraser le texte, mais cover assure le remplissage */
-                max-height: 60vh; 
-                object-fit: cover; 
-            }
+    .lb-img {
+        width: 100%;
+        height: auto;
+        max-height: 60vh; 
+        /* Garde le cover pour éviter les bandes noires sur les images carrées */
+        object-fit: cover; 
+    }
 
-            .lb-text-wrapper {
-                width: 100%;
-                height: auto;
-                flex: 1;
-                min-height: 0; 
-            }
-        }
+    .lb-text-wrapper {
+        width: 100%;
+        height: auto;
+        flex: 1;
+        min-height: 0; 
+    }
+}
         
     </style>
     <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
