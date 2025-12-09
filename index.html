@@ -3484,7 +3484,6 @@ function onScroll() {
         }
 
         function rebuildDomLabel(st, label) {
-    // Nettoyage ancien label / baffle
     if (st.baffles) {
         st.baffles.forEach(b => b.stop());
         st.baffles = null;
@@ -3493,67 +3492,43 @@ function onScroll() {
         st.domLabelEl.remove();
         st.domLabelEl = null;
     }
-
     const layer = document.getElementById('labels-layer');
     if (layer) layer.style.zIndex = '3';
-
     const el = makeDomLabelEl(label);
-
-    // Carré noir = paragraphe sous les images (détecté au Lorem ipsum)
     const isBlackSquare = String(label).toLowerCase().includes('lorem ipsum');
-    st.isBlackSquare = isBlackSquare;   // on mémorise sur le state
-
+    st.isBlackSquare = isBlackSquare;
     if (isBlackSquare) {
         el.classList.add('black-text');
     }
-
-    // on laisse une valeur par défaut, la vraie origine / alignement
-    // sera recalculée dans updateDomLabelLayout()
     el.style.transformOrigin = '100% 0%';
     el.style.textAlign = 'right';
-
     el.style.position = 'absolute';
     el.style.left = '0px';
     el.style.top = '0px';
     el.style.textRendering = 'optimizeLegibility';
     el.style.webkitFontSmoothing = 'antialiased';
     el.style.direction = 'ltr';
-
-    // invisible au départ
     el.style.opacity = '0';
     el.style.transition = 'opacity 0s linear';
-
     const lines = Array.from(el.querySelectorAll('.line'));
     st.lines = lines;
     st.labelText = label;
-
-    // Mise en forme de base des lignes
     lines.forEach(line => {
         line.style.display = 'block';
         line.style.whiteSpace = isBlackSquare ? 'normal' : 'nowrap';
-        // l’alignement sera forcé dans updateDomLabelLayout()
         line.style.textAlign = isBlackSquare ? 'left' : 'right';
     });
-
     layer?.appendChild(el);
     st.domLabelEl = el;
-
-    // Mesure "offscreen"
     const prev = el.style.transform;
     el.style.transform = 'translate(-10000px,-10000px)';
-
     const fm = FontMetrics.measure(label);
     st.baseFontPx = fm.fontSize;
     st.labelBaseWidthPx = fm.width;
-
     const firstLine = String(label).split('\n')[0];
     st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
-
     el.style.transform = prev || '';
-
-    // Flag : est-ce que ce label a DÉJÀ été animé une fois ?
     const alreadyAnimated = !!st.hasAnimatedBaffle;
-
     if (!isMobileBucket() && window.baffle && !alreadyAnimated) {
         st.baffles = lines.map(line =>
             window.baffle(line).set({
@@ -3564,7 +3539,6 @@ function onScroll() {
     } else {
         st.baffles = null;
     }
-
     st.hovering = false;
     st.appearTriggered = false;
 }
@@ -3572,18 +3546,11 @@ function onScroll() {
 
 
     function ensureGlobalLabelFontPx(lm) {
-    // On différencie un peu mieux :
-    // - desktop (tous formats paysage "larges")
-    // - tablette portrait
-    // - mobile portrait
-    const isMobilePortrait  = currentBucket === 'mobile-v';
-    const isTabletPortrait  = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
-
-    // Bases plus petites qu'avant
-    const baseDesktop = 13;  // avant ~14–15 visuellement
-    const baseTablet  = 12;  // un poil plus petit
-    const baseMobile  = 11;  // nettement plus raisonnable en mobile
-
+    const isMobilePortrait = currentBucket === 'mobile-v';
+    const isTabletPortrait = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+    const baseDesktop = 13;
+    const baseTablet = 12;
+    const baseMobile = 11;
     let base;
     if (isMobilePortrait) {
         base = baseMobile;
@@ -3592,75 +3559,51 @@ function onScroll() {
     } else {
         base = baseDesktop;
     }
-
-    const scale = viewportLabelScaleFactor(); // garde ta logique de scale existante
+    const scale = viewportLabelScaleFactor();
     return base * scale;
 }
 
     function syncCategoryLabelSize(lmOverride) {
     const catEl = document.getElementById('category-label');
     if (!catEl) return;
-
     const lm = lmOverride || getLayoutMetrics();
-    const basePx = ensureGlobalLabelFontPx(lm);   // même base que les titres de paragraphes
-    const titlePx = basePx * 1.6;                 // même facteur que ton 1.6em
-
+    const basePx = ensureGlobalLabelFontPx(lm);
+    const titlePx = basePx * 1.6;
     catEl.style.fontSize = `${titlePx}px`;
 }
-
 
 
    function updateDomLabelLayout(st, lm) {
     if (!st.domLabelEl) return;
     const el = st.domLabelEl;
     const { w } = lm;
-
-    // --- ratio d’agrandissement du carré (0 → 1) ---
     const targetSize = (st.targetScale && st.targetScale.x) || st.originalSize || w;
     const currentSize = (st.currentScale && st.currentScale.x) ||
         (st.mesh ? st.mesh.scale.x : targetSize);
-
     const ratio = targetSize > 0 ? (currentSize / targetSize) : 1;
-
-    // Taille affichée du carré
     const dispS = Math.max(0, currentSize);
-
-    // Centre en coordonnées locales (contentGroup)
     const localX = st.currentPosition ? st.currentPosition.x :
         (st.mesh ? st.mesh.position.x : 0);
     const localY = st.currentPosition ? st.currentPosition.y :
         (st.mesh ? st.mesh.position.y : 0);
-
-    // Décalage du groupe (scroll)
     const gx = contentGroup?.position?.x || 0;
     const gy = contentGroup?.position?.y || 0;
-
-    // Coordonnées monde
     const worldX = localX + gx;
     const worldY = localY + gy;
-
     const half = dispS / 2;
-
-    // Carrés noirs "paragraphe" (ceux sous les images)
     const isBlackSquare =
         !!st.isBlackSquare ||
         (st.labelText && st.labelText.toLowerCase().includes('lorem ipsum'));
-
-    // Sommes-nous dans un format vertical ?
     const isPortraitBucket =
         currentBucket === 'mobile-v' ||
         currentBucket === 'tablet-3:4' ||
         currentBucket === 'tablet-9:16';
-
-    // Est-ce que ce carré noir est à gauche de l’image la plus proche ?
     let isLeftOfImage = false;
     if (isBlackSquare && isPortraitBucket) {
         const cx = localX;
         const cy = localY;
-
         let bestD2 = Infinity;
         let bestImageX = null;
-
         for (const other of fractalState.values()) {
             if (!other.isImage) continue;
             const ox = other.currentPosition
@@ -3669,7 +3612,6 @@ function onScroll() {
             const oy = other.currentPosition
                 ? other.currentPosition.y
                 : (other.mesh ? other.mesh.position.y : 0);
-
             const dx = ox - cx;
             const dy = oy - cy;
             const d2 = dx * dx + dy * dy;
@@ -3678,48 +3620,32 @@ function onScroll() {
                 bestImageX = ox;
             }
         }
-
         if (bestImageX != null) {
-            // si l'image est à droite du texte → texte à gauche de l'image
             if (bestImageX > cx + 1e-4) {
                 isLeftOfImage = true;
             }
         }
     }
-
-    // Ici on décide si le texte doit être ferré à droite dans le carré
     const alignRightInside = isBlackSquare && isPortraitBucket && isLeftOfImage;
-
     const marginPctRight = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_RIGHT - 2));
-    const marginPctTop   = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP   - 2));
-
+    const marginPctTop = 1 / Math.pow(2, (LABEL_MARGIN_DEPTH_TOP - 2));
     let mRightWorld = dispS * marginPctRight;
     const mTopWorld = dispS * marginPctTop;
     let mLeftWorld = 0;
-
     let txWorld, tyWorld;
-
     if (isBlackSquare) {
-        // Même marge à gauche et à droite
-        mLeftWorld  = dispS * marginPctTop;
+        mLeftWorld = dispS * marginPctTop;
         mRightWorld = mLeftWorld;
-
         if (alignRightInside) {
-            // Texte ferré à droite dans le carré
             txWorld = worldX + half - mRightWorld;
         } else {
-            // Texte ferré à gauche comme avant
             txWorld = worldX - half + mLeftWorld;
         }
-
         tyWorld = worldY + half - mTopWorld;
     } else {
-        // Boutons "normaux" : ancrage haut-droit
         txWorld = worldX + half - mRightWorld;
         tyWorld = worldY + half - mTopWorld;
     }
-
-    // Re-mesure au besoin
     if ((!st.labelBaseWidthPx || st.labelBaseWidthPx <= 0) && st.domLabelEl) {
         const fm = FontMetrics.measure(st.labelText || '');
         st.baseFontPx = fm.fontSize;
@@ -3727,13 +3653,9 @@ function onScroll() {
         const firstLine = String(st.labelText || '').split('\n')[0];
         st.firstLineBaseWidthPx = FontMetrics.measure(firstLine).width;
     }
-
     const targetS = Math.max(0, st.targetScale?.x || dispS);
-
     const pxPerWorldX =
         (STABLE_VP_W || window.innerWidth) / (camera.right - camera.left);
-
-    // Largeur dispo en px
     let availablePxFinal;
     if (isBlackSquare) {
         const innerWorld = Math.max(0, dispS - (mLeftWorld + mRightWorld));
@@ -3743,33 +3665,19 @@ function onScroll() {
         availablePxFinal = computeSquareInnerWidthPx(targetS);
         el.style.maxWidth = '';
     }
-
-    // Taille de base calculée en fonction du viewport + bucket
     const baseFontPx = ensureGlobalLabelFontPx(lm);
-
-    const isDesktopBucket =
-        currentBucket === 'desktop-16:9' ||
-        currentBucket === 'desktop-21:9' ||
-        currentBucket === 'desktop-32:9';
-
-    const isMobilePortrait  = currentBucket === 'mobile-v';
-    const isTabletPortrait  = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
-    const isCompact         = isMobilePortrait || isTabletPortrait;
-
+    const isMobilePortrait = currentBucket === 'mobile-v';
+    const isTabletPortrait = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+    const isCompact = isMobilePortrait || isTabletPortrait;
     const perPx =
         (st.labelBaseWidthPx > 0 && st.baseFontPx > 0)
             ? (st.labelBaseWidthPx / st.baseFontPx)
             : 0;
-
-    // Taille max permise par la place dispo
     let maxByWidth = perPx > 0
         ? (availablePxFinal / perPx)
         : (st.baseFontPx || baseFontPx);
-
     let finalFontPx;
-
     if (isBlackSquare) {
-        // Paragraphes sous images
         if (isCompact) {
             finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
             finalFontPx = Math.max(
@@ -3781,7 +3689,6 @@ function onScroll() {
             finalFontPx = Math.max(finalFontPx, 13);
         }
     } else {
-        // Labels de boutons
         if (isCompact) {
             finalFontPx = Math.min(maxByWidth, baseFontPx * 0.9);
             finalFontPx = Math.max(
@@ -3793,20 +3700,13 @@ function onScroll() {
             finalFontPx = Math.max(finalFontPx, 12);
         }
     }
-
-    // Arrondi et bornes globales
     finalFontPx = Math.round(finalFontPx * 2) / 2;
     finalFontPx = Math.max(9, Math.min(64, finalFontPx));
     el.style.fontSize = finalFontPx + 'px';
     el.style.color = '#f3f1ee';
-
-    // 🔥 SEUIL 80% : apparition du texte + ANIMATION UNE SEULE FOIS
     if (!st.appearTriggered && ratio >= 0.8) {
         st.appearTriggered = true;
-
-        // Apparition brutale du texte
         el.style.opacity = '1';
-
         if (st.baffles && !st.hasAnimatedBaffle) {
             st.hasAnimatedBaffle = true;
             st.baffles.forEach(b => {
@@ -3815,29 +3715,21 @@ function onScroll() {
             });
         }
     }
-
-    // Alignement final (en tenant compte des CSS !important)
     const desiredAlign = isBlackSquare
         ? (alignRightInside ? 'right' : 'left')
         : 'right';
-
     el.style.setProperty('text-align', desiredAlign, 'important');
     if (st.lines) {
         st.lines.forEach(line => {
             line.style.setProperty('text-align', desiredAlign, 'important');
         });
     }
-
-    // Origine de transform pour coller à l’alignement
     const originX = (isBlackSquare && !alignRightInside) ? '0%' : '100%';
     el.style.transformOrigin = `${originX} 0%`;
-
-    // Projection monde → pixels
     const p = worldToClientXY(new THREE.Vector3(txWorld, tyWorld, 0));
     const translateX = (isBlackSquare && !alignRightInside)
         ? 'translateX(0%)'
         : 'translateX(-100%)';
-
     el.style.transform =
         `translate(${Math.round(p.x)}px, ${Math.round(p.y + LABEL_NUDGE_PX_Y)}px) ${translateX}`;
 }
