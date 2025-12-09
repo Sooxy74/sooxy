@@ -44,16 +44,12 @@
             pointer-events: none;
             mix-blend-mode: overlay;
             opacity: 0.5;
-            /* Ajustez l'opacité selon l'intensité de votre PNG (souvent 0.3 à 0.5 suffit) */
-            /* Le filtre contrast n'est généralement plus nécessaire avec un PNG, sauf si le bruit est trop gris */
             background-image: url('img/noise.png');
             background-repeat: repeat;
             background-size: 256px 256px;
-            /* Taille de votre texture */
             image-rendering: auto;
             z-index: 0;
         }
-
 
         #ui-header::after {
             content: "";
@@ -66,7 +62,6 @@
             transform: translateZ(0);
             z-index: 1;
         }
-
 
         #ui-header,
         #ui-header * {
@@ -107,10 +102,6 @@
             pointer-events: none;
             transition: opacity .4s ease;
         }
-
-        @media (min-width:1025px) {}
-
-
 
         body {
             margin: 0;
@@ -176,7 +167,6 @@
             opacity: 0;
             transition: opacity 0.2s ease;
         }
-
         
         #nav-links {
             display: flex;
@@ -223,8 +213,6 @@
             will-change: transform;
         }
 
-
-
         #logo-link {
             pointer-events: auto;
             display: inline-flex;
@@ -266,69 +254,23 @@
         }
 
         @media (orientation: portrait) and (max-width: 1024px) {
-    #header-inner {
-        justify-content: center;
-    }
-
-    #nav-links {
-        display: none !important;
-    }
-
-    #logo-link {
-        margin-left: 0;
-    }
-
-    #mobile-left,
-    #mobile-right {
-        display: inline-flex;
-        align-items: center;
-    }
-
-    #mobile-right {
-        right: var(--menu-gap);
-        left: auto;
-    }
-
-    #mobile-left {
-        left: auto;
-        right: calc(2 * var(--menu-gap) + var(--menu-h));
-    }
-}
+            #header-inner { justify-content: center; }
+            #nav-links { display: none !important; }
+            #logo-link { margin-left: 0; }
+            #mobile-left, #mobile-right { display: inline-flex; align-items: center; }
+            #mobile-right { right: var(--menu-gap); left: auto; }
+            #mobile-left { left: auto; right: calc(2 * var(--menu-gap) + var(--menu-h)); }
+        }
 
         @media (orientation: landscape) {
-            #header-inner {
-                justify-content: flex-end;
-            }
-
-            #nav-links {
-                display: flex !important;
-                white-space: nowrap;
-            }
-
-            #logo-link {
-                display: inline-flex;
-            }
-
-            #mobile-left,
-            #mobile-right {
-                display: none !important;
-            }
-
-            #ui-header {
-                position: fixed;
-                left: 0;
-                right: 0;
-                top: 0;
-                max-width: 100vw;
-                overflow: hidden;
-            }
+            #header-inner { justify-content: flex-end; }
+            #nav-links { display: flex !important; white-space: nowrap; }
+            #logo-link { display: inline-flex; }
+            #mobile-left, #mobile-right { display: none !important; }
+            #ui-header { position: fixed; left: 0; right: 0; top: 0; max-width: 100vw; overflow: hidden; }
         }
 
-
-
-        #scroll-spacer {
-            height: var(--doc-h);
-        }
+        #scroll-spacer { height: var(--doc-h); }
 
         #labels-layer {
             position: fixed;
@@ -338,39 +280,21 @@
         }
 
         .hover-label {
-    position: absolute;
-    font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-    font-weight: 400;              /* texte par défaut = normal */
-    font-size: 18px;
-    color: #f3f1ee;
-    line-height: 1;
-    transform-origin: 100% 0%;
-    will-change: transform;
-    pointer-events: none;
-    white-space: normal;
-}
-
-/* Titre = première ligne, en gras */
-.hover-label .line:first-child {
-    font-weight: 700;
-}
-
-/* Les autres lignes sont normales (héritent du 400 de .hover-label) */
-.hover-label .line {
-    display: block;
-    white-space: nowrap;
-}
-
-/* Variante “sub” si tu l’utilises encore (petit texte secondaire) */
-.hover-label .line.sub {
-    font-style: italic;
-    font-weight: 400;
-    font-size: .6em;
-    line-height: 1.6667;
-    white-space: nowrap;
-}
-
+            position: absolute;
+            font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+            font-weight: 400;
+            font-size: 18px;
+            color: #f3f1ee;
+            line-height: 1;
+            transform-origin: 100% 0%;
+            will-change: transform;
+            pointer-events: none;
+            white-space: normal;
         }
+
+        .hover-label .line:first-child { font-weight: 700; }
+        .hover-label .line { display: block; white-space: nowrap; }
+        .hover-label .line.sub { font-style: italic; font-weight: 400; font-size: .6em; line-height: 1.6667; white-space: nowrap; }
 
         #mobile-footer {
             position: fixed;
@@ -395,7 +319,6 @@
             inset: 0;
             pointer-events: none;
             opacity: .10;
-            /* Gardez l'opacité faible ici comme avant */
             background-image: url('img/noise.png');
             background-repeat: repeat;
             background-size: 256px 256px;
@@ -403,27 +326,9 @@
             mix-blend-mode: normal;
         }
 
-        #ui-header {
-            background: transparent !important;
-        }
-
-        #ui-header::before {
-            content: none !important;
-            display: none !important;
-        }
-
-        #ui-header::after {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 1px;
-            background: #0055ff;
-            transform: translateZ(0);
-            z-index: 1;
-        }
-
+        #ui-header { background: transparent !important; }
+        #ui-header::before { content: none !important; display: none !important; }
+        #ui-header::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #0055ff; transform: translateZ(0); z-index: 1; }
 
         #images-layer {
             position: fixed;
@@ -433,27 +338,38 @@
             opacity: 0;
         }
 
-        /* Styles pour les labels des carrés noirs */
+        /* --- CORRECTION POUR LE TEXTE QUI DÉBORDE --- */
         .hover-label.black-text {
             text-align: left !important;
             direction: ltr !important;
             white-space: normal !important;
             word-wrap: break-word !important;
             max-width: 100%;
+            /* On s'assure que le conteneur lui-même cache ce qui dépasse */
+            overflow: hidden; 
+            display: flex;
+            flex-direction: column;
         }
 
         .hover-label.black-text .line:first-child {
-            font-size: 1.6em !important; /* Titre nettement plus gros */
+            font-size: 1.6em !important; 
             font-weight: 700;
             margin-bottom: 0.35em;
+            flex-shrink: 0; /* Le titre ne doit pas être écrasé */
         }
 
         .hover-label.black-text .line:not(:first-child) {
-            font-size: 1em !important;   /* Paragraphe un poil plus gros */
-            line-height: 1.5;
+            font-size: 1em !important;   
+            line-height: 1.4; /* Ligne un peu plus serrée pour caser plus de texte */
             font-weight: 400;
+            
+            /* --- MAGIE DU CLAMPING --- */
+            display: -webkit-box;
+            -webkit-line-clamp: 6; /* Limite à 6 lignes maximum (ajustable) */
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Ajoute les "..." */
         }
-
 
         .dom-ol {
             position: absolute;
@@ -472,204 +388,166 @@
             object-fit: cover;
         }
 
-        /* Gouttières 1px comme la grille WebGL */
-        .dom-ol .gut {
-            position: absolute;
-            top: -1px;
-            bottom: -1px;
-            width: 1px;
-            background: #090B0B;
-            pointer-events: none;
-        }
-
-        .dom-ol .gut.left {
-            left: -1px;
-        }
-
-        .dom-ol .gut.right {
-            right: -1px;
-        }
-
+        .dom-ol .gut { position: absolute; top: -1px; bottom: -1px; width: 1px; background: #090B0B; pointer-events: none; }
+        .dom-ol .gut.left { left: -1px; }
+        .dom-ol .gut.right { right: -1px; }
 
         @media (prefers-reduced-motion: reduce) {
-            #webgl-canvas {
-                transition: none;
-            }
+            #webgl-canvas { transition: none; }
         }
 
         @media (min-width:1025px) {
-            html {
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
-            }
-
-            body {
-                overflow: hidden !important;
-            }
+            html { overflow-x: auto !important; overflow-y: hidden !important; }
+            body { overflow: hidden !important; }
         }
 
-        #scroll-spacer {
-            display: block;
-            min-height: 100vh;
-        }
+        #scroll-spacer { display: block; min-height: 100vh; }
         
         /* Lightbox Styles */
-#lightbox-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    background: rgba(9, 11, 11, 0.95);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    cursor: zoom-out;
-}
+        #lightbox-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(9, 11, 11, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            cursor: zoom-out;
+        }
 
-#lightbox-overlay.active {
-    opacity: 1;
-}
+        #lightbox-overlay.active { opacity: 1; }
 
-.lightbox-container {
-    display: flex;
-    max-width: 90vw;
-    max-height: 90vh;
-    cursor: default;
-    position: relative;
-    gap: 0; /* Pas d'espace entre les blocs */
-    box-sizing: border-box;
-}
+        .lightbox-container {
+            display: flex;
+            max-width: 90vw;
+            max-height: 90vh;
+            cursor: default;
+            position: relative;
+            gap: 0;
+            box-sizing: border-box;
+        }
 
-/* Image Wrapper */
-.lb-img-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border: 1px solid #0055ff;
-    background: #090B0B;
-    box-sizing: border-box;
-    overflow: hidden;
-}
+        .lb-img-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #0055ff;
+            background: #090B0B;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
 
-.lb-img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
+        .lb-img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
 
-/* Text Wrapper */
-.lb-text-wrapper {
-    position: relative;
-    border: 1px solid #0055ff;
-    background: #090B0B;
-    color: #f3f1ee;
-    font-family: "Space Mono", monospace;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
-}
+        .lb-text-wrapper {
+            position: relative;
+            border: 1px solid #0055ff;
+            background: #090B0B;
+            color: #f3f1ee;
+            font-family: "Space Mono", monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
 
-.lb-text-wrapper::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.12;
-    background-image: url('img/noise.png');
-    background-repeat: repeat;
-    background-size: 256px 256px;
-    z-index: 0;
-}
+        .lb-text-wrapper::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.12;
+            background-image: url('img/noise.png');
+            background-repeat: repeat;
+            background-size: 256px 256px;
+            z-index: 0;
+        }
 
-.lb-content {
-    position: relative;
-    z-index: 1;
-    padding: 32px;
-    overflow-y: auto;
-    height: 100%;
-    box-sizing: border-box;
-}
+        .lb-content {
+            position: relative;
+            z-index: 1;
+            padding: 32px;
+            overflow-y: auto;
+            height: 100%;
+            box-sizing: border-box;
+        }
 
-.lb-title {
-    font-weight: 700;
-    font-size: 24px;
-    margin-bottom: 16px;
-    line-height: 1.2;
-}
+        .lb-title {
+            font-weight: 700;
+            font-size: 24px;
+            margin-bottom: 16px;
+            line-height: 1.2;
+        }
 
-.lb-desc {
-    font-weight: 400;
-    font-size: 14px;
-    line-height: 1.6;
-}
+        .lb-desc {
+            font-weight: 400;
+            font-size: 14px;
+            line-height: 1.6;
+        }
 
-@media (orientation: landscape) {
-    .lightbox-container {
-        flex-direction: row;
-        align-items: stretch;
-        height: 80vh; 
-        width: auto;
-    }
+        @media (orientation: landscape) {
+            .lightbox-container {
+                flex-direction: row;
+                align-items: stretch;
+                height: 80vh; 
+                width: auto;
+            }
+            .lb-img-wrapper {
+                flex: 1 1 auto;
+                height: 100%;
+                width: auto;
+                min-width: 0; 
+                border-right: none;
+            }
+            .lb-img {
+                height: 100%;
+                width: 100%;
+                max-width: 65vw;
+                object-fit: contain;
+            }
+            .lb-text-wrapper {
+                flex: 0 0 400px;
+                width: 400px;
+                min-width: 300px;
+                height: 100%;
+            }
+        }
 
-    .lb-img-wrapper {
-        flex: 1 1 auto;
-        height: 100%;
-        width: auto;
-        min-width: 0; 
-        border-right: none; /* Fusionne la bordure avec le texte à droite */
-    }
-    
-    .lb-img {
-        height: 100%;
-        width: 100%;
-        max-width: 65vw;
-        object-fit: contain;
-    }
-
-    .lb-text-wrapper {
-        flex: 0 0 400px;
-        width: 400px;
-        min-width: 300px;
-        height: 100%;
-    }
-}
-
-@media (orientation: portrait) {
-    .lightbox-container {
-        flex-direction: column;
-        /* MODIFICATION ICI : Passage de 90vw à 80vw */
-        width: 80vw; 
-        height: auto;
-        max-height: 90vh;
-    }
-
-    .lb-img-wrapper {
-        width: 100%;
-        height: auto;
-        flex-shrink: 0;
-        display: block; 
-        border-bottom: none; /* Fusionne la bordure avec le texte en bas */
-    }
-
-    .lb-img {
-        width: 100%;
-        height: auto;
-        max-height: 60vh; 
-        /* Garde le cover pour éviter les bandes noires sur les images carrées */
-        object-fit: cover; 
-    }
-
-    .lb-text-wrapper {
-        width: 100%;
-        height: auto;
-        flex: 1;
-        min-height: 0; 
-    }
-}
-        
+        @media (orientation: portrait) {
+            .lightbox-container {
+                flex-direction: column;
+                /* --- CORRECTION 80vw --- */
+                width: 80vw; 
+                height: auto;
+                max-height: 90vh;
+            }
+            .lb-img-wrapper {
+                width: 100%;
+                height: auto;
+                flex-shrink: 0;
+                display: block; 
+                border-bottom: none;
+            }
+            .lb-img {
+                width: 100%;
+                height: auto;
+                max-height: 60vh; 
+                object-fit: cover; 
+            }
+            .lb-text-wrapper {
+                width: 100%;
+                height: auto;
+                flex: 1;
+                min-height: 0; 
+            }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
@@ -3894,11 +3772,21 @@ function onScroll() {
     let availablePxFinal;
     if (isBlackSquare) {
         const innerWorld = Math.max(0, dispS - (mLeftWorld + mRightWorld));
+        
+        // --- CORRECTION CRITIQUE : Limite aussi la hauteur ---
+        // On calcule la hauteur disponible en pixels (en prenant la même marge top/bottom)
+        const innerHeightWorld = Math.max(0, dispS - (mTopWorld * 2));
+        const availableHeightPx = innerHeightWorld * pxPerWorldX;
+        
         availablePxFinal = innerWorld * pxPerWorldX;
+        
         el.style.maxWidth = `${availablePxFinal}px`;
+        // On force la hauteur maximale à la taille intérieure du carré
+        el.style.maxHeight = `${availableHeightPx}px`;
     } else {
         availablePxFinal = computeSquareInnerWidthPx(targetS);
         el.style.maxWidth = '';
+        el.style.maxHeight = '';
     }
     const baseFontPx = ensureGlobalLabelFontPx(lm);
     const isMobilePortrait = currentBucket === 'mobile-v';
