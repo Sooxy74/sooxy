@@ -512,6 +512,156 @@
             display: block;
             min-height: 100vh;
         }
+        
+        /* Lightbox Styles */
+#lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(9, 11, 11, 0.95);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    cursor: zoom-out;
+}
+
+#lightbox-overlay.active {
+    opacity: 1;
+}
+
+.lightbox-container {
+    display: flex;
+    max-width: 90vw;
+    max-height: 90vh;
+    cursor: default;
+    position: relative;
+    gap: 24px;
+    box-sizing: border-box;
+}
+
+/* Image Wrapper */
+.lb-img-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #0055ff;
+    background: #090B0B;
+    box-sizing: border-box;
+}
+
+.lb-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Text Wrapper */
+.lb-text-wrapper {
+    position: relative;
+    border: 1px solid #0055ff;
+    background: #090B0B;
+    color: #f3f1ee;
+    font-family: "Space Mono", monospace;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.lb-text-wrapper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: url('img/noise.png');
+    background-repeat: repeat;
+    background-size: 256px 256px;
+    z-index: 0;
+}
+
+.lb-content {
+    position: relative;
+    z-index: 1;
+    padding: 32px;
+    overflow-y: auto;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.lb-title {
+    font-weight: 700;
+    font-size: 24px;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
+
+.lb-desc {
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+@media (orientation: landscape) {
+    .lightbox-container {
+        flex-direction: row;
+        align-items: stretch;
+        height: 80vh; 
+        width: auto;
+    }
+
+    .lb-img-wrapper {
+        flex: 1 1 auto;
+        height: 100%;
+        width: auto;
+        min-width: 0; 
+    }
+    
+    .lb-img {
+        height: 100%;
+        width: 100%;
+        max-width: 65vw;
+    }
+
+    .lb-text-wrapper {
+        flex: 0 0 400px;
+        width: 400px;
+        min-width: 300px;
+        height: 100%;
+    }
+}
+
+@media (orientation: portrait) {
+    .lightbox-container {
+        flex-direction: column;
+        width: 90vw;
+        height: auto;
+        max-height: 90vh;
+    }
+
+    .lb-img-wrapper {
+        width: 100%;
+        height: auto;
+        flex-shrink: 0;
+    }
+
+    .lb-img {
+        width: 100%;
+        height: auto;
+        max-height: 50vh; 
+    }
+
+    .lb-text-wrapper {
+        width: 100%;
+        height: auto;
+        flex: 1;
+        min-height: 0; 
+    }
+}
+        
     </style>
     <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
@@ -560,7 +710,19 @@
 
     <div id="images-layer" aria-hidden="true"></div>
 
-
+    <div id="lightbox-overlay">
+    <div class="lightbox-container" id="lb-container">
+        <div class="lb-img-wrapper">
+            <img id="lb-image" class="lb-img" src="" alt="Artwork detail" />
+        </div>
+        <div class="lb-text-wrapper">
+            <div class="lb-content">
+                <div id="lb-title" class="lb-title"></div>
+                <div id="lb-desc" class="lb-desc"></div>
+            </div>
+        </div>
+    </div>
+    </div>
 
     <script type="module">
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js';
@@ -1339,19 +1501,25 @@
 
 
         function createGrainPlane() {
-            const mat = new THREE.ShaderMaterial({
-                transparent: config.grainOpacity > 0,
-                depthTest: false,
-                depthWrite: false,
-                uniforms: { uOpacity: { value: config.grainOpacity } },
-                vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-                fragmentShader: 'uniform float uOpacity; varying vec2 vUv; float r(vec2 st){ return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);} void main(){ vec2 uv=gl_FragCoord.xy/512.0; float g=r(uv); gl_FragColor=vec4(1.0,1.0,1.0,g*uOpacity); }'
-            });
-            grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-            grainPlane.position.z = 1; grainPlane.renderOrder = 2; scene.add(grainPlane);
-            grainPlane.visible = config.grainOpacity > 0;
-            updateGrainPlaneSize();
-        }
+    const mat = new THREE.ShaderMaterial({
+        transparent: config.grainOpacity > 0,
+        depthTest: false,
+        depthWrite: false,
+        uniforms: {
+            uOpacity: {
+                value: config.grainOpacity
+            }
+        },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+        fragmentShader: 'uniform float uOpacity; varying vec2 vUv; float r(vec2 st){ return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);} void main(){ vec2 uv=gl_FragCoord.xy/512.0; float g=r(uv); gl_FragColor=vec4(1.0,1.0,1.0,g*uOpacity); }'
+    });
+    grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+    grainPlane.position.z = 1;
+    grainPlane.renderOrder = 1;
+    scene.add(grainPlane);
+    grainPlane.visible = config.grainOpacity > 0;
+    updateGrainPlaneSize();
+}
 
         function createMenuPlane() {
             const menuOccluderMaterial = new THREE.MeshBasicMaterial({
@@ -1863,13 +2031,12 @@ function onScroll() {
                 return pxH / worldH;
             };
 
-            // 🔥 Augmentation du délai de sécurité pour éviter les saccades
             const markLogicalScroll = () => {
                 isScrolling = true;
                 if (scrollTimeout) clearTimeout(scrollTimeout);
                 scrollTimeout = setTimeout(() => {
                     isScrolling = false;
-                }, 250); // Passé de 120 à 250ms
+                }, 250);
             };
 
             const setXWorld = (v) => {
@@ -1914,6 +2081,9 @@ function onScroll() {
             let dragging = false;
 
             window.__pointerDrag = (ev) => {
+                const overlay = document.getElementById('lightbox-overlay');
+                if (overlay && overlay.classList.contains('active')) return;
+
                 updateMouseFromClient(ev);
                 dragging = true;
                 dragId = ev.pointerId;
@@ -1962,6 +2132,20 @@ function onScroll() {
             const WHEEL_SENS = 1;
 
             window.__wheelScroll = (e) => {
+                const overlay = document.getElementById('lightbox-overlay');
+                if (overlay && overlay.classList.contains('active')) {
+                     if (Math.abs(e.deltaY) > 10 || Math.abs(e.deltaX) > 10) {
+                         if(!window._lbWheelLock) {
+                             const dir = (e.deltaY > 0 || e.deltaX > 0) ? 1 : -1;
+                             if(typeof navigateLightbox === 'function') navigateLightbox(dir);
+                             window._lbWheelLock = true;
+                             setTimeout(() => window._lbWheelLock = false, 300);
+                         }
+                     }
+                     e.preventDefault();
+                     return;
+                }
+
                 if (isLand) {
                     const absY = Math.abs(e.deltaY);
                     const absX = Math.abs(e.deltaX);
@@ -1980,6 +2164,19 @@ function onScroll() {
             window.addEventListener('wheel', window.__wheelScroll, { passive: false });
 
             window.__arrowScroll = (e) => {
+                const overlay = document.getElementById('lightbox-overlay');
+                if (overlay && overlay.classList.contains('active')) {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                        if(typeof navigateLightbox === 'function') navigateLightbox(1);
+                        e.preventDefault();
+                    }
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                        if(typeof navigateLightbox === 'function') navigateLightbox(-1);
+                        e.preventDefault();
+                    }
+                    return;
+                }
+
                 if (isLand) {
                     const stepPx = Math.round((STABLE_VP_W || window.innerWidth) * 0.25);
                     const worldW = (camera.right - camera.left) || 1;
@@ -3737,202 +3934,241 @@ function onScroll() {
 
 
         function syncStateToMeshes() {
-            const getOccluderMaterial = () => {
-                if (!scene.userData.occluderMaterial) {
-                    scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({ color: config.darkColor, depthTest: false, depthWrite: false });
+    const getOccluderMaterial = () => {
+        if (!scene.userData.occluderMaterial) {
+            scene.userData.occluderMaterial = new THREE.MeshBasicMaterial({
+                color: config.darkColor,
+                depthTest: false,
+                depthWrite: false
+            });
+        }
+        return scene.userData.occluderMaterial;
+    };
+    const isMobile = isMobileBucket();
+    const newKeys = new Set(targetState.keys());
+    const IMAGE_ORDER = 3.0;
+    const DOT_ORDER_NONBTN = 2.50;
+    const BUTTON_ORDER = 3.1;
+    const DOT_ORDER_BUTTON = 3.40;
+    const lm = getLayoutMetrics();
+    const gx = contentGroup?.position?.x || 0;
+    const gy = contentGroup?.position?.y || 0;
+    const viewW = camera.right - camera.left;
+    const viewH = lm.contentTop - camera.bottom;
+
+    const isLand = isLandscapeLike();
+    const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
+    const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
+
+    const Lhard = camera.left - gx - hardX;
+    const Rhard = camera.right - gx + hardX;
+    const Bhard = camera.bottom - gy - hardY;
+    const Thard = lm.contentTop - gy + hardY;
+
+    const screenL = camera.left - gx;
+    const screenR = camera.right - gx;
+    const screenB = camera.bottom - gy;
+    const screenT = lm.contentTop - gy;
+
+    for (const [key, st] of fractalState) {
+        if (!newKeys.has(key)) {
+            const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
+            const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
+
+            const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
+            const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
+
+            const l = cx - half,
+                r = cx + half,
+                b = cy - half,
+                t = cy + half;
+            const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
+
+            if (tooFar || instantKill.has(key)) {
+                if (st.mesh) {
+                    contentGroup.remove(st.mesh);
+                    meshPool.push(st.mesh);
                 }
-                return scene.userData.occluderMaterial;
-            };
-            const isMobile = isMobileBucket();
-            const newKeys = new Set(targetState.keys());
-            const IMAGE_ORDER = 2.96;
-            const DOT_ORDER_NONBTN = 2.50;
-            const BUTTON_ORDER = 3.00;
-            const DOT_ORDER_BUTTON = 3.40;
-            const lm = getLayoutMetrics();
-            const gx = contentGroup?.position?.x || 0;
-            const gy = contentGroup?.position?.y || 0;
-            const viewW = camera.right - camera.left;
-            const viewH = lm.contentTop - camera.bottom;
-
-            const isLand = isLandscapeLike();
-            const hardX = isLand ? viewW * 6.0 : viewW * 2.0;
-            const hardY = isLand ? viewH * 2.0 : viewH * 6.0;
-
-            const Lhard = camera.left - gx - hardX;
-            const Rhard = camera.right - gx + hardX;
-            const Bhard = camera.bottom - gy - hardY;
-            const Thard = lm.contentTop - gy + hardY;
-
-            const screenL = camera.left - gx;
-            const screenR = camera.right - gx;
-            const screenB = camera.bottom - gy;
-            const screenT = lm.contentTop - gy;
-
-            for (const [key, st] of fractalState) {
-                if (!newKeys.has(key)) {
-                    const curS = st.currentScale ? st.currentScale.x : (st.mesh ? st.mesh.scale.x : 0);
-                    const half = st.originalSize ? st.originalSize * 0.5 : Math.max(0, curS) * 0.5;
-
-                    const cx = st.currentPosition ? st.currentPosition.x : (st.mesh ? st.mesh.position.x : 0);
-                    const cy = st.currentPosition ? st.currentPosition.y : (st.mesh ? st.mesh.position.y : 0);
-
-                    const l = cx - half, r = cx + half, b = cy - half, t = cy + half;
-                    const tooFar = (r <= Lhard || l >= Rhard || t <= Bhard || b >= Thard);
-
-                    if (tooFar || instantKill.has(key)) {
-                        if (st.mesh) { contentGroup.remove(st.mesh); meshPool.push(st.mesh); }
-                        if (st.dotMesh) { contentGroup.remove(st.dotMesh); dotMeshPool.push(st.dotMesh); }
-                        if (st.labelSprite) { scene.remove(st.labelSprite); }
-                        if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                        if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-                        if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                        fractalState.delete(key);
-                    } else {
-                        st.targetScale.set(0, 0, 0);
-                        if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
-                        if (st.labelSprite) { scene.remove(st.labelSprite); st.labelSprite = null; }
-                        if (st.occluderMesh) { contentGroup.remove(st.occluderMesh); st.occluderMesh = null; }
-                        if (st.domLabelEl) { st.domLabelEl.remove(); st.domLabelEl = null; }
-                        if (st.baffles) { st.baffles.forEach(b => b.stop()); st.baffles = null; }
-                    }
-                }
-            }
-
-            for (const key of newKeys) {
-                const t = targetState.get(key);
-                const ex = fractalState.get(key);
-                const isImg = imageCells.has(key);
-                const isBtn = buttonCells.has(key);
-
-                const half = t.size / 2;
-
-                const isVisibleStrictly = !(
-                    (t.x + half) < screenL ||
-                    (t.x - half) > screenR ||
-                    (t.y + half) < screenB ||
-                    (t.y - half) > screenT
-                );
-                const startScale = isVisibleStrictly ? 0 : t.size;
-
-                if (isImg) {
-                    const url = imageAssignment.get(key);
-                    const material = getImageMaterial(url);
-
-                    if (ex) {
-                        ex.logicalCenter ||= new THREE.Vector3();
-                        ex.logicalCenter.set(t.x, t.y, 0);
-                        ex.anchorPosition ||= new THREE.Vector3();
-                        ex.anchorPosition.set(t.x, t.y, 0);
-                        ex.mesh.position.set(t.x, t.y, 0);
-                        ex.targetScale.set(t.size, t.size, 1);
-                        ex.originalSize = t.originalSize;
-                        if (ex.mesh.material !== material) ex.mesh.material = material;
-                        ex.isButton = isBtn;
-                        ex.isImage = isImg;
-                        ex.mesh.renderOrder = IMAGE_ORDER;
-                    } else {
-                        const mesh = meshPool.pop() || new THREE.Mesh(geometry);
-                        mesh.material = material;
-                        mesh.position.set(t.x, t.y, 0);
-                        mesh.scale.set(startScale, startScale, 1);
-                        mesh.renderOrder = IMAGE_ORDER;
-                        contentGroup.add(mesh);
-
-                        const st = {
-                            mesh,
-                            dotMesh: null,
-                            labelSprite: null,
-                            domLabelEl: null,
-                            baffles: null,
-                            occluderMesh: null,
-                            hovering: false,
-                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                            targetScale: new THREE.Vector3(t.size, t.size, 1),
-                            originalSize: t.originalSize,
-                            isButton: isBtn,
-                            isImage: isImg
-                        };
-                        fractalState.set(key, st);
-                    }
-                } else {
-                    if (ex) {
-                        ex.logicalCenter ||= new THREE.Vector3();
-                        ex.logicalCenter.set(t.x, t.y, 0);
-                        ex.anchorPosition ||= new THREE.Vector3();
-                        ex.anchorPosition.set(t.x, t.y, 0);
-                        ex.targetPosition.set(t.x, t.y, 0);
-                        ex.targetScale.set(t.size, t.size, 1);
-                        ex.originalSize = t.originalSize;
-                        ex.isButton = isBtn;
-                        ex.isImage = isImg;
-
-                        if (isBtn) {
-                            const label = buttonCells.get(key)?.label || '';
-                            if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) { rebuildDomLabel(ex, label); }
-                        } else { destroyDomLabel(ex); }
-
-                        if (isBtn && isMobile) {
-                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                            const inset = lm.onePxWorld * insetPx;
-                            if (!ex.occluderMesh) {
-                                ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                                contentGroup.add(ex.occluderMesh);
-                            }
-                            ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                            ex.occluderMesh.position.set(t.x, t.y, 0.05);
-                            const sz = Math.max(0, t.size - inset * 2);
-                            ex.occluderMesh.scale.set(sz, sz, 1);
-                        } else if (ex.occluderMesh) {
-                            contentGroup.remove(ex.occluderMesh);
-                            ex.occluderMesh = null;
-                        }
-                    } else {
-                        const st = {
-                            mesh: null,
-                            dotMesh: null,
-                            labelSprite: null,
-                            domLabelEl: null,
-                            baffles: null,
-                            occluderMesh: null,
-                            hovering: false,
-                            logicalCenter: new THREE.Vector3(t.x, t.y, 0),
-                            anchorPosition: new THREE.Vector3(t.x, t.y, 0),
-                            targetPosition: new THREE.Vector3(t.x, t.y, 0),
-                            targetScale: new THREE.Vector3(t.size, t.size, 1),
-                            currentPosition: new THREE.Vector3(t.x, t.y, 0),
-                            currentScale: new THREE.Vector3(startScale, startScale, 1),
-                            originalSize: t.originalSize,
-                            isButton: isBtn,
-                            isImage: isImg
-                        };
-                        fractalState.set(key, st);
-
-                        if (isBtn && isMobile) {
-                            const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
-                            const inset = lm.onePxWorld * insetPx;
-                            st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
-                            st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
-                            st.occluderMesh.position.set(t.x, t.y, 0.05);
-                            const sz = Math.max(0, t.size - inset * 2);
-                            st.occluderMesh.scale.set(sz, sz, 1);
-                            contentGroup.add(st.occluderMesh);
-                        }
-                    }
-                }
-            }
-
-            for (const st of fractalState.values()) {
-                if (!st.isImage && st.dotMesh) {
+                if (st.dotMesh) {
                     contentGroup.remove(st.dotMesh);
                     dotMeshPool.push(st.dotMesh);
-                    st.dotMesh = null;
+                }
+                if (st.labelSprite) {
+                    scene.remove(st.labelSprite);
+                }
+                if (st.domLabelEl) {
+                    st.domLabelEl.remove();
+                    st.domLabelEl = null;
+                }
+                if (st.baffles) {
+                    st.baffles.forEach(b => b.stop());
+                    st.baffles = null;
+                }
+                if (st.occluderMesh) {
+                    contentGroup.remove(st.occluderMesh);
+                    st.occluderMesh = null;
+                }
+                fractalState.delete(key);
+            } else {
+                st.targetScale.set(0, 0, 0);
+                if (st.dotMesh) st.dotMesh.scale.set(0, 0, 0);
+                if (st.labelSprite) {
+                    scene.remove(st.labelSprite);
+                    st.labelSprite = null;
+                }
+                if (st.occluderMesh) {
+                    contentGroup.remove(st.occluderMesh);
+                    st.occluderMesh = null;
+                }
+                if (st.domLabelEl) {
+                    st.domLabelEl.remove();
+                    st.domLabelEl = null;
+                }
+                if (st.baffles) {
+                    st.baffles.forEach(b => b.stop());
+                    st.baffles = null;
                 }
             }
         }
+    }
 
+    for (const key of newKeys) {
+        const t = targetState.get(key);
+        const ex = fractalState.get(key);
+        const isImg = imageCells.has(key);
+        const isBtn = buttonCells.has(key);
+
+        const half = t.size / 2;
+
+        const isVisibleStrictly = !(
+            (t.x + half) < screenL ||
+            (t.x - half) > screenR ||
+            (t.y + half) < screenB ||
+            (t.y - half) > screenT
+        );
+        const startScale = isVisibleStrictly ? 0 : t.size;
+
+        if (isImg) {
+            const url = imageAssignment.get(key);
+            const material = getImageMaterial(url);
+
+            if (ex) {
+                ex.logicalCenter ||= new THREE.Vector3();
+                ex.logicalCenter.set(t.x, t.y, 0);
+                ex.anchorPosition ||= new THREE.Vector3();
+                ex.anchorPosition.set(t.x, t.y, 0);
+                ex.mesh.position.set(t.x, t.y, 0);
+                ex.targetScale.set(t.size, t.size, 1);
+                ex.originalSize = t.originalSize;
+                if (ex.mesh.material !== material) ex.mesh.material = material;
+                ex.isButton = isBtn;
+                ex.isImage = isImg;
+                ex.mesh.renderOrder = IMAGE_ORDER;
+            } else {
+                const mesh = meshPool.pop() || new THREE.Mesh(geometry);
+                mesh.material = material;
+                mesh.position.set(t.x, t.y, 0);
+                mesh.scale.set(startScale, startScale, 1);
+                mesh.renderOrder = IMAGE_ORDER;
+                contentGroup.add(mesh);
+
+                const st = {
+                    mesh,
+                    dotMesh: null,
+                    labelSprite: null,
+                    domLabelEl: null,
+                    baffles: null,
+                    occluderMesh: null,
+                    hovering: false,
+                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                    targetScale: new THREE.Vector3(t.size, t.size, 1),
+                    originalSize: t.originalSize,
+                    isButton: isBtn,
+                    isImage: isImg
+                };
+                fractalState.set(key, st);
+            }
+        } else {
+            if (ex) {
+                ex.logicalCenter ||= new THREE.Vector3();
+                ex.logicalCenter.set(t.x, t.y, 0);
+                ex.anchorPosition ||= new THREE.Vector3();
+                ex.anchorPosition.set(t.x, t.y, 0);
+                ex.targetPosition.set(t.x, t.y, 0);
+                ex.targetScale.set(t.size, t.size, 1);
+                ex.originalSize = t.originalSize;
+                ex.isButton = isBtn;
+                ex.isImage = isImg;
+
+                if (isBtn) {
+                    const label = buttonCells.get(key)?.label || '';
+                    if (!ex.domLabelEl || ex.labelText !== label || forceRecreateLabelsOnce) {
+                        rebuildDomLabel(ex, label);
+                    }
+                } else {
+                    destroyDomLabel(ex);
+                }
+
+                if (isBtn && isMobile) {
+                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                    const inset = lm.onePxWorld * insetPx;
+                    if (!ex.occluderMesh) {
+                        ex.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                        contentGroup.add(ex.occluderMesh);
+                    }
+                    ex.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                    ex.occluderMesh.position.set(t.x, t.y, 0.05);
+                    const sz = Math.max(0, t.size - inset * 2);
+                    ex.occluderMesh.scale.set(sz, sz, 1);
+                } else if (ex.occluderMesh) {
+                    contentGroup.remove(ex.occluderMesh);
+                    ex.occluderMesh = null;
+                }
+            } else {
+                const st = {
+                    mesh: null,
+                    dotMesh: null,
+                    labelSprite: null,
+                    domLabelEl: null,
+                    baffles: null,
+                    occluderMesh: null,
+                    hovering: false,
+                    logicalCenter: new THREE.Vector3(t.x, t.y, 0),
+                    anchorPosition: new THREE.Vector3(t.x, t.y, 0),
+                    targetPosition: new THREE.Vector3(t.x, t.y, 0),
+                    targetScale: new THREE.Vector3(t.size, t.size, 1),
+                    currentPosition: new THREE.Vector3(t.x, t.y, 0),
+                    currentScale: new THREE.Vector3(startScale, startScale, 1),
+                    originalSize: t.originalSize,
+                    isButton: isBtn,
+                    isImage: isImg
+                };
+                fractalState.set(key, st);
+
+                if (isBtn && isMobile) {
+                    const insetPx = Math.max(MOBILE_BTN_OCCLUDER_PAD_PX || 1, 1);
+                    const inset = lm.onePxWorld * insetPx;
+                    st.occluderMesh = new THREE.Mesh(geometry, getOccluderMaterial());
+                    st.occluderMesh.renderOrder = IMAGE_ORDER - 0.01;
+                    st.occluderMesh.position.set(t.x, t.y, 0.05);
+                    const sz = Math.max(0, t.size - inset * 2);
+                    st.occluderMesh.scale.set(sz, sz, 1);
+                    contentGroup.add(st.occluderMesh);
+                }
+            }
+        }
+    }
+
+    for (const st of fractalState.values()) {
+        if (!st.isImage && st.dotMesh) {
+            contentGroup.remove(st.dotMesh);
+            dotMeshPool.push(st.dotMesh);
+            st.dotMesh = null;
+        }
+    }
+}
         function addDotToState(st) {
             // No-op for instanced items
         }
@@ -4641,62 +4877,67 @@ function onScroll() {
 
 
         function onClick(e) {
-    // Outil de debug (Alt + Click)
-    if (e.altKey) {
-        const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-        logD2At(wp);
-        return;
-    }
+            const overlay = document.getElementById('lightbox-overlay');
+            if (overlay && overlay.classList.contains('active')) return;
 
-    const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
-    const { contentTop } = getLayoutMetrics();
+            if (e.altKey) {
+                const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+                logD2At(wp);
+                return;
+            }
 
-    // Ignore les clics dans le header (menu du haut)
-    if (wp.y >= contentTop) return;
+            const wp = new THREE.Vector3(lastMouseScreenPos.x, lastMouseScreenPos.y, 0).unproject(camera);
+            const { contentTop } = getLayoutMetrics();
 
-    // 1. Gestion de la Navigation (Clic sur un bouton ou une image active)
-    const gx = contentGroup?.position?.x || 0;
-    const gy = contentGroup?.position?.y || 0;
-    const lx = wp.x - gx;   // coords LOGIQUES locales
-    const ly = wp.y - gy;
+            if (wp.y >= contentTop) return;
 
-    for (const [key, st] of Array.from(fractalState.entries())) {
-        if (!st.isButton) continue;
-        
-        const half = st.targetScale.x / 2;
-        const inside =
-            (lx >= st.targetPosition.x - half && lx <= st.targetPosition.x + half &&
-             ly >= st.targetPosition.y - half && ly <= st.targetPosition.y + half);
-        
-        if (inside && buttonCells.has(key)) {
-            const { url, category } = buttonCells.get(key);
-            
-            // Cas spécial : Carré noir (texte) -> On régénère la grille
-            const isBlackSquare = key.startsWith('black/');
-            if (isBlackSquare || url === '#') {
-                 // On reset le scale du curseur ici aussi pour l'effet visuel
-                 mouseSquare.scale.set(0, 0, 1);
-                 cursorBorder.scale.set(0, 0, 1);
-                 reformGridKeepImages();
-                 return;
+            const gx = contentGroup?.position?.x || 0;
+            const gy = contentGroup?.position?.y || 0;
+            const lx = wp.x - gx;   
+            const ly = wp.y - gy;
+
+            for (const [key, st] of Array.from(fractalState.entries())) {
+                
+                if (!st.isButton && !st.isImage) continue;
+                
+                const half = st.targetScale.x / 2;
+                const inside =
+                    (lx >= st.targetPosition.x - half && lx <= st.targetPosition.x + half &&
+                     ly >= st.targetPosition.y - half && ly <= st.targetPosition.y + half);
+                
+                if (inside) {
+                    if (st.isImage && imageCells.has(key)) {
+                        const match = key.match(/^rib\/(\d+)$/);
+                        if (match) {
+                            const index = parseInt(match[1], 10);
+                            const url = imageAssignment.get(key);
+                            openLightbox(index, url);
+                            return; 
+                        }
+                    }
+
+                    if (st.isButton && buttonCells.has(key)) {
+                        const { url } = buttonCells.get(key);
+                        
+                        const isBlackSquare = key.startsWith('black/');
+                        if (isBlackSquare || url === '#') {
+                             mouseSquare.scale.set(0, 0, 1);
+                             cursorBorder.scale.set(0, 0, 1);
+                             reformGridKeepImages();
+                             return;
+                        }
+                        
+                        window.location.href = url;
+                        return;
+                    }
+                }
             }
             
-            // Navigation réelle
-            window.location.href = url;
-            return;
+            mouseSquare.scale.set(0, 0, 1);
+            cursorBorder.scale.set(0, 0, 1);
+
+            reformGridKeepImages();
         }
-    }
-
-    // 2. Gestion de la Régénération (Clic dans le vide / fond)
-    
-    // --- L'EFFET MAGIQUE EST ICI ---
-    // On force la taille du curseur à 0 immédiatement. 
-    // La boucle animate() le fera grandir vers sa nouvelle cible au frame suivant.
-    mouseSquare.scale.set(0, 0, 1);
-    cursorBorder.scale.set(0, 0, 1);
-
-    reformGridKeepImages();
-}
 
 
 
@@ -4710,6 +4951,91 @@ function onScroll() {
             const quad = (wp.y > cy ? (wp.x < cx ? 2 : 3) : (wp.x < cx ? 0 : 1));
             console.log(`{ size:'D2', row:${row}, col:${col}, quad:${quad} }`);
         }
+        
+        // --- LIGHTBOX LOGIC ---
+        let currentLightboxIndex = 0;
+
+        function getFakeTextContent(index) {
+            return {
+                title: `Title ${index + 1}`,
+                desc: `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.`
+            };
+        }
+
+        function openLightbox(index, url) {
+            const overlay = document.getElementById('lightbox-overlay');
+            const imgEl = document.getElementById('lb-image');
+            const titleEl = document.getElementById('lb-title');
+            const descEl = document.getElementById('lb-desc');
+            const container = document.getElementById('lb-container');
+
+            if (!overlay || !imgEl) return;
+
+            currentLightboxIndex = index;
+
+            imgEl.src = url;
+            const content = getFakeTextContent(index);
+            titleEl.textContent = content.title;
+            descEl.textContent = content.desc;
+
+            overlay.style.display = 'flex';
+            void overlay.offsetWidth;
+            overlay.classList.add('active');
+
+            // --- CORRECTION ---
+            // On retire le blocage global sur tout le conteneur.
+            // Cela permet au clic sur l'image de remonter à l'overlay et de fermer la lightbox.
+            container.onclick = null;
+
+            // On ajoute une protection UNIQUEMENT sur le texte pour permettre 
+            // la sélection ou le clic sans fermer la lightbox par erreur.
+            const textWrapper = container.querySelector('.lb-text-wrapper');
+            if (textWrapper) {
+                textWrapper.onclick = (e) => e.stopPropagation();
+            }
+        }
+
+        function closeLightbox(e) {
+            // --- CORRECTION ---
+            // Si c'est un clic souris, on l'arrête ici.
+            // Sinon, il traverse l'overlay (qui vient de disparaitre visuellement ou perdre sa classe)
+            // et atteint le 'window.click' du WebGL, ce qui rouvrirait immédiatement l'image.
+            if (e && e.type === 'click') {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }
+
+            const overlay = document.getElementById('lightbox-overlay');
+            if (!overlay) return;
+
+            overlay.classList.remove('active');
+            setTimeout(() => {
+                if (!overlay.classList.contains('active')) {
+                    overlay.style.display = 'none';
+                    document.getElementById('lb-image').src = '';
+                }
+            }, 300);
+        }
+
+        function navigateLightbox(direction) {
+            if (!imageTextures || imageTextures.length === 0) return;
+            const count = imageTextures.length;
+            
+            currentLightboxIndex = (currentLightboxIndex + direction + count) % count;
+            const url = imageTextures[currentLightboxIndex];
+            if(url) openLightbox(currentLightboxIndex, url);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+        
+        const lbOverlay = document.getElementById('lightbox-overlay');
+        if (lbOverlay) {
+            lbOverlay.addEventListener('click', closeLightbox);
+        }
+        
     </script>
 
     <div id="mobile-footer" aria-hidden="true"></div>
