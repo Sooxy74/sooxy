@@ -4057,7 +4057,9 @@ function onScroll() {
                 ex.logicalCenter.set(t.x, t.y, 0);
                 ex.anchorPosition ||= new THREE.Vector3();
                 ex.anchorPosition.set(t.x, t.y, 0);
-                ex.mesh.position.set(t.x, t.y, 0);
+                
+                ex.mesh.position.set(t.x, t.y, 1.5); 
+                
                 ex.targetScale.set(t.size, t.size, 1);
                 ex.originalSize = t.originalSize;
                 if (ex.mesh.material !== material) ex.mesh.material = material;
@@ -4067,7 +4069,8 @@ function onScroll() {
             } else {
                 const mesh = meshPool.pop() || new THREE.Mesh(geometry);
                 mesh.material = material;
-                mesh.position.set(t.x, t.y, 0);
+                mesh.position.set(t.x, t.y, 1.5);
+                
                 mesh.scale.set(startScale, startScale, 1);
                 mesh.renderOrder = IMAGE_ORDER;
                 contentGroup.add(mesh);
