@@ -1501,25 +1501,31 @@
 
 
         function createGrainPlane() {
-    const mat = new THREE.ShaderMaterial({
-        transparent: config.grainOpacity > 0,
-        depthTest: false,
-        depthWrite: false,
-        uniforms: {
-            uOpacity: {
-                value: config.grainOpacity
-            }
-        },
-        vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-        fragmentShader: 'uniform float uOpacity; varying vec2 vUv; float r(vec2 st){ return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);} void main(){ vec2 uv=gl_FragCoord.xy/512.0; float g=r(uv); gl_FragColor=vec4(1.0,1.0,1.0,g*uOpacity); }'
-    });
-    grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-    grainPlane.position.z = 1;
-    grainPlane.renderOrder = 1;
-    scene.add(grainPlane);
-    grainPlane.visible = config.grainOpacity > 0;
-    updateGrainPlaneSize();
-}
+            // On utilise le loader global pour charger ton image de bruit
+            const noiseTexture = textureLoader.load('img/noise.png');
+            noiseTexture.wrapS = THREE.RepeatWrapping;
+            noiseTexture.wrapT = THREE.RepeatWrapping;
+            noiseTexture.minFilter = THREE.LinearFilter;
+            
+            // On utilise un matériau simple avec ta texture
+            // depthTest: false assure qu'il est dessiné comme un fond
+            // renderOrder: 1 assure qu'il est dessiné AVANT les images (qui sont à 3)
+            const mat = new THREE.MeshBasicMaterial({
+                map: noiseTexture,
+                transparent: true,
+                opacity: config.grainOpacity, // Utilise la config (0.12)
+                depthTest: false,
+                depthWrite: false
+            });
+
+            grainPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+            grainPlane.position.z = 1; 
+            grainPlane.renderOrder = 1; 
+            scene.add(grainPlane);
+            
+            grainPlane.visible = config.grainOpacity > 0;
+            updateGrainPlaneSize();
+        }
 
         function createMenuPlane() {
             const menuOccluderMaterial = new THREE.MeshBasicMaterial({
@@ -1802,8 +1808,28 @@
 
 
 
-        function updateGrainPlaneSize() { if (!grainPlane) return; const h = camera.top - camera.bottom; const w = camera.right - camera.left; grainPlane.scale.set(w, h, 1); }
+            function updateGrainPlaneSize() {
+            if (!grainPlane) return;
+            
+            const h = camera.top - camera.bottom;
+            const w = camera.right - camera.left;
+            
+            // On redimensionne le plan pour couvrir toute la vue caméra
+            grainPlane.scale.set(w, h, 1);
 
+            // On ajuste la répétition de la texture pour qu'elle fasse toujours 
+            // environ 256px visuellement (comme ton CSS), peu importe le zoom ou l'écran.
+            if (grainPlane.material.map) {
+                const vpW = STABLE_VP_W || window.innerWidth;
+                const vpH = STABLE_VP_H || window.innerHeight;
+                
+                // CSS background-size est 256px
+                const repeatX = vpW / 256;
+                const repeatY = vpH / 256;
+                
+                grainPlane.material.map.repeat.set(repeatX, repeatY);
+            }
+        }
         (function installStableResizeHandlers() {
             let lastW = Math.round(window.visualViewport?.width || window.innerWidth);
             let lastH = Math.round(window.visualViewport?.height || window.innerHeight);
