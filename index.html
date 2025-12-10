@@ -451,7 +451,8 @@
             border: 1px solid #0055ff;
             background: #090B0B;
             color: #f3f1ee;
-            font-family: "Space Mono", monospace; /* La taille de police sera injectée par JS */
+            /* La police est définie, mais la taille sera écrasée par le JS pour matcher la grille */
+            font-family: "Space Mono", monospace; 
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -473,7 +474,7 @@
         .lb-content {
             position: relative;
             z-index: 1;
-            /* Correspond à marginPctTop = 1/16 = 6.25% utilisé dans la grille */
+            /* COPIE GRILLE : 1/16ème (marginPctTop) équivaut à 6.25% */
             padding: 6.25%; 
             overflow-y: auto;
             height: 100%;
@@ -482,19 +483,20 @@
             flex-direction: column;
         }
 
-        /* Styles copiés de .hover-label.black-text */
+        /* COPIE GRILLE : .hover-label.black-text .line:first-child */
         .lb-title {
             font-weight: 700;
-            font-size: 1.6em; /* Identique à la grille */
-            margin-bottom: 0.35em; /* Identique à la grille */
+            font-size: 1.6em; 
+            margin-bottom: 0.35em;
             line-height: 1.1; 
             flex-shrink: 0;
         }
 
+        /* COPIE GRILLE : .hover-label.black-text .line:not(:first-child) */
         .lb-desc {
             font-weight: 400;
-            font-size: 1em; /* Identique à la grille */
-            line-height: 1.4; /* Identique à la grille */
+            font-size: 1em; 
+            line-height: 1.4;
         }
 
         @media (orientation: landscape) {
@@ -551,7 +553,7 @@
                 flex: 1;
                 min-height: 0; 
             }
-        }       }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
@@ -4914,15 +4916,38 @@ function onScroll() {
 
             if (!overlay || !imgEl) return;
 
-            // --- SYNCHRONISATION TAILLE TEXTE ---
-            // On récupère la taille de base calculée pour la grille (ex: 13px, 14px...)
-            // et on l'applique au conteneur. Le CSS en 'em' fera le reste.
+            // --- CALCUL TAILLE IDENTIQUE À LA GRILLE ---
             const lm = getLayoutMetrics();
-            const baseFontSize = ensureGlobalLabelFontPx(lm);
-            if (textWrapper) {
-                textWrapper.style.fontSize = `${baseFontSize}px`;
+            
+            // 1. Récupération des mêmes variables de contexte que dans updateDomLabelLayout
+            const isMobilePortrait = currentBucket === 'mobile-v';
+            const isTabletPortrait = currentBucket === 'tablet-3:4' || currentBucket === 'tablet-9:16';
+            const isCompact = isMobilePortrait || isTabletPortrait;
+            
+            // 2. Récupération de la taille de base (calculée par viewportLabelScaleFactor)
+            const baseFontPx = ensureGlobalLabelFontPx(lm);
+            
+            let finalFontPx;
+
+            // 3. Application de la logique exacte de "Black Square" de la grille
+            if (isCompact) {
+                // Mobile/Tablette : 90% de la base, min 11px ou 12px
+                finalFontPx = baseFontPx * 0.9;
+                finalFontPx = Math.max(finalFontPx, isMobilePortrait ? 11 : 12);
+            } else {
+                // Desktop : Base complète, min 13px
+                finalFontPx = baseFontPx; // On n'applique pas le min() lié à la largeur car en LB on a de la place
+                finalFontPx = Math.max(finalFontPx, 13);
             }
-            // ------------------------------------
+
+            // 4. Arrondi comme dans la grille
+            finalFontPx = Math.round(finalFontPx * 2) / 2;
+            
+            // 5. Application au conteneur (le CSS en 'em' fera le reste)
+            if (textWrapper) {
+                textWrapper.style.fontSize = `${finalFontPx}px`;
+            }
+            // -------------------------------------------
 
             currentLightboxIndex = index;
 
