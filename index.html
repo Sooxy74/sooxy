@@ -1033,18 +1033,34 @@
             const headerPx = headerEl ? Math.round(headerEl.getBoundingClientRect().height) : 0;
 
             const key =
-                [camera.left, camera.right, camera.top, camera.bottom, baseCols, STABLE_VP_W, STABLE_VP_H, headerPx].join('|');
+                [camera.left, camera.right, camera.top, camera.bottom, baseCols, baseRowsPrimary, STABLE_VP_W, STABLE_VP_H, headerPx].join('|');
 
             const m = getLayoutMetrics._memo || {};
             if (m.key === key && m.val) return m.val;
 
             const viewHeight = camera.top - camera.bottom;
             const viewWidth = camera.right - camera.left;
-
-            const w = viewWidth / baseCols;
-
             const pxH = STABLE_VP_H || window.innerHeight;
+
+            // 1. Hauteur du menu en unités World
             const headerWorld = (headerPx / pxH) * viewHeight;
+
+            // 2. Calcul théorique de la largeur (largeur écran / nombre colonnes)
+            let w = viewWidth / baseCols;
+
+            // 3. --- CONTRAINTE HAUTEUR (Anti-Crop) ---
+            // Si on est en paysage, on s'assure que les 2 lignes (baseRowsPrimary) rentrent.
+            if (viewWidth > viewHeight && baseRowsPrimary > 0) {
+                const availableHeight = viewHeight - headerWorld;
+                // Taille max du carré pour tenir en hauteur
+                const maxWFromHeight = availableHeight / baseRowsPrimary;
+                
+                // On garde la plus petite taille pour que tout soit visible (largeur ET hauteur)
+                // Le -0.001 sert de marge de sécurité pour éviter les arrondis foireux
+                w = Math.min(w, maxWFromHeight - 0.001);
+            }
+            // ------------------------------------------
+
             const onePxWorld = viewHeight / pxH;
 
             if (Math.abs(config.borderWidth - onePxWorld) > 1e-6) config.borderWidth = onePxWorld;
@@ -1587,98 +1603,82 @@
 
 
         function updateScrollDocHeight() {
-    const spacer = document.getElementById('scroll-spacer');
-    if (!spacer) return;
+            const spacer = document.getElementById('scroll-spacer');
+            if (!spacer) return;
 
-    const stableW = STABLE_VP_W || window.innerWidth;
-    const stableH = STABLE_VP_H || window.innerHeight;
+            const stableW = STABLE_VP_W || window.innerWidth;
+            const stableH = STABLE_VP_H || window.innerHeight;
+            const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
 
-    // Nombre d’images trouvées dans img/fractal-art_img
-    const imgCount = (imageTextures && imageTextures.length) ? imageTextures.length : 0;
+            // --- SCROLL VERTICAL (Portrait) ---
+            if (!isLandscapeLike()) {
+                const { viewHeight, w, menuHeight } = getLayoutMetrics();
+                const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
 
-    // --- SCROLL VERTICAL (portrait / mobile-like) ---
-    if (!isLandscapeLike()) {
-        const { viewHeight, w, menuHeight } = getLayoutMetrics();
-        const V = (scene.userData._vscroll ||= { yWorld: 0, maxWorld: 0, patternRows: 0, gapRows: 0 });
+                V.patternRows = imgCount > 0 ? imgCount : 1;
+                V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
-        // une "ligne" par image
-        V.patternRows = imgCount > 0 ? imgCount : 1;
-        V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+                const gapYWorld = Math.max(0, V.gapRows) * w;
+                
+                // MODIFICATION ICI : Ajout de + (0.5 * w) pour la demi-ligne en plus en bas
+                const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld + (0.5 * w);
+                
+                const visibleWorld = Math.max(0, (viewHeight - menuHeight));
 
-        const gapYWorld = Math.max(0, V.gapRows) * w;
+                V.maxWorld = Math.max(0, totalWorld - visibleWorld);
+                mobileWorldContentHeight = totalWorld;
 
-        // 🔥 hauteur totale du contenu en world units
-        const totalWorld =
-            (V.patternRows * w) +
-            Math.max(0, V.patternRows - 1) * gapYWorld;
+                spacer.style.height = stableH + 'px';
+                spacer.style.width = '1px';
+                spacer.style.display = 'block';
 
-        // 🔥 zone visible (viewport - header)
-        const visibleWorld = Math.max(0, (viewHeight - menuHeight));
+                const root = rootScroller();
+                root.style.overflowX = 'hidden';
+                root.style.overflowY = 'hidden';
+                root.style.webkitOverflowScrolling = 'auto';
 
-        // 🔥 on veut pouvoir scroller jusqu’en bas : maxWorld = total - visible
-        V.maxWorld = Math.max(0, totalWorld - visibleWorld);
-        mobileWorldContentHeight = totalWorld;
+                V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
+                return;
+            }
 
-        // On garde le spacer à la taille de la viewport
-        spacer.style.height = stableH + 'px';
-        spacer.style.width = '1px';
-        spacer.style.display = 'block';
+            // --- SCROLL HORIZONTAL (Paysage) ---
+            const { w, viewWidth } = getLayoutMetrics();
+            const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 0, gapCols: 0 });
 
-        const root = rootScroller();
-        root.style.overflowX = 'hidden';
-        root.style.overflowY = 'hidden';
-        root.style.webkitOverflowScrolling = 'auto';
+            const offsetCols = contentOffsetColsForBucket();
+            
+            // Index de la dernière colonne occupée par une image
+            const lastImgColIndex = Math.max(0, imgCount - 1) + offsetCols;
 
-        // Clamp du scroll courant
-        V.yWorld = Math.min(Math.max(0, V.yWorld || 0), V.maxWorld || 0);
-        return;
-    }
+            H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+            const gapXWorld = Math.max(0, H.gapCols) * w;
 
-    // --- SCROLL HORIZONTAL (paysage / desktop) ---
-    const { w } = getLayoutMetrics();
-    const H = (scene.userData._hscroll ||= { xWorld: 0, maxWorld: 0, patternCols: 0, gapCols: 0 });
+            // Calcul précis du bord droit de la dernière image :
+            // (IndexColonne * (Largeur + Gap)) + Largeur
+            const lastColStart = lastImgColIndex * (w + gapXWorld);
+            const contentRightEdge = lastColStart + w;
 
-    const contentCols = contentColsForBucket();
+            // MODIFICATION ICI : Passage de 0.5 à 1.0 pour ajouter une demi-colonne de plus
+            const extraMargin = 1.0 * w; 
+            const totalWorld = contentRightEdge + extraMargin;
 
-    H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
+            // Le scroll max est ce total moins la largeur de l'écran
+            H.maxWorld = Math.max(0, totalWorld - viewWidth);
+            
+            // On limite la génération de la grille un peu après pour éviter de voir trop de vide
+            H.patternCols = lastImgColIndex + 3; 
 
-    if (imgCount > 0) {
-        const slots = Math.ceil(imgCount / 2);
-        const minPatternCols = 2 * slots;
-        const extraCols = imgCount > 3 ? 1 : 0;
-        H.patternCols = Math.max(contentCols, minPatternCols + extraCols);
-    } else {
-        H.patternCols = contentCols;
-    }
+            spacer.style.height = stableH + 'px';
+            spacer.style.width = '1px';
+            spacer.style.display = 'block';
 
-    const patternCols = H.patternCols;
-    const gapXWorld = Math.max(0, H.gapCols) * w;
+            const root = rootScroller();
+            root.style.overflowX = 'hidden';
+            root.style.overflowY = 'hidden';
+            root.style.webkitOverflowScrolling = 'auto';
 
-    const totalWorld =
-        (patternCols * w) +
-        Math.max(0, patternCols - 1) * gapXWorld;
-
-    const visibleWorld =
-        (contentCols * w) +
-        Math.max(0, contentCols - 1) * gapXWorld;
-
-    const extraWorld = Math.max(0, totalWorld - visibleWorld);
-    H.maxWorld = extraWorld;
-
-    spacer.style.height = stableH + 'px';
-    spacer.style.width = '1px';
-    spacer.style.display = 'block';
-
-    const root = rootScroller();
-    root.style.overflowX = 'hidden';
-    root.style.overflowY = 'hidden';
-    root.style.webkitOverflowScrolling = 'auto';
-
-    H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
-}
-
-
-
+            H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
+        }
 
 
 
