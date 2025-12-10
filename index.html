@@ -1045,21 +1045,17 @@
             // 1. Hauteur du menu en unités World
             const headerWorld = (headerPx / pxH) * viewHeight;
 
-            // 2. Calcul théorique de la largeur (largeur écran / nombre colonnes)
+            // 2. Calcul théorique de la largeur par défaut
             let w = viewWidth / baseCols;
 
-            // 3. --- CONTRAINTE HAUTEUR (Anti-Crop) ---
-            // Si on est en paysage, on s'assure que les 2 lignes (baseRowsPrimary) rentrent.
+            // 3. --- CONTRAINTE HAUTEUR (Modifiée pour "Remplir parfaitement") ---
+            // Si on est en paysage, on calcule w pour que 'baseRowsPrimary' (2 lignes)
+            // occupent exactement la hauteur disponible (viewHeight - headerWorld).
             if (viewWidth > viewHeight && baseRowsPrimary > 0) {
                 const availableHeight = viewHeight - headerWorld;
-                // Taille max du carré pour tenir en hauteur
-                const maxWFromHeight = availableHeight / baseRowsPrimary;
-                
-                // On garde la plus petite taille pour que tout soit visible (largeur ET hauteur)
-                // Le -0.001 sert de marge de sécurité pour éviter les arrondis foireux
-                w = Math.min(w, maxWFromHeight - 0.001);
+                // On force la taille du carré pour qu'il n'y ait pas de "rab" en dessous
+                w = availableHeight / baseRowsPrimary;
             }
-            // ------------------------------------------
 
             const onePxWorld = viewHeight / pxH;
 
@@ -1619,8 +1615,7 @@
                 V.gapRows = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
 
                 const gapYWorld = Math.max(0, V.gapRows) * w;
-                
-                // MODIFICATION ICI : Ajout de + (0.5 * w) pour la demi-ligne en plus en bas
+                // On garde la demi-ligne en plus en bas pour le vertical
                 const totalWorld = (V.patternRows * w) + Math.max(0, V.patternRows - 1) * gapYWorld + (0.5 * w);
                 
                 const visibleWorld = Math.max(0, (viewHeight - menuHeight));
@@ -1647,25 +1642,20 @@
 
             const offsetCols = contentOffsetColsForBucket();
             
-            // Index de la dernière colonne occupée par une image
             const lastImgColIndex = Math.max(0, imgCount - 1) + offsetCols;
 
             H.gapCols = (typeof config.overlayGapCols === 'number' ? config.overlayGapCols : 0.5);
             const gapXWorld = Math.max(0, H.gapCols) * w;
 
-            // Calcul précis du bord droit de la dernière image :
-            // (IndexColonne * (Largeur + Gap)) + Largeur
             const lastColStart = lastImgColIndex * (w + gapXWorld);
             const contentRightEdge = lastColStart + w;
 
-            // MODIFICATION ICI : Passage de 0.5 à 1.0 pour ajouter une demi-colonne de plus
+            // MODIFICATION ICI : Exactement la largeur d'une seule colonne en plus
             const extraMargin = 1.0 * w; 
             const totalWorld = contentRightEdge + extraMargin;
 
-            // Le scroll max est ce total moins la largeur de l'écran
             H.maxWorld = Math.max(0, totalWorld - viewWidth);
             
-            // On limite la génération de la grille un peu après pour éviter de voir trop de vide
             H.patternCols = lastImgColIndex + 3; 
 
             spacer.style.height = stableH + 'px';
