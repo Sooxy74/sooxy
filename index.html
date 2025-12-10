@@ -1648,14 +1648,15 @@
             const lastColStart = lastImgColIndex * (w + gapXWorld);
             const contentRightEdge = lastColStart + w;
 
-            // MODIFICATION : Marge à 0 pour arrêter le scroll net après le contenu
-            const extraMargin = 0; 
+            // MODIFICATION ICI : Ajout de 1/4 de la largeur d'une colonne (0.25 * w)
+            const extraMargin = 0.25 * w; 
             const totalWorld = contentRightEdge + extraMargin;
 
             H.maxWorld = Math.max(0, totalWorld - viewWidth);
             
-            // On limite la génération de grille au strict minimum nécessaire
-            H.patternCols = lastImgColIndex + 1; 
+            // On augmente légèrement la limite de génération (+2) pour être sûr que 
+            // la grille de fond se dessine bien dans ce 1/4 de colonne supplémentaire.
+            H.patternCols = lastImgColIndex + 2; 
 
             spacer.style.height = stableH + 'px';
             spacer.style.width = '1px';
