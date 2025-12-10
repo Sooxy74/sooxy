@@ -2288,8 +2288,8 @@ function onScroll() {
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
-            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 1.5;
+            const genBuffX = isLandscapeLike() ? viewWidth * 4.0 : viewWidth * 0.5;
+            const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 4;
 
             let minCol = Math.floor((scrollX - genBuffX) / w);
             let maxCol = Math.ceil((scrollX + viewWidth + genBuffX) / w);
@@ -2300,7 +2300,7 @@ function onScroll() {
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            const pruneBuffer = w * 3;
+            const pruneBuffer = w * 6;
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
             const keepMinY = contentTop - scrollY - viewHeight - genBuffY - pruneBuffer;
