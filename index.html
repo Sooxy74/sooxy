@@ -1048,12 +1048,10 @@
             // 2. Calcul théorique de la largeur par défaut
             let w = viewWidth / baseCols;
 
-            // 3. --- CONTRAINTE HAUTEUR (Modifiée pour "Remplir parfaitement") ---
-            // Si on est en paysage, on calcule w pour que 'baseRowsPrimary' (2 lignes)
-            // occupent exactement la hauteur disponible (viewHeight - headerWorld).
+            // 3. --- CONTRAINTE HAUTEUR (Remplissage parfait) ---
+            // En paysage, on calcule w pour que les lignes tiennent exactement dans la hauteur dispo
             if (viewWidth > viewHeight && baseRowsPrimary > 0) {
                 const availableHeight = viewHeight - headerWorld;
-                // On force la taille du carré pour qu'il n'y ait pas de "rab" en dessous
                 w = availableHeight / baseRowsPrimary;
             }
 
@@ -1650,13 +1648,14 @@
             const lastColStart = lastImgColIndex * (w + gapXWorld);
             const contentRightEdge = lastColStart + w;
 
-            // MODIFICATION ICI : Exactement la largeur d'une seule colonne en plus
-            const extraMargin = 1.0 * w; 
+            // MODIFICATION : Marge à 0 pour arrêter le scroll net après le contenu
+            const extraMargin = 0; 
             const totalWorld = contentRightEdge + extraMargin;
 
             H.maxWorld = Math.max(0, totalWorld - viewWidth);
             
-            H.patternCols = lastImgColIndex + 3; 
+            // On limite la génération de grille au strict minimum nécessaire
+            H.patternCols = lastImgColIndex + 1; 
 
             spacer.style.height = stableH + 'px';
             spacer.style.width = '1px';
@@ -1669,7 +1668,6 @@
 
             H.xWorld = Math.min(Math.max(0, H.xWorld || 0), H.maxWorld || 0);
         }
-
 
 
         function updateMenuGeometry() {
@@ -2284,14 +2282,11 @@ function onScroll() {
                 return true;
             }
 
-            // --- OPTIMISATION SCROLL ---
-            // Mode performance pendant le scroll : pas de calculs inutiles
             const isFastMode = isScrolling && !forceFull;
 
             const scrollX = (scene.userData._hscroll?.xWorld || 0);
             const scrollY = (scene.userData._vscroll?.yWorld || 0);
 
-            // Buffers de génération (zones hors écran prêtes à être affichées)
             const genBuffX = isLandscapeLike() ? viewWidth * 2.0 : viewWidth * 0.5;
             const genBuffY = isLandscapeLike() ? viewHeight * 0.5 : viewHeight * 1.5;
 
@@ -2304,7 +2299,6 @@ function onScroll() {
             minCol = Math.max(0, minCol);
             minRow = Math.max(0, minRow);
 
-            // Pruning : Suppression des cellules trop lointaines pour libérer la mémoire
             const pruneBuffer = w * 3;
             const keepMinX = camera.left + scrollX - genBuffX - pruneBuffer;
             const keepMaxX = camera.left + scrollX + viewWidth + genBuffX + pruneBuffer;
@@ -2329,7 +2323,6 @@ function onScroll() {
             (preset?.buttons || []).forEach(b => { FORCE_D1.add(`content/${b.row}/${b.col}`); });
             (preset?.imagesD2 || []).forEach(im => { FORCE_D1.add(`content/${im.row}/${im.col}`); });
 
-            // Vecteur temporaire réutilisé pour éviter l'allocation mémoire dans la boucle
             const tempVec = new THREE.Vector3();
 
             for (let row = minRow; row < maxRow; row++) {
@@ -2341,12 +2334,10 @@ function onScroll() {
                     const x = camera.left + (col + 0.5 + (isPrimary ? offsetCols : 0)) * w;
                     const y = contentTop - row * w - w / 2;
 
-                    // LEVIER PRINCIPAL : Si on n'est pas en reset complet,
-                    // on vérifie si la case est déjà occupée via findLeafAt (version optimisée).
                     if (!forceFull) {
                         tempVec.set(x, y, 0);
                         const existing = findLeafAt(tempVec, targetState);
-                        if (existing) continue; // On saute la génération si ça existe déjà
+                        if (existing) continue; 
                     }
 
                     let pref = 'filler';
@@ -2365,7 +2356,8 @@ function onScroll() {
                 if (isPrimary && minCol === 0) addPrimaryRowSideFillers(row, offsetCols);
             }
 
-            if (minRow < mobileRowsNeeded()) {
+            // MODIFICATION : On n'ajoute les fillers à droite que si on N'EST PAS en format paysage
+            if (!isLandscapeLike() && minRow < mobileRowsNeeded()) {
                 for (let row = minRow; row < maxRow; row++) {
                     addRightFillersForOverlayPattern(row, offsetCols);
                 }
@@ -2394,13 +2386,10 @@ function onScroll() {
                 forceMobilePattern();
             }
 
-            // Nettoyage structurel
             cutOutUnderButtons();
             dedupeTargetState();
             forceNoD1GlobalExceptFixed();
 
-            // RAFFINEMENTS : On ne les fait que si on ne scrolle pas (FastMode),
-            // sauf si on force un refresh complet. Cela fluidifie grandement le scroll.
             if (!isFastMode || forceFull) {
                 sprinkleRefinements(isMobileBucket() ? 12 : 12);
 
