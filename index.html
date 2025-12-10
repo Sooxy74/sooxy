@@ -451,7 +451,7 @@
             border: 1px solid #0055ff;
             background: #090B0B;
             color: #f3f1ee;
-            font-family: "Space Mono", monospace;
+            font-family: "Space Mono", monospace; /* La taille de police sera injectée par JS */
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -473,23 +473,28 @@
         .lb-content {
             position: relative;
             z-index: 1;
-            padding: 32px;
+            /* Correspond à marginPctTop = 1/16 = 6.25% utilisé dans la grille */
+            padding: 6.25%; 
             overflow-y: auto;
             height: 100%;
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
         }
 
+        /* Styles copiés de .hover-label.black-text */
         .lb-title {
             font-weight: 700;
-            font-size: 24px;
-            margin-bottom: 16px;
-            line-height: 1.2;
+            font-size: 1.6em; /* Identique à la grille */
+            margin-bottom: 0.35em; /* Identique à la grille */
+            line-height: 1.1; 
+            flex-shrink: 0;
         }
 
         .lb-desc {
             font-weight: 400;
-            font-size: 14px;
-            line-height: 1.6;
+            font-size: 1em; /* Identique à la grille */
+            line-height: 1.4; /* Identique à la grille */
         }
 
         @media (orientation: landscape) {
@@ -523,7 +528,6 @@
         @media (orientation: portrait) {
             .lightbox-container {
                 flex-direction: column;
-                /* --- CORRECTION 80vw --- */
                 width: 80vw; 
                 height: auto;
                 max-height: 90vh;
@@ -547,7 +551,7 @@
                 flex: 1;
                 min-height: 0; 
             }
-        }
+        }       }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/baffle@0.3.6/dist/baffle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" defer></script>
@@ -4906,28 +4910,37 @@ function onScroll() {
             const titleEl = document.getElementById('lb-title');
             const descEl = document.getElementById('lb-desc');
             const container = document.getElementById('lb-container');
+            const textWrapper = document.querySelector('.lb-text-wrapper');
 
             if (!overlay || !imgEl) return;
+
+            // --- SYNCHRONISATION TAILLE TEXTE ---
+            // On récupère la taille de base calculée pour la grille (ex: 13px, 14px...)
+            // et on l'applique au conteneur. Le CSS en 'em' fera le reste.
+            const lm = getLayoutMetrics();
+            const baseFontSize = ensureGlobalLabelFontPx(lm);
+            if (textWrapper) {
+                textWrapper.style.fontSize = `${baseFontSize}px`;
+            }
+            // ------------------------------------
 
             currentLightboxIndex = index;
 
             imgEl.src = url;
             const content = getFakeTextContent(index);
             titleEl.textContent = content.title;
-            descEl.textContent = content.desc;
+            // On remplace les sauts de ligne JS par des balises HTML pour garder la mise en forme
+            descEl.innerHTML = content.desc.replace(/\n/g, '<br/>');
 
             overlay.style.display = 'flex';
+            // Force reflow
             void overlay.offsetWidth;
             overlay.classList.add('active');
 
-            // --- CORRECTION ---
-            // On retire le blocage global sur tout le conteneur.
-            // Cela permet au clic sur l'image de remonter à l'overlay et de fermer la lightbox.
+            // On retire le onclick global du conteneur pour éviter les fermetures accidentelles
             container.onclick = null;
 
-            // On ajoute une protection UNIQUEMENT sur le texte pour permettre 
-            // la sélection ou le clic sans fermer la lightbox par erreur.
-            const textWrapper = container.querySelector('.lb-text-wrapper');
+            // On protège le clic sur le texte
             if (textWrapper) {
                 textWrapper.onclick = (e) => e.stopPropagation();
             }
