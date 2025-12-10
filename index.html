@@ -1164,7 +1164,7 @@
                 depth: true
             });
             
-            renderer.setPixelRatio(1); // <-- ICI : Force 1 pixel rendu pour 1 pixel CSS
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.setSize(window.innerWidth, window.innerHeight);
 
             loaderOverlay = document.getElementById('loader-overlay');
@@ -1798,7 +1798,7 @@
                 camera.updateProjectionMatrix();
 
                 // OPTIMISATION : On s'assure que le ratio reste à 1 même après resize
-                renderer.setPixelRatio(1);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 renderer.setSize(w, h);
 
                 STABLE_VP_W = w;
